@@ -52,6 +52,7 @@ from chirpstack_api.api import tenant_pb2, tenant_pb2_grpc
 from chirpstack_api.api import application_pb2, application_pb2_grpc
 from chirpstack_api.api import device_profile_pb2, device_profile_pb2_grpc
 from chirpstack_api.api import device_pb2, device_pb2_grpc
+from chirpstack_api.api import gateway_pb2, gateway_pb2_grpc
 from chirpstack_api.api import internal_pb2, internal_pb2_grpc
 from chirpstack_api.common import common_pb2
 
@@ -206,7 +207,7 @@ def find_or_create_device_profile(stub, meta: list, tenant_id: str) -> str:
                 reg_params_revision=common_pb2.RegParamsRevision.RP002_1_0_3,
                 adr_algorithm_id="default",
                 payload_codec_runtime=device_profile_pb2.CodecRuntime.JS,
-                uplink_codec_script=(
+                payload_codec_script=(
                     "function decodeUplink(input) {\n"
                     "  var hex = Array.from(input.bytes)"
                     ".map(function(b){return b.toString(16).padStart(2,'0')}).join('');\n"
@@ -221,6 +222,39 @@ def find_or_create_device_profile(stub, meta: list, tenant_id: str) -> str:
     )
     print(f"[smoke_test] Device profile created: {resp.id}")
     return resp.id
+
+
+def find_or_create_gateway(stub, meta: list, tenant_id: str) -> None:
+    """
+    Find or create the smoke-test gateway in ChirpStack.
+
+    Without this, ChirpStack drops uplinks from unknown gateway IDs with
+    'Object does not exist'.  The smoke-test UDP packet forwarder publishes
+    under GATEWAY_EUI; that EUI must match a registered gateway.
+    """
+    try:
+        existing = stub.Get(
+            gateway_pb2.GetGatewayRequest(gateway_id=GATEWAY_EUI), metadata=meta
+        )
+        print(f"[smoke_test] Gateway already exists: {existing.gateway.gateway_id}")
+        return
+    except grpc.RpcError as e:
+        if e.code() != grpc.StatusCode.NOT_FOUND:
+            raise
+
+    stub.Create(
+        gateway_pb2.CreateGatewayRequest(
+            gateway=gateway_pb2.Gateway(
+                gateway_id=GATEWAY_EUI,
+                name="whz-smoke-test-gateway",
+                description="Created by smoke_test.py",
+                tenant_id=tenant_id,
+                stats_interval=30,
+            )
+        ),
+        metadata=meta,
+    )
+    print(f"[smoke_test] Gateway created: {GATEWAY_EUI}")
 
 
 def find_or_create_device(
@@ -333,8 +367,11 @@ def build_push_data(token: int, payload: dict) -> bytes:
       N bytes JSON payload
     """
     header = struct.pack("!BHB", 2, token, 0x00)
-    gw_mac_le = bytes.fromhex(GATEWAY_EUI)[::-1]
-    return header + gw_mac_le + json.dumps(payload).encode("utf-8")
+    # chirpstack-gateway-bridge reads the MAC bytes from the wire as-is and
+    # publishes them as the gateway EUI; reversing here would produce a
+    # different EUI than the one we register with ChirpStack.
+    gw_mac = bytes.fromhex(GATEWAY_EUI)
+    return header + gw_mac + json.dumps(payload).encode("utf-8")
 
 
 def send_stats_frame(sock: socket.socket) -> None:
@@ -550,6 +587,9 @@ def main() -> None:
         )
         find_or_create_device(
             device_pb2_grpc.DeviceServiceStub(channel), meta, app_id, profile_id
+        )
+        find_or_create_gateway(
+            gateway_pb2_grpc.GatewayServiceStub(channel), meta, tenant_id
         )
     except grpc.RpcError as e:
         die(f"gRPC provisioning failed: {e.code()} — {e.details()}")
