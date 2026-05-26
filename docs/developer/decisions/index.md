@@ -28,3 +28,4 @@ documentation step of the directive lifecycle, not afterwards.
 - [ADR-0013 — Branch, Merge and Gate-2 Mechanics](adr-0013.md)
 - [ADR-0014 — LoRaWAN Network Server: ChirpStack v4](adr-0014.md)
 - [ADR-0015 — Verification Toolchain: Python Smoke-Test via gRPC + UDP](adr-0015.md)
+- [ADR-0016 — Branch Protection on main: deferred](adr-0016.md)
