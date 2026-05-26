@@ -53,7 +53,7 @@ jobs:
       - name: Codec unit tests (if codecs/ present)
         run: |
           if [ -d codecs ] && ls codecs/*.test.js >/dev/null 2>&1; then
-            node --test codecs/
+            node --test codecs/*.test.js
           else
             echo "No codec tests yet — skipped"
           fi

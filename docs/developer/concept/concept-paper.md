@@ -264,9 +264,12 @@ flowchart LR
 - **Tooling**: Docker, Compose, Python 3.12+, `chirpstack-api`,
   `paho-mqtt`. Lint kommt für jede Sprache hinzu, sobald entsprechender
   Code entsteht (Codecs: `node --test`; Python-Skripte: `ruff`).
-- **CI**: GitHub Actions Job mit `timeout-minutes: 10`, Stack-Hochlauf,
-  Smoke-Test-Lauf, Logs-bei-Fehler, `docker compose down -v` im
-  Teardown. `paths-ignore` für reine Doku-Änderungen.
+- **CI-Strategie**: Bis zum geplanten Umzug auf einen selbst betriebenen
+  GitLab (siehe ADR-0017) läuft die Verifikation **lokal** auf dem
+  Entwickler-Host. Die GitHub-Actions-Workflow-Datei
+  `.github/workflows/ci.yml` bleibt als Basis für den späteren
+  GitLab-Port erhalten; sie ist aktuell nicht das Gate. Gate-2-Evidenz
+  ist die wörtliche Smoke-Test-Ausgabe im PR-Review.
 
 ### Deployment & Environments
 

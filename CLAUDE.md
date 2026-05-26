@@ -241,11 +241,12 @@ Export: `export/build.ps1` builds both sites.
 
 A task is done when:
 
-- automated checks (the quickcheck hook and CI) pass,
+- automated local checks (the quickcheck hook) pass,
 - the reviewer report has no open BLOCKER items (for full tasks),
 - the acceptance criteria from the specification are all met,
 - tests cover the change,
-- the project's verification check passes,
+- the project's verification check passes (locally, until the GitLab
+  move — see ADR-0017),
 - for feature-affecting work, the feature registry reflects the change,
 - developer and, if user-facing, user documentation are updated,
 - Gate 2 (PO acceptance) has passed.
@@ -264,9 +265,15 @@ Test at several levels, cheap and fast first (the test pyramid):
   is set at onboarding and recorded in the concept paper.
 
 Unit, integration and end-to-end tests run in ephemeral Docker containers —
-every run clean and reproducible. CI (GitHub Actions) runs them on every
-pull request: the deep, developer-facing verification. The concrete levels
-and tools are decided per project during onboarding.
+every run clean and reproducible. The concrete levels and tools are decided
+per project during onboarding.
+
+**Until the project migrates from GitHub to self-hosted GitLab, verification
+runs locally on the developer host, not in CI** — see ADR-0017. The
+`.github/workflows/ci.yml` workflow stays in the repository as the future
+basis for the GitLab CI port; it is not the gate. The verification evidence
+for Gate 2 is the verbatim smoke-test output pasted into the pull-request
+review.
 
 ## Releases
 
@@ -351,7 +358,28 @@ Vollständige Definition: `docs/developer/concept/concept-paper.md`.
 | Doku-Export | `./export/build.ps1` |
 
 Build/Lint-Schritte für eigenen Code (Codec-JS, Smoke-Test-Skript) liegen
-in `.claude/hooks/quickcheck.ps1`; CI-Schritte in
-`.github/workflows/ci.yml`. Beide werden gefüllt, sobald die ersten
-eigenen Code-Anteile entstehen — bis dahin laufen sie auf Konfig-
-Validierung (yaml/toml syntax).
+in `.claude/hooks/quickcheck.ps1`. Die CI-Steps in
+`.github/workflows/ci.yml` sind der Basisentwurf für den späteren
+GitLab-Port (siehe ADR-0017) — aktuell ist die Verifikation lokal.
+
+### Lokale Voraussetzungen (für den Verifikationscheck)
+
+| Tool | Zweck |
+|---|---|
+| Docker Desktop für Windows | LNS-Stack-Laufzeit |
+| Python 3.12+ | Smoke-Test (`scripts/smoke_test.py`) |
+| Node.js 20+ | Codec-Unit-Tests (`node --test codecs/*.test.js`) |
+| `gh` CLI | Issues, PRs, Labels |
+| `pip install -r scripts/requirements-test.txt` | `chirpstack-api`, `paho-mqtt`, `cryptography` |
+
+Der lokale Verifikationsablauf für eine Direktive:
+
+```powershell
+docker compose up -d --wait                    # Stack hochfahren
+py -3.12 scripts/smoke_test.py                 # End-to-End-Smoke-Test
+node --test codecs/*.test.js                   # Codec-Unit-Tests
+docker compose down -v                         # sauberer Teardown
+```
+
+Erfolgs-Output des Smoke-Tests wird wörtlich in den PR-Review-Kommentar
+geklebt — das ist die Gate-2-Evidenz.
