@@ -1,0 +1,98 @@
+name: CI
+
+# Verification gate (Pillar 4). whz-lora is a Docker-Compose-based
+# LoRaWAN setup; the verification check is
+#   stack up → ChirpStack gRPC :8080 reachable → Mosquitto :1883 accepts
+#   authenticated connections → smoke-test provisions
+#   tenant/app/device-profile/device via gRPC → injects a synthetic
+#   uplink via UDP packet forwarder → MQTT subscriber receives the
+#   decoded JSON event within 30 seconds.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install docs dependencies
+        run: pip install -r requirements.txt
+      - name: Build developer docs (strict)
+        run: mkdocs build -f mkdocs.developer.yml --strict
+      - name: Build user docs (strict)
+        run: mkdocs build -f mkdocs.user.yml --strict
+
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Skip stack verification for documentation-only PRs.
+    if: >
+      !(github.event_name == 'pull_request' &&
+        contains(github.event.pull_request.labels.*.name, 'docs-only'))
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up Node (codec tests)
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Codec unit tests (if codecs/ present)
+        run: |
+          if [ -d codecs ] && ls codecs/*.test.js >/dev/null 2>&1; then
+            node --test codecs/
+          else
+            echo "No codec tests yet — skipped"
+          fi
+
+      - name: Validate docker-compose.yml (if present)
+        run: |
+          if [ -f docker-compose.yml ]; then
+            if [ -f .env.example ] && [ ! -f .env ]; then cp .env.example .env; fi
+            docker compose config -q
+          else
+            echo "No docker-compose.yml yet — skipped"
+          fi
+
+      - name: Bring stack up (if compose present)
+        run: |
+          if [ -f docker-compose.yml ]; then
+            docker compose up -d --wait
+          else
+            echo "No docker-compose.yml yet — skipped"
+          fi
+
+      - name: Smoke test (Python)
+        run: |
+          if [ -f scripts/smoke_test.py ]; then
+            pip install chirpstack-api paho-mqtt
+            python scripts/smoke_test.py
+          else
+            echo "No scripts/smoke_test.py yet — skipped"
+          fi
+
+      - name: Compose logs on failure
+        if: failure()
+        run: |
+          if [ -f docker-compose.yml ]; then
+            docker compose logs --no-color || true
+          fi
+
+      - name: Teardown
+        if: always()
+        run: |
+          if [ -f docker-compose.yml ]; then
+            docker compose down -v || true
+          fi

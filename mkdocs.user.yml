@@ -1,0 +1,44 @@
+site_name: User Documentation
+site_description: How to use the product
+docs_dir: docs/user
+
+theme:
+  name: material
+  language: en
+  features:
+    - navigation.top
+    - search.suggest
+    - content.code.copy
+  palette:
+    - scheme: default
+      toggle:
+        icon: material/weather-night
+        name: Dark mode
+    - scheme: slate
+      toggle:
+        icon: material/weather-sunny
+        name: Light mode
+
+nav:
+  - Home: index.md
+  - Getting Started: getting-started.md
+  - Guides: guides.md
+  - FAQ: faq.md
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+plugins:
+  - search
+
+validation:
+  nav:
+    omitted_files: warn
+  links:
+    not_found: warn

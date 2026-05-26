@@ -1,0 +1,9 @@
+Template version: 1.0
+
+This file marks the pristine, un-instantiated project template.
+scripts/init-project.ps1 instantiates new projects only from a source that
+carries this marker, reads the version above and writes it into the new
+project's concept paper, then removes the marker from the instance. Bump
+the version line when the template gains a notable change so instantiated
+projects can be diffed against it later. Do not delete it from the
+template; do not add it to an instantiated project.

@@ -1,0 +1,70 @@
+site_name: Developer Documentation
+site_description: Technical documentation for contributors
+docs_dir: docs/developer
+
+theme:
+  name: material
+  language: en
+  features:
+    - navigation.sections
+    - navigation.top
+    - search.suggest
+    - content.code.copy
+  palette:
+    - scheme: default
+      toggle:
+        icon: material/weather-night
+        name: Dark mode
+    - scheme: slate
+      toggle:
+        icon: material/weather-sunny
+        name: Light mode
+
+nav:
+  - Home: index.md
+  - Onboarding: onboarding.md
+  - Concept:
+      - Concept Paper: concept/concept-paper.md
+  - Features: features.md
+  - Research:
+      - Overview: research/overview.md
+  - Architecture:
+      - System Design: architecture/system-design.md
+  - Diagrams:
+      - Project Plan: diagrams/project-plan.md
+  - Decisions:
+      - Overview: decisions/index.md
+      - ADR Template: decisions/adr-template.md
+      - ADR-0001: decisions/adr-0001.md
+      - ADR-0002: decisions/adr-0002.md
+      - ADR-0003: decisions/adr-0003.md
+      - ADR-0004: decisions/adr-0004.md
+      - ADR-0005: decisions/adr-0005.md
+      - ADR-0006: decisions/adr-0006.md
+      - ADR-0007: decisions/adr-0007.md
+      - ADR-0008: decisions/adr-0008.md
+      - ADR-0009: decisions/adr-0009.md
+      - ADR-0010: decisions/adr-0010.md
+      - ADR-0011: decisions/adr-0011.md
+      - ADR-0012: decisions/adr-0012.md
+      - ADR-0013: decisions/adr-0013.md
+      - ADR-0014: decisions/adr-0014.md
+      - ADR-0015: decisions/adr-0015.md
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+plugins:
+  - search
+
+validation:
+  nav:
+    omitted_files: warn
+  links:
+    not_found: warn
