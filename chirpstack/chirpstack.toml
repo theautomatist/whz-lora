@@ -6,7 +6,7 @@
 
 [postgresql]
   # DSN uses environment variables injected via Compose.
-  dsn="postgres://chirpstack:${POSTGRES_PASSWORD}@$POSTGRESQL_HOST/chirpstack?sslmode=disable"
+  dsn="postgres://chirpstack:$POSTGRES_PASSWORD@$POSTGRESQL_HOST/chirpstack?sslmode=disable"
   max_open_connections=10
   min_idle_connections=0
 
