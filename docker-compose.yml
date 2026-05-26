@@ -1,0 +1,115 @@
+services:
+  chirpstack:
+    image: chirpstack/chirpstack:4.18.0
+    command: -c /etc/chirpstack
+    restart: unless-stopped
+    volumes:
+      - ./chirpstack:/etc/chirpstack
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mosquitto:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      - MQTT_BROKER_HOST=mosquitto
+      - REDIS_HOST=redis
+      - POSTGRESQL_HOST=postgres
+      - CHIRPSTACK_API_SECRET=${CHIRPSTACK_API_SECRET}
+      - CHIRPSTACK_MQTT_USERNAME=${CHIRPSTACK_MQTT_USERNAME}
+      - CHIRPSTACK_MQTT_PASSWORD=${CHIRPSTACK_MQTT_PASSWORD}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    ports:
+      - "8080:8080"
+
+  chirpstack-gateway-bridge:
+    image: chirpstack/chirpstack-gateway-bridge:4.1.1
+    restart: unless-stopped
+    ports:
+      - "1700:1700/udp"
+    volumes:
+      - ./chirpstack-gateway-bridge:/etc/chirpstack-gateway-bridge
+    environment:
+      - INTEGRATION__MQTT__EVENT_TOPIC_TEMPLATE=eu868/gateway/{{ .GatewayID }}/event/{{ .EventType }}
+      - INTEGRATION__MQTT__STATE_TOPIC_TEMPLATE=eu868/gateway/{{ .GatewayID }}/state/{{ .StateType }}
+      - INTEGRATION__MQTT__COMMAND_TOPIC_TEMPLATE=eu868/gateway/{{ .GatewayID }}/command/#
+      - INTEGRATION__MQTT__AUTH__GENERIC__SERVERS=tcp://mosquitto:1883
+      - INTEGRATION__MQTT__AUTH__GENERIC__USERNAME=${CHIRPSTACK_MQTT_USERNAME}
+      - INTEGRATION__MQTT__AUTH__GENERIC__PASSWORD=${CHIRPSTACK_MQTT_PASSWORD}
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+
+  chirpstack-gateway-bridge-basicstation:
+    image: chirpstack/chirpstack-gateway-bridge:4.1.1
+    restart: unless-stopped
+    command: -c /etc/chirpstack-gateway-bridge/chirpstack-gateway-bridge-basicstation-eu868.toml
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./chirpstack-gateway-bridge:/etc/chirpstack-gateway-bridge
+    environment:
+      - INTEGRATION__MQTT__AUTH__GENERIC__USERNAME=${CHIRPSTACK_MQTT_USERNAME}
+      - INTEGRATION__MQTT__AUTH__GENERIC__PASSWORD=${CHIRPSTACK_MQTT_PASSWORD}
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:14.23-alpine
+    restart: unless-stopped
+    volumes:
+      - ./postgresql/initdb:/docker-entrypoint-initdb.d
+      # Schema lives in named volume 'postgresqldata'.
+      # Reset: 'docker compose down -v' before recreating from a different ChirpStack major.
+      - postgresqldata:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=chirpstack
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=chirpstack
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7.4.9-alpine
+    restart: unless-stopped
+    command: redis-server --save 300 1 --save 60 100 --appendonly no
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  mosquitto:
+    image: eclipse-mosquitto:2.1.2-alpine
+    restart: unless-stopped
+    entrypoint: ["/mosquitto/config/entrypoint.sh"]
+    environment:
+      - CHIRPSTACK_MQTT_USERNAME=${CHIRPSTACK_MQTT_USERNAME}
+      - CHIRPSTACK_MQTT_PASSWORD=${CHIRPSTACK_MQTT_PASSWORD}
+      - MQTT_TEST_USERNAME=${MQTT_TEST_USERNAME}
+      - MQTT_TEST_PASSWORD=${MQTT_TEST_PASSWORD}
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto:/mosquitto/config/
+      - mosquittodata:/mosquitto/data
+    healthcheck:
+      # Tiny authenticated publish round-trip — proves listener is up and
+      # auth/ACL accept the credentials. $SYS topics are not retained on
+      # mosquitto v2 and publish every 10 s, so probing them is unreliable.
+      test: ["CMD-SHELL", "mosquitto_pub -h 127.0.0.1 -p 1883 -t healthcheck -m ok -u $$CHIRPSTACK_MQTT_USERNAME -P $$CHIRPSTACK_MQTT_PASSWORD -q 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgresqldata:
+  redisdata:
+  mosquittodata:

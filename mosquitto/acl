@@ -1,0 +1,12 @@
+# Mosquitto ACL for whz-lora.
+#
+# chirpstack — internal ChirpStack MQTT client: full access to application
+# events and gateway topics.
+user chirpstack
+topic readwrite #
+
+# testsubscriber — read-only subscriber for smoke testing and research consumers.
+# Restrict to application uplink events; no write access.
+user testsubscriber
+topic read application/#
+topic read eu868/gateway/#

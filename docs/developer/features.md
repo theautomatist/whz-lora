@@ -101,7 +101,7 @@ records what was removed and why. The entry format is defined in
 
 ### F-0004 — Reproduzierbares Setup
 
-- Status: proposed
+- Status: active
 - Summary: Der gesamte Server-Stack (ChirpStack v4, Gateway-Bridges,
   Mosquitto, PostgreSQL, Redis) ist als versioniertes Docker-Compose im
   Repository abgelegt und mit `docker compose up` startbar.
@@ -123,5 +123,5 @@ records what was removed and why. The entry format is defined in
 - Dependencies: keine
 - Interfaces & data: Repository, Docker, `.env`.
 - Realised by: n/a
-- Linked directives / ADRs: ADR-0014, ADR-0015
-- History: 2026-05-26 added
+- Linked directives / ADRs: ADR-0014, ADR-0015, ADR-0017, PR #2
+- History: 2026-05-26 added; 2026-05-26 status → active (PR #2)
