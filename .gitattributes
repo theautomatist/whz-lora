@@ -1,0 +1,15 @@
+# Shell scripts MUST stay LF on every checkout — Linux containers can't
+# exec a script with CRLF line endings.
+*.sh text eol=lf
+
+# Codec and Python likewise stay LF for cross-platform consistency.
+*.js text eol=lf
+*.py text eol=lf
+
+# Configuration files we ship to Linux containers
+*.toml text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.conf text eol=lf
+mosquitto/acl text eol=lf
+mosquitto/passwd text eol=lf

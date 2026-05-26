@@ -1,5 +1,5 @@
 #!/bin/sh
-# Mosquitto entrypoint — generate passwd file from environment variables,
+# Mosquitto entrypoint - generate passwd file from environment variables,
 # then exec the broker.  The passwd file is written to a named volume at
 # /mosquitto/data, never the bind-mounted /mosquitto/config (Windows host
 # permission round-trips break read-back from the daemon).
