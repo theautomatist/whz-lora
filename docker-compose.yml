@@ -6,9 +6,12 @@ services:
     volumes:
       - ./chirpstack:/etc/chirpstack
     depends_on:
-      - postgres
-      - mosquitto
-      - redis
+      postgres:
+        condition: service_healthy
+      mosquitto:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     environment:
       - MQTT_BROKER_HOST=mosquitto
       - REDIS_HOST=redis
@@ -35,7 +38,8 @@ services:
       - INTEGRATION__MQTT__AUTH__GENERIC__USERNAME=${CHIRPSTACK_MQTT_USERNAME}
       - INTEGRATION__MQTT__AUTH__GENERIC__PASSWORD=${CHIRPSTACK_MQTT_PASSWORD}
     depends_on:
-      - mosquitto
+      mosquitto:
+        condition: service_healthy
 
   chirpstack-gateway-bridge-basicstation:
     image: chirpstack/chirpstack-gateway-bridge:4.1.1
@@ -49,27 +53,26 @@ services:
       - INTEGRATION__MQTT__AUTH__GENERIC__USERNAME=${CHIRPSTACK_MQTT_USERNAME}
       - INTEGRATION__MQTT__AUTH__GENERIC__PASSWORD=${CHIRPSTACK_MQTT_PASSWORD}
     depends_on:
-      - mosquitto
-
-  chirpstack-rest-api:
-    image: chirpstack/chirpstack-rest-api:4.18.0
-    restart: unless-stopped
-    command: --server chirpstack:8080 --bind 0.0.0.0:8090 --insecure
-    ports:
-      - "8090:8090"
-    depends_on:
-      - chirpstack
+      mosquitto:
+        condition: service_healthy
 
   postgres:
     image: postgres:14.23-alpine
     restart: unless-stopped
     volumes:
       - ./postgresql/initdb:/docker-entrypoint-initdb.d
+      # Schema lives in named volume 'postgresqldata'.
+      # Reset: 'docker compose down -v' before recreating from a different ChirpStack major.
       - postgresqldata:/var/lib/postgresql/data
     environment:
       - POSTGRES_USER=chirpstack
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=chirpstack
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   redis:
     image: redis:7.4.9-alpine
@@ -77,6 +80,11 @@ services:
     command: redis-server --save 300 1 --save 60 100 --appendonly no
     volumes:
       - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   mosquitto:
     image: eclipse-mosquitto:2.1.2-alpine
@@ -91,6 +99,11 @@ services:
       - "1883:1883"
     volumes:
       - ./mosquitto:/mosquitto/config/
+    healthcheck:
+      test: ["CMD-SHELL", "mosquitto_sub -t '$$SYS/broker/uptime' -C 1 -W 2 -u $$CHIRPSTACK_MQTT_USERNAME -P $$CHIRPSTACK_MQTT_PASSWORD"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
 volumes:
   postgresqldata:
