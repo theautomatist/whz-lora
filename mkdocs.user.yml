@@ -22,6 +22,7 @@ theme:
 nav:
   - Home: index.md
   - Getting Started: getting-started.md
+  - Kerlink iFemtoCell Bring-up: kerlink-ifemtocell-bring-up.md
   - Guides: guides.md
   - FAQ: faq.md
 
