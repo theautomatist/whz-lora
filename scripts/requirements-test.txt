@@ -1,0 +1,4 @@
+# Pinned test dependencies for the smoke test script.
+# chirpstack-api version tracks the ChirpStack server version (4.18.0).
+chirpstack-api==4.18.0
+paho-mqtt==2.1.0
