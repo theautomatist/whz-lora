@@ -99,8 +99,12 @@ services:
       - "1883:1883"
     volumes:
       - ./mosquitto:/mosquitto/config/
+      - mosquittodata:/mosquitto/data
     healthcheck:
-      test: ["CMD-SHELL", "mosquitto_sub -t '$$SYS/broker/uptime' -C 1 -W 2 -u $$CHIRPSTACK_MQTT_USERNAME -P $$CHIRPSTACK_MQTT_PASSWORD"]
+      # Tiny authenticated publish round-trip — proves listener is up and
+      # auth/ACL accept the credentials. $SYS topics are not retained on
+      # mosquitto v2 and publish every 10 s, so probing them is unreliable.
+      test: ["CMD-SHELL", "mosquitto_pub -h 127.0.0.1 -p 1883 -t healthcheck -m ok -u $$CHIRPSTACK_MQTT_USERNAME -P $$CHIRPSTACK_MQTT_PASSWORD -q 1"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -108,3 +112,4 @@ services:
 volumes:
   postgresqldata:
   redisdata:
+  mosquittodata:
