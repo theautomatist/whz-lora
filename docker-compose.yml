@@ -78,6 +78,12 @@ services:
   mosquitto:
     image: eclipse-mosquitto:2.1.2-alpine
     restart: unless-stopped
+    entrypoint: ["/mosquitto/config/entrypoint.sh"]
+    environment:
+      - CHIRPSTACK_MQTT_USERNAME=${CHIRPSTACK_MQTT_USERNAME}
+      - CHIRPSTACK_MQTT_PASSWORD=${CHIRPSTACK_MQTT_PASSWORD}
+      - MQTT_TEST_USERNAME=${MQTT_TEST_USERNAME}
+      - MQTT_TEST_PASSWORD=${MQTT_TEST_PASSWORD}
     ports:
       - "1883:1883"
     volumes:

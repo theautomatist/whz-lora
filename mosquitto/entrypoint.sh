@@ -1,0 +1,15 @@
+#!/bin/sh
+# Mosquitto entrypoint — generate passwd file from environment variables,
+# then exec the broker.  The passwd file is written to the mounted config
+# directory and is never committed to the repository.
+set -eu
+
+PASSWD_FILE=/mosquitto/config/passwd
+
+# Create / overwrite the passwd file with the two required users.
+mosquitto_passwd -b -c "$PASSWD_FILE" \
+    "$CHIRPSTACK_MQTT_USERNAME" "$CHIRPSTACK_MQTT_PASSWORD"
+mosquitto_passwd -b "$PASSWD_FILE" \
+    "$MQTT_TEST_USERNAME" "$MQTT_TEST_PASSWORD"
+
+exec /usr/sbin/mosquitto -c /mosquitto/config/mosquitto.conf
