@@ -45,6 +45,9 @@ services:
       - "3001:3001"
     volumes:
       - ./chirpstack-gateway-bridge:/etc/chirpstack-gateway-bridge
+    environment:
+      - INTEGRATION__MQTT__AUTH__GENERIC__USERNAME=${CHIRPSTACK_MQTT_USERNAME}
+      - INTEGRATION__MQTT__AUTH__GENERIC__PASSWORD=${CHIRPSTACK_MQTT_PASSWORD}
     depends_on:
       - mosquitto
 
