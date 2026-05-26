@@ -1,0 +1,50 @@
+# ChirpStack Gateway Bridge — Basics Station backend, EU868.
+# Used by the chirpstack-gateway-bridge-basicstation service.
+
+[integration.mqtt.auth.generic]
+servers=["tcp://mosquitto:1883"]
+# Credentials are passed via environment variables in the Compose file
+# for the UDP bridge; the basicstation service reads from this static file.
+# Use the chirpstack user which has full MQTT access.
+username="chirpstack"
+password="chirpstack"
+
+[integration.mqtt]
+event_topic_template="eu868/gateway/{{ .GatewayID }}/event/{{ .EventType }}"
+state_topic_template="eu868/gateway/{{ .GatewayID }}/state/{{ .StateType }}"
+command_topic_template="eu868/gateway/{{ .GatewayID }}/command/#"
+
+[backend]
+type="basic_station"
+
+  [backend.basic_station]
+  bind=":3001"
+  tls_cert=""
+  tls_key=""
+  ca_cert=""
+
+  region="EU868"
+  frequency_min=863000000
+  frequency_max=870000000
+
+  [[backend.basic_station.concentrators]]
+
+    [backend.basic_station.concentrators.multi_sf]
+    frequencies=[
+      868100000,
+      868300000,
+      868500000,
+      867100000,
+      867300000,
+      867500000,
+      867700000,
+      867900000,
+    ]
+
+    [backend.basic_station.concentrators.lora_std]
+    frequency=868300000
+    bandwidth=250000
+    spreading_factor=7
+
+    [backend.basic_station.concentrators.fsk]
+    frequency=868800000
