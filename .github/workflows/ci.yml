@@ -77,7 +77,8 @@ jobs:
       - name: Smoke test (Python)
         run: |
           if [ -f scripts/smoke_test.py ]; then
-            pip install chirpstack-api paho-mqtt
+            pip install -r scripts/requirements-test.txt
+            set -a; . .env; set +a
             python scripts/smoke_test.py
           else
             echo "No scripts/smoke_test.py yet — skipped"
