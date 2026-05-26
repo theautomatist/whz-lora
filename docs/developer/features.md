@@ -17,29 +17,41 @@ records what was removed and why. The entry format is defined in
 
 ### F-0001 — Gateway-Anbindung
 
-- Status: proposed
+- Status: active (Gateway-Pfad), Sensor-Uplink ausstehend bis erste
+  Hardware verfügbar
 - Summary: LoRaWAN-Gateways (Start: Kerlink Wirnet iFemtoCell Evolution
   868) sprechen mit dem im Stack betriebenen ChirpStack v4 LNS.
 - Problem solved: Eigene Gateways müssen Uplinks an einen lokal
   betriebenen LNS liefern, ohne externen Cloud-Service.
 - User-facing behavior: Der Betreiber konfiguriert sein Gateway laut
   Anleitung; das Gateway erscheint in der ChirpStack-UI als `online`
-  und liefert empfangene Frames.
+  und liefert empfangene Frames. Anleitung:
+  [docs/user/kerlink-ifemtocell-bring-up.md](kerlink-ifemtocell-bring-up.md).
 - Acceptance criteria:
   - **CI (Simulator-Modus)**: Das Smoke-Test-Skript registriert ein
     virtuelles Gateway in ChirpStack und sendet über UDP-Port 1700
     einen Stats-Frame; das Gateway erscheint in der gRPC-API mit Status
-    `online` (`LastSeenAt` jünger als 30 Sekunden).
-  - **Manuell**: Der Kerlink iFemtoCell ist über das Packet Forwarder
-    Protocol (UDP/1700) oder Basics Station (WebSocket) verbunden und
-    in der ChirpStack-UI mit Status `online` sichtbar.
-  - Unterstützt sind Semtech UDP Packet Forwarder und Basics Station.
+    `online` (`LastSeenAt` jünger als 30 Sekunden). — **erfüllt durch
+    PR #2 (F-0004), Smoke-Test grün.**
+  - **Manuell (Kerlink-Hardware, Gateway-Pfad)**: Der Kerlink
+    iFemtoCell Evolution ist über das Packet Forwarder Protocol
+    (UDP/1700) verbunden und in der ChirpStack-UI mit Status `online`
+    sichtbar; Stats-Frames werden alle 30 Sekunden in der
+    ChirpStack-Metrik-Tabelle gespeichert. — **erfüllt durch PR #4,
+    Bring-up am 2026-05-26 gegen EUI `7076ff0064071a3d`.**
+  - **Manuell (Sensor-Uplink)**: Ein realer OTAA-EU868-Sensor joint
+    über das Gateway und sein Uplink erscheint als JSON-Nachricht auf
+    `application/<id>/device/<eui>/event/up`. — **offen**, wartet auf
+    Hardware (Empfehlung Dragino LHT52, ~21 € netto). Wird in einer
+    Folge-Direktive abgeschlossen.
+  - Unterstützt sind Semtech UDP Packet Forwarder und (auf TOML-Ebene
+    konfigurierbar) Basics Station.
 - Dependencies: F-0004 (Reproduzierbares Setup)
 - Interfaces & data: Backhaul Gateway → Stack via Packet Forwarder
   (UDP/1700) oder Basics Station (WebSocket).
 - Realised by: n/a (Single-Repo)
-- Linked directives / ADRs: ADR-0014, ADR-0015
-- History: 2026-05-26 added
+- Linked directives / ADRs: ADR-0014, ADR-0015, ADR-0018; Issue #3, PR #4
+- History: 2026-05-26 added; 2026-05-26 Gateway-Pfad active (PR #4)
 
 ### F-0002 — Geräte-Verwaltung
 

@@ -372,6 +372,14 @@ GitLab-Port (siehe ADR-0017) — aktuell ist die Verifikation lokal.
 | `gh` CLI | Issues, PRs, Labels |
 | `pip install -r scripts/requirements-test.txt` | `chirpstack-api`, `paho-mqtt`, `cryptography` |
 
+Für Bring-up echter Kerlink-Hardware zusätzlich (siehe
+[ADR-0018](docs/developer/decisions/adr-0018.md) +
+[user-doc](docs/user/kerlink-ifemtocell-bring-up.md)):
+
+- Zwei Windows-Firewall-Regeln (UDP 1700 + ICMPv4), einmalig per
+  elevated PowerShell.
+- Ein USB-C-Datenkabel für den Gateway-Anschluss.
+
 Der lokale Verifikationsablauf für eine Direktive:
 
 ```powershell
