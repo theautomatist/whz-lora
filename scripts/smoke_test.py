@@ -9,7 +9,9 @@ Performs an end-to-end smoke test against a running ChirpStack v4 stack:
    - Otherwise, logs in with CHIRPSTACK_ADMIN_USER / CHIRPSTACK_ADMIN_PASS
      and creates a temporary API key.
 2. Creates (idempotent find-or-create) a Tenant, Application,
-   Device Profile, and Device.
+   Device Profile, and Device.  The device is provisioned as ABP so that
+   the smoke test can inject a MIC-valid Unconfirmed Data Up frame without
+   an over-the-air join.
 3. Sends a Semtech UDP Packet Forwarder PUSH_DATA frame (stats + RXPK)
    to localhost:1700 to simulate a gateway uplink.
 4. Subscribes to the MQTT uplink topic and waits up to 30 seconds for
@@ -18,13 +20,13 @@ Performs an end-to-end smoke test against a running ChirpStack v4 stack:
 6. Exits 0 on success, non-zero with a clear error message on failure.
 
 Required environment variables (set via .env or CI secrets):
-  CHIRPSTACK_ADMIN_USER   — ChirpStack admin username (default: admin)
-  CHIRPSTACK_ADMIN_PASS   — ChirpStack admin password (default: admin)
   MQTT_TEST_USERNAME      — MQTT username for test subscriber
   MQTT_TEST_PASSWORD      — MQTT password for test subscriber
 
 Optional:
   CHIRPSTACK_API_KEY      — Pre-created API key (skips login if provided)
+  CHIRPSTACK_ADMIN_USER   — ChirpStack admin username (default: admin)
+  CHIRPSTACK_ADMIN_PASS   — ChirpStack admin password (default: admin)
 """
 
 import base64
@@ -39,6 +41,11 @@ import random
 
 import grpc
 import paho.mqtt.client as mqtt
+
+# AES-CMAC for LoRaWAN MIC computation
+from cryptography.hazmat.primitives.cmac import CMAC
+from cryptography.hazmat.primitives.ciphers.algorithms import AES
+from cryptography.hazmat.backends import default_backend
 
 # gRPC stubs from chirpstack-api package
 from chirpstack_api.api import tenant_pb2, tenant_pb2_grpc
@@ -66,6 +73,12 @@ DEVICE_PROFILE_NAME = "whz-smoke-test-profile"
 DEVICE_EUI = "0102030405060708"
 DEVICE_NAME = "whz-smoke-test-device"
 GATEWAY_EUI = "aabbccddee010203"
+
+# ABP session keys and address — deterministic test values.
+# All-zeros NwkSKey / AppSKey are intentionally weak; this is test-only.
+ABP_DEV_ADDR = "01020304"
+ABP_NWK_S_KEY = "00000000000000000000000000000001"  # 16 bytes hex
+ABP_APP_S_KEY = "00000000000000000000000000000002"  # 16 bytes hex
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -201,7 +214,7 @@ def find_or_create_device_profile(stub, meta: list, tenant_id: str) -> str:
                     "}\n"
                     "function encodeDownlink(input) { return { bytes: [] }; }\n"
                 ),
-                supports_otaa=True,
+                supports_otaa=False,
             )
         ),
         metadata=meta,
@@ -213,42 +226,94 @@ def find_or_create_device_profile(stub, meta: list, tenant_id: str) -> str:
 def find_or_create_device(
     stub, meta: list, app_id: str, profile_id: str
 ) -> None:
+    """
+    Find or create the smoke-test device and ensure ABP activation is set.
+
+    ABP is used so the smoke test can inject a MIC-valid Unconfirmed Data Up
+    frame without performing an over-the-air join (which ChirpStack v4 rejects
+    when the MIC is zero).
+    """
+    device_existed = False
     try:
         existing = stub.Get(
             device_pb2.GetDeviceRequest(dev_eui=DEVICE_EUI), metadata=meta
         )
         print(f"[smoke_test] Device already exists: {existing.device.dev_eui}")
-        return
+        device_existed = True
     except grpc.RpcError as e:
         if e.code() != grpc.StatusCode.NOT_FOUND:
             raise
 
-    stub.Create(
-        device_pb2.CreateDeviceRequest(
-            device=device_pb2.Device(
-                dev_eui=DEVICE_EUI,
-                name=DEVICE_NAME,
-                description="Created by smoke_test.py",
-                application_id=app_id,
-                device_profile_id=profile_id,
-                is_disabled=False,
-            )
-        ),
-        metadata=meta,
-    )
-    print(f"[smoke_test] Device created: {DEVICE_EUI}")
+    if not device_existed:
+        stub.Create(
+            device_pb2.CreateDeviceRequest(
+                device=device_pb2.Device(
+                    dev_eui=DEVICE_EUI,
+                    name=DEVICE_NAME,
+                    description="Created by smoke_test.py",
+                    application_id=app_id,
+                    device_profile_id=profile_id,
+                    is_disabled=False,
+                )
+            ),
+            metadata=meta,
+        )
+        print(f"[smoke_test] Device created: {DEVICE_EUI}")
 
-    stub.CreateKeys(
-        device_pb2.CreateDeviceKeysRequest(
-            device_keys=device_pb2.DeviceKeys(
-                dev_eui=DEVICE_EUI,
-                nwk_key="00000000000000000000000000000001",
-                app_key="00000000000000000000000000000001",
-            )
-        ),
-        metadata=meta,
+    # Ensure ABP activation is present (idempotent — overwrite is safe).
+    try:
+        stub.Activate(
+            device_pb2.ActivateDeviceRequest(
+                device_activation=device_pb2.DeviceActivation(
+                    dev_eui=DEVICE_EUI,
+                    dev_addr=ABP_DEV_ADDR,
+                    app_s_key=ABP_APP_S_KEY,
+                    nwk_s_enc_key=ABP_NWK_S_KEY,
+                    s_nwk_s_int_key=ABP_NWK_S_KEY,
+                    f_nwk_s_int_key=ABP_NWK_S_KEY,
+                    f_cnt_up=0,
+                    n_f_cnt_down=0,
+                    a_f_cnt_down=0,
+                )
+            ),
+            metadata=meta,
+        )
+        print(f"[smoke_test] ABP activation set for: {DEVICE_EUI} (DevAddr={ABP_DEV_ADDR})")
+    except grpc.RpcError as e:
+        die(f"ABP Activate failed ({e.code()}): {e.details()}")
+
+
+# ---------------------------------------------------------------------------
+# LoRaWAN MIC helper
+# ---------------------------------------------------------------------------
+
+
+def compute_uplink_mic(
+    nwk_s_key: bytes,
+    dev_addr: bytes,
+    f_cnt: int,
+    mhdr: int,
+    fhdr: bytes,
+    fport: int,
+    frm_payload: bytes,
+) -> bytes:
+    """
+    Compute a LoRaWAN 1.0.x uplink MIC using AES-CMAC (TS001-1.0.3 §4.4).
+
+    B0 = 0x49 || 0x00 0x00 0x00 0x00 || Dir=0 || DevAddr (LE) || FCntUp (LE) || 0x00 || len(msg)
+    msg = MHDR || FHDR || FPort || FRMPayload
+    MIC = first 4 bytes of AES128_CMAC(NwkSKey, B0 || msg)
+    """
+    msg = bytes([mhdr]) + fhdr + bytes([fport]) + frm_payload
+    b0 = (
+        bytes([0x49, 0x00, 0x00, 0x00, 0x00, 0x00])
+        + dev_addr  # 4 bytes, little-endian
+        + struct.pack("<I", f_cnt)
+        + bytes([0x00, len(msg)])
     )
-    print(f"[smoke_test] Device keys set for: {DEVICE_EUI}")
+    c = CMAC(AES(nwk_s_key), backend=default_backend())
+    c.update(b0 + msg)
+    return c.finalize()[:4]
 
 
 # ---------------------------------------------------------------------------
@@ -289,21 +354,32 @@ def send_stats_frame(sock: socket.socket) -> None:
     print(f"[smoke_test] Sent stats PUSH_DATA (token={token:#06x})")
 
 
-def send_uplink_frame(sock: socket.socket) -> None:
+def send_uplink_frame(sock: socket.socket, f_cnt: int = 1) -> None:
     """
-    Send a Join Request frame so ChirpStack emits an event on MQTT.
+    Send a MIC-valid Unconfirmed Data Up frame for the ABP-provisioned device.
 
-    ChirpStack publishes a join/up event even when the MIC check fails,
-    which lets the smoke test confirm the full pipeline without a real
-    over-the-air join.
+    MHDR = 0x40 (Unconfirmed Data Up, MType=0b010, RFU=0, Major=0)
+    FHDR = DevAddr (LE) || FCtrl=0x00 || FCnt (LE 2 bytes)
+    FPort = 1
+    FRMPayload = b'\xDE\xAD' (arbitrary test payload)
+    MIC computed with NwkSEncKey using AES-CMAC per LoRaWAN 1.0.3 §4.4.
     """
     token = random.randint(0, 0xFFFF)
-    mhdr = 0x00  # JoinRequest
-    join_eui = bytes(8)  # all zeros
-    dev_eui_le = bytes.fromhex(DEVICE_EUI)[::-1]
-    dev_nonce = struct.pack("<H", random.randint(1, 0xFFFF))
-    mic = bytes(4)
-    phy = bytes([mhdr]) + join_eui + dev_eui_le + dev_nonce + mic
+
+    nwk_s_key = bytes.fromhex(ABP_NWK_S_KEY)
+    dev_addr_bytes = bytes.fromhex(ABP_DEV_ADDR)[::-1]  # little-endian
+
+    mhdr = 0x40  # Unconfirmed Data Up
+    fctrl = 0x00
+    fcnt_le = struct.pack("<H", f_cnt)
+    fhdr = dev_addr_bytes + bytes([fctrl]) + fcnt_le
+    fport = 1
+    frm_payload = b"\xDE\xAD"
+
+    mic = compute_uplink_mic(
+        nwk_s_key, dev_addr_bytes, f_cnt, mhdr, fhdr, fport, frm_payload
+    )
+    phy = bytes([mhdr]) + fhdr + bytes([fport]) + frm_payload + mic
 
     payload = {
         "rxpk": [
@@ -325,7 +401,10 @@ def send_uplink_frame(sock: socket.socket) -> None:
         ]
     }
     sock.sendto(build_push_data(token, payload), (UDP_HOST, UDP_PORT))
-    print(f"[smoke_test] Sent uplink PUSH_DATA (token={token:#06x})")
+    print(
+        f"[smoke_test] Sent Unconfirmed Data Up PUSH_DATA "
+        f"(DevAddr={ABP_DEV_ADDR}, FCnt={f_cnt}, token={token:#06x})"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -333,10 +412,18 @@ def send_uplink_frame(sock: socket.socket) -> None:
 # ---------------------------------------------------------------------------
 
 
-def wait_for_uplink(app_id: str, username: str, password: str) -> bool:
+def wait_for_uplink(
+    app_id: str,
+    username: str,
+    password: str,
+    subscribed_gate: threading.Event,
+) -> bool:
     """
     Subscribe to application events and wait up to UPLINK_TIMEOUT_SECONDS.
-    Returns True if any event is received.
+
+    Sets subscribed_gate once the MQTT subscription is confirmed (SUBACK),
+    so that the inject thread can start only after the subscriber is ready.
+    Returns True if an event is received within the timeout.
     """
     topic = f"application/{app_id}/device/{DEVICE_EUI}/event/+"
     received = threading.Event()
@@ -350,6 +437,11 @@ def wait_for_uplink(app_id: str, username: str, password: str) -> bool:
                 f"[smoke_test] MQTT connect rejected (rc={reason_code})",
                 file=sys.stderr,
             )
+            subscribed_gate.set()  # unblock inject thread even on failure
+
+    def on_subscribe(client, userdata, mid, reason_codes, properties):
+        print(f"[smoke_test] MQTT subscription confirmed (mid={mid})")
+        subscribed_gate.set()
 
     def on_message(client, userdata, msg):
         print(f"[smoke_test] MQTT event on {msg.topic}: {msg.payload[:120]!r}")
@@ -361,6 +453,7 @@ def wait_for_uplink(app_id: str, username: str, password: str) -> bool:
         clean_session=True,
     )
     client.on_connect = on_connect
+    client.on_subscribe = on_subscribe
     client.on_message = on_message
     client.username_pw_set(username, password)
 
@@ -370,18 +463,20 @@ def wait_for_uplink(app_id: str, username: str, password: str) -> bool:
         die(f"Cannot connect to Mosquitto at {MQTT_HOST}:{MQTT_PORT}: {e}")
 
     client.loop_start()
-    result = received.wait(timeout=UPLINK_TIMEOUT_SECONDS)
+    ok = received.wait(timeout=UPLINK_TIMEOUT_SECONDS)
     client.loop_stop()
     client.disconnect()
-    return result
+    return ok
 
 
 def verify_anonymous_rejected() -> None:
     """Assert that anonymous MQTT connections are refused."""
+    connected = threading.Event()
     rc_holder = [None]
 
     def on_connect(client, userdata, flags, reason_code, properties):
         rc_holder[0] = reason_code
+        connected.set()
 
     anon = mqtt.Client(
         mqtt.CallbackAPIVersion.VERSION2,
@@ -393,7 +488,12 @@ def verify_anonymous_rejected() -> None:
     try:
         anon.connect(MQTT_HOST, MQTT_PORT, keepalive=5)
         anon.loop_start()
-        time.sleep(2)
+        if not connected.wait(timeout=5):
+            anon.loop_stop()
+            # TCP connection made but no CONNACK arrived — treat as rejected.
+            print("[smoke_test] Anonymous MQTT: no CONNACK within 5s — treated as rejected OK")
+            anon.disconnect()
+            return
         anon.loop_stop()
         anon.disconnect()
     except OSError:
@@ -461,25 +561,38 @@ def main() -> None:
     verify_anonymous_rejected()
 
     # ------------------------------------------------------------------
-    # Step 4 — Subscribe and inject UDP frame
+    # Step 4 — Subscribe first, then inject UDP frame after subscription
+    #           is confirmed to avoid the race between inject and subscribe.
     # ------------------------------------------------------------------
+    subscribed_gate = threading.Event()
+
     def inject_uplink() -> None:
-        time.sleep(2)  # wait for subscriber to be connected
+        # Wait until the MQTT subscriber has confirmed its subscription
+        # before sending the frame; avoids the inject-before-subscribe race.
+        if not subscribed_gate.wait(timeout=15):
+            print(
+                "[smoke_test] WARNING: MQTT subscription not confirmed within 15s; "
+                "injecting anyway.",
+                file=sys.stderr,
+            )
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             send_stats_frame(sock)
-            time.sleep(1)
+            time.sleep(0.5)
             send_uplink_frame(sock)
             sock.close()
         except Exception as exc:
             print(f"[smoke_test] UDP inject error: {exc}", file=sys.stderr)
 
-    threading.Thread(target=inject_uplink, daemon=True).start()
+    inject_thread = threading.Thread(target=inject_uplink, daemon=True)
+    inject_thread.start()
 
     print(
         f"[smoke_test] Waiting up to {UPLINK_TIMEOUT_SECONDS}s for MQTT event ..."
     )
-    if not wait_for_uplink(app_id, test_user, test_pass):
+    received = wait_for_uplink(app_id, test_user, test_pass, subscribed_gate)
+
+    if not received:
         die(
             f"No MQTT event received within {UPLINK_TIMEOUT_SECONDS}s on "
             f"application/{app_id}/device/{DEVICE_EUI}/event/+. "
