@@ -318,18 +318,22 @@ Vollständige Definition: `docs/developer/concept/concept-paper.md`.
 ### Stack & Layout
 
 - **LoRaWAN Network Server**: ChirpStack v4 (siehe
-  `docs/developer/decisions/adr-0001-lns-stack-chirpstack-v4.md`).
-- **Begleitende Container** (alle aus dem offiziellen `chirpstack-docker`
+  `docs/developer/decisions/adr-0014.md`).
+- **Begleitende Container** (aus dem offiziellen `chirpstack-docker`
   Compose abgeleitet): ChirpStack, ChirpStack Gateway Bridge (UDP),
   ChirpStack Gateway Bridge (Basics Station), Mosquitto, PostgreSQL,
-  Redis, REST-API-Proxy.
-- **Eigene Code-Anteile** (erwartet klein):
+  Redis. (Der REST-API-Proxy des Upstream-Compose wird bewusst *nicht*
+  betrieben — Zugriff erfolgt direkt per gRPC.)
+- **Eigene Code-Anteile**:
   - Geräte-Codecs in JavaScript (im LNS hinterlegt, separat versioniert).
-  - Ein Smoke-Test-Skript (Python oder PowerShell) für den
+  - Ein Smoke-Test-Skript in **Python** (`scripts/smoke_test.py`) für den
     Verifikationscheck.
+  - Provisioning-Web-App (`provisioning/`, FastAPI) zum Einbuchen von
+    OTAA-Aktuatoren — Feature F-0005, siehe ADR-0019.
   - `.env.example` für Konfiguration.
-- **Test-Container**: `chirpstack-simulator` (separates Image, im
-  test-compose nachgeladen) zum Erzeugen synthetischer Uplinks.
+- **Verifikation**: Das Python-Smoke-Test-Skript speist synthetische
+  Uplinks direkt per UDP ein; `brocaar/chirpstack-simulator` wird *nicht*
+  genutzt (Wartungsrisiko — siehe ADR-0015). Kein separates Test-Compose.
 - **Doku-Sprache**: Englisch (Developer und User).
 
 ### Verzeichnis-Layout (Soll-Zustand)
@@ -337,13 +341,15 @@ Vollständige Definition: `docs/developer/concept/concept-paper.md`.
 ```
 .
 ├─ docker-compose.yml          # Produktiv-Stack
-├─ docker-compose.test.yml     # Smoke-Test-Overlay (Simulator)
 ├─ .env.example
 ├─ chirpstack/                 # ChirpStack-Konfig (region_eu868.toml, ...)
-├─ mosquitto/                  # Mosquitto-Konfig + ACL
+├─ chirpstack-gateway-bridge/  # Basics-Station-Konfig
+├─ mosquitto/                  # Mosquitto-Konfig + ACL + Entrypoint
+├─ postgresql/initdb/          # DB-Init-Skripte
 ├─ codecs/                     # Device-Codecs (JS)
-├─ scripts/smoke-test.ps1      # Verifikationscheck
-└─ docs/                       # mkdocs-Sites (unverändert)
+├─ provisioning/               # Aktuator-Provisioning-Web-App (FastAPI, F-0005)
+├─ scripts/smoke_test.py       # Verifikationscheck
+└─ docs/                       # mkdocs-Sites
 ```
 
 ### Befehle
@@ -352,7 +358,8 @@ Vollständige Definition: `docs/developer/concept/concept-paper.md`.
 |---|---|
 | Stack starten | `docker compose up -d` |
 | Stack stoppen | `docker compose down` |
-| Verifikationscheck (lokal) | `./scripts/smoke-test.ps1` |
+| Provisioning-App (UI) | `http://localhost:8092` (nach `docker compose up`) |
+| Verifikationscheck (lokal) | `py -3.12 scripts/smoke_test.py` |
 | Doku-Build (Entwicklung) | `mkdocs serve -f mkdocs.developer.yml` |
 | Doku-Build (Nutzer) | `mkdocs serve -f mkdocs.user.yml` |
 | Doku-Export | `./export/build.ps1` |

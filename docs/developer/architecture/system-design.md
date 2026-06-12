@@ -1,17 +1,27 @@
 # System Design
 
-> Fill in per project. Show structures as diagrams, not prose (see
-> `CLAUDE.md`, core principles).
+The authoritative architecture of whz-lora is **not duplicated here** — it lives in
+the single sources of truth, so there is only ever one place to update:
 
-## Component Overview
+- **Topology, data model & data flow** — [Concept Paper §2](../concept/concept-paper.md)
+  (component, ER and data-flow diagrams).
+- **What the product does** — the [Feature Registry](../features.md) (F-0001 … F-0005).
+- **Why it is built this way** — the [Architecture Decision Records](../decisions/index.md),
+  notably ADR-0014 (ChirpStack v4), ADR-0015 (smoke-test toolchain), ADR-0017
+  (local verification), ADR-0018 (gateway USB-NDIS) and ADR-0019 (provisioning app).
 
-```mermaid
-graph TD
-    A[Client] --> B[API]
-    B --> C[(Database)]
-    B --> D[External Service]
-```
+## Runtime components (at a glance)
 
-## Data Model
+A navigational summary only — the compose file is authoritative for versions and ports.
 
-> Add an ER diagram per project.
+| Container | Role | Host port |
+|---|---|---|
+| `chirpstack` | LoRaWAN Network Server + gRPC API + Web UI | 8080 |
+| `chirpstack-gateway-bridge` | Semtech UDP packet forwarder endpoint | 1700/udp |
+| `chirpstack-gateway-bridge-basicstation` | Basics Station endpoint | 3001 |
+| `mosquitto` | MQTT broker (auth + ACL) | 1883 |
+| `postgres` | LNS persistence | — |
+| `redis` | sessions / cache | — |
+| `provisioning-app` | Actuator provisioning & commissioning web app (F-0005) | 8092 |
+
+For the rationale behind each component, follow the ADRs linked above.

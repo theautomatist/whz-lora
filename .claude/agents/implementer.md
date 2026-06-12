@@ -38,10 +38,12 @@ the smallest change that solves the task wins.
 This is a ChirpStack-v4-based LoRaWAN base. The own code footprint is
 intentionally small; expect to spend most directives on:
 
-- `docker-compose.yml` and `docker-compose.test.yml` (the stack itself).
+- `docker-compose.yml` (the stack itself).
 - ChirpStack region/server config (`region_eu868.toml`,
   `chirpstack.toml`).
 - Mosquitto config + ACL.
+- The provisioning web app (`provisioning/`, FastAPI) and the shared
+  gRPC client (`scripts/chirpstack_client.py`).
 - Device codecs in JavaScript under `codecs/`.
 - The smoke-test script under `scripts/`.
 - `.env.example` (never `.env` — see `.gitignore`).

@@ -1,14 +1,11 @@
 # Project Plan
 
-Timeline as a Gantt diagram. Replace the placeholder below with the real
-roadmap during or after onboarding.
+The project has no hard deadlines (see the Concept Paper, *Scope & Constraints*),
+so no separate Gantt chart is maintained — it would be a second, drifting source.
 
-```mermaid
-gantt
-    title Project Roadmap (placeholder — fill in per project)
-    dateFormat YYYY-MM-DD
-    section Phase 1
-    First milestone     :m1, 2025-01-01, 14d
-    section Phase 2
-    Second milestone    :m2, after m1, 14d
-```
+The **living roadmap and status is the single source of truth itself**:
+
+- **What is done, in progress or planned** — the [Feature Registry](../features.md);
+  each feature carries a `Status` and a `History` line.
+- **Decisions and their sequence** — the
+  [Architecture Decision Records](../decisions/index.md).
