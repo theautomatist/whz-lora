@@ -101,7 +101,7 @@ for a second opinion. No fresh measurement campaign for v1.
 |---|---|---|
 | Perspective | institutional owner-operator | no split incentive (owner = bill-payer); rented-residential split mode is a later variant |
 | Horizon | 10 yr | matches device lifetime + the German break-even study frame |
-| Energy price | €0.12 / kWh | conservative German institutional gas/district-heat; **confirm** |
+| Energy price | €0.12 gas / €0.16 Fernwärme | sourced (§10); the **energy source is the decisive swing** |
 | Discount rate | 3% | institutional |
 | **Target buildings X / Y** | **TBD** | name 1–2 real WHZ buildings to instantiate the model |
 
@@ -134,3 +134,24 @@ Defaults and their sources are in [building-typology.md](building-typology.md)
 (IWU TABULA, Destatis / Zensus 2022, ista, Heizspiegel). Every preset value stays
 editable in the **[calculator](model-calculator.html)**; presets are a starting
 point, not a constraint.
+
+## 10. Cost inputs (sourced defaults)
+
+The initial placeholder constants are replaced with researched German figures.
+**Cost per radiator (device + install) stays ~€110** — the cheaper bulk device
+exactly offsets the higher install labour, so the headline paybacks barely move;
+what moves is the *balancing* scenario and the *energy source*.
+
+| Input | Placeholder | Sourced default | Range | Conf. | Source |
+|---|---|---|---|---|---|
+| LoRaWAN TRV (€/valve, building scale, ex-VAT) | 90 | **70** | 50–82 | med | [m2mgermany](https://www.m2mgermany.de/shop/produkt/wt101-868m-smartes-heizkoerper-thermostat); [Concept13 ladder](https://www.concept13.co.uk/shop/sensors/heating/vicki-lorawan-trv-heating-control/) |
+| Install / valve (head swap + provisioning, batched) | 20 | **40** | 30–60 | med | [enpal head-swap](https://www.enpal.de/waermepumpe/thermostat-wechseln) |
+| Hydraulic balancing (€/radiator, Verfahren B, pre-subsidy) | 25 | **75** | 50–120 | high | [co2online](https://www.co2online.de/energie-sparen/heizenergie-sparen/hydraulischer-abgleich/hydraulischer-abgleich-kosten-amortisationszeit/); [Finanztip](https://www.finanztip.de/hydraulischer-abgleich/) |
+| Energy — gas (€/kWh, all-in institutional) | 0.12 | **0.12** | 0.09–0.13 | high | [Destatis H2 2025](https://www.destatis.de/DE/Presse/Pressemitteilungen/2026/03/PD26_111_61243.html); [BDEW](https://www.bdew.de/service/daten-und-grafiken/bdew-gaspreisanalyse/) |
+| Energy — district heating (€/kWh, Arbeitspreis) | 0.12 | **0.16** | 0.08–0.20 | high | [vzbv median 17 ct](https://www.vzbv.de/pressemitteilungen/teure-fernwaermepreise-verbraucherzentrale-fordert-preisdeckel); [DIW Wärmemonitor 2024](https://www.diw.de/de/diw_01.c.990772.de/publikationen/wochenberichte/2025_49_1/waermemonitor_2024__nach_energiekrise_entwickeln_sich_preise_der_heizenergietraeger_sehr_unterschiedlich.html) |
+
+**Decisive swing = the energy source.** Benefit scales linearly with price; a
+Fernwärme building (€0.16) has ~30 % more annual benefit than a gas one (€0.12)
+and can flip a borderline Altbau from ✗ to ✓. Still soft: bulk TRV pricing is
+login-gated (estimated −10–15 %), install is a batch figure, Fernwärme is a local
+monopoly price (factor-2 spread) — a real WHZ quote hardens all three.
