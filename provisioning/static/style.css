@@ -243,7 +243,11 @@ tr.row-created td {
 
 /* State dots */
 .state-dot {
-  font-size: 1rem;
+  font-size: 1.2rem;
+  cursor: help;
+}
+.state-cell {
+  text-align: center;
 }
 
 .state-online     { color: #1d7a3a; }
