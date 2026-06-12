@@ -34,7 +34,9 @@ Each archetype bundles a **thermal** profile and an **RF** profile.
 Savings bands are **conservative, literature-measured** (not vendor claims):
 valve-only ≈ honest controlled benchmarks; *+balancing* ≈ doubling per Szczotka.
 Savings are highest where insulation is worst (C/D) and where room usage is
-irregular (D, institutional) — which is exactly whz-lora's target.
+irregular (D, institutional) — which is exactly whz-lora's target. Representative
+per-preset defaults (intensity, sizes, radiator counts) are locked in
+[building-typology.md](building-typology.md).
 
 ## 4. Equations
 
@@ -50,7 +52,7 @@ cost_ceiling_per_radiator = benefit_per_radiator × horizon           # (NPV var
 ```
 
 `savings` = valve-only or +balancing per the flag. `m²_per_radiator` defaults to
-~15 (near-constant; a Tier-3 knob).
+~20 (near-constant; a Tier-3 knob; [building-typology.md](building-typology.md)).
 
 Absolute path (totals & sizing):
 
@@ -78,8 +80,8 @@ Make explicitly carries its own running cost:
 
 | Case | baseline/radiator | × savings × €0.12 | benefit/yr | cost/radiator | payback |
 |---|---|---|---|---|---|
-| **C — old** | 200 × 15 = 3000 kWh | × 10% | €36 | €110 | **~3 yr ✓** |
-| **A — modern** | 50 × 15 = 750 kWh | × 4% | €3.6 | €110 | **~30 yr ✗** |
+| **C — Altbau** | 160 × 20 = 3,200 kWh | × 10% | €38 | €110 | **~3 yr ✓** |
+| **A — Neubau** | 70 × 20 = 1,400 kWh | × 4% | €6.7 | €110 | **~16 yr ✗** |
 
 The model discriminates correctly out of the box — it reproduces the literature
 (pays back in poorly-insulated buildings, not in well-insulated ones). This is
@@ -115,19 +117,20 @@ exemplary scenarios:
 
 | Tier | Example class | Dwelling units | Floors | Living area (m²) | Radiators |
 |---|---|---|---|---|---|
-| **Klein** | Mehrfamilienhaus | TBD | TBD | TBD | TBD |
-| **Mittel** | Größerer Wohnkomplex | TBD | TBD | TBD | TBD |
-| **Groß** | Bürokomplex / Super-Komplex | TBD | TBD | TBD | TBD |
+| **Klein** | Mehrfamilienhaus | 7 | 4 | 500 | 35 |
+| **Mittel** | Größerer Wohnkomplex | 22 | 6 | 1,500 | 120 |
+| **Groß** | Bürokomplex / Super-Komplex | — | 6 | 1,800 | 92 |
 
 **Axis 2 — Construction / age** (type → archetype = intensity + savings + RF class):
 
-| Preset | Archetype (§3) | Era / method | Intensity | RF class |
+| Preset | Archetype (§3) | Era / method | Intensity (kWh/m²·yr) | RF class |
 |---|---|---|---|---|
-| **Neubau** | A modern | GEG / Effizienzhaus, concrete frame | TBD | TBD |
-| **Saniert** | B renovated | retrofit insulation | TBD | TBD |
-| **Altbau** | C old | pre-1980 masonry | TBD | TBD |
-| **Plattenbau / RC** | D institutional | 1960s–70s reinforced concrete | TBD | TBD |
+| **Neubau** | A modern | GEG / Effizienzhaus, masonry/timber + WDVS | 70 | hostile (low-E) |
+| **Saniert** | B renovated | retrofit WDVS insulation | 90 | moderate |
+| **Altbau** | C old | pre-1949 solid brick | 160 | mild (brick) |
+| **Plattenbau / RC** | D institutional | 1958–90 reinforced-concrete sandwich | 140 | heavy (RC) |
 
-`TBD` defaults are filled by the **building-typology deep-research** (IWU TABULA,
-Destatis / Zensus 2022, BBSR non-residential typology). Every preset value stays
-editable; presets are a starting point, not a constraint.
+Defaults and their sources are in [building-typology.md](building-typology.md)
+(IWU TABULA, Destatis / Zensus 2022, ista, Heizspiegel). Every preset value stays
+editable in the **[calculator](model-calculator.html)**; presets are a starting
+point, not a constraint.

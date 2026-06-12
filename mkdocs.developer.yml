@@ -32,6 +32,7 @@ nav:
       - Scope & Requirements: analysis/scope-and-requirements.md
       - Preliminary Research: analysis/preliminary-research.md
       - Model Design: analysis/model.md
+      - Building Typology: analysis/building-typology.md
       - Glossary: analysis/CONTEXT.md
   - Architecture:
       - System Design: architecture/system-design.md

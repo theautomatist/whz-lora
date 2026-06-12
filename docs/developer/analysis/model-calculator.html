@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>whz-lora — Wirtschaftlichkeitsrechner (LoRaWAN-Heizungssteuerung)</title>
+<style>
+  :root{
+    --bg:#0f1419; --card:#1a212b; --card2:#222b37; --ink:#e6edf3; --muted:#9aa7b4;
+    --line:#2d3743; --accent:#4aa3ff; --good:#2ea043; --bad:#e5534b; --warn:#d29922;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+  header{padding:20px 24px;border-bottom:1px solid var(--line)}
+  header h1{margin:0;font-size:19px}
+  header p{margin:6px 0 0;color:var(--muted);font-size:13px;max-width:70ch}
+  .wrap{display:flex;flex-wrap:wrap;gap:18px;padding:18px 24px;align-items:flex-start}
+  .col{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px}
+  .inputs{flex:1 1 360px;min-width:320px}
+  .results{flex:1 1 360px;min-width:320px;position:sticky;top:18px}
+  h2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);
+    margin:0 0 12px;font-weight:600}
+  .presets{display:flex;gap:10px;margin-bottom:16px}
+  .presets>div{flex:1}
+  label{display:block;font-size:12px;color:var(--muted);margin:10px 0 4px}
+  input,select{width:100%;background:var(--card2);color:var(--ink);border:1px solid var(--line);
+    border-radius:8px;padding:8px 10px;font-size:14px}
+  input:focus,select:focus{outline:none;border-color:var(--accent)}
+  .row{display:flex;gap:10px}
+  .row>div{flex:1}
+  .check{display:flex;align-items:center;gap:8px;margin-top:12px}
+  .check input{width:auto}
+  .check label{margin:0;color:var(--ink);font-size:14px}
+  details{margin-top:14px;border-top:1px solid var(--line);padding-top:10px}
+  summary{cursor:pointer;color:var(--muted);font-size:13px}
+  .verdict{border-radius:12px;padding:16px 18px;margin-bottom:16px;border:1px solid var(--line)}
+  .verdict.good{background:rgba(46,160,67,.12);border-color:var(--good)}
+  .verdict.bad{background:rgba(229,83,75,.12);border-color:var(--bad)}
+  .verdict .big{font-size:22px;font-weight:700}
+  .verdict.good .big{color:var(--good)} .verdict.bad .big{color:var(--bad)}
+  .verdict .sub{color:var(--muted);font-size:13px;margin-top:2px}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  td{padding:7px 0;border-bottom:1px solid var(--line)}
+  td:last-child{text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
+  tr.head td{color:var(--muted);font-weight:600;border-bottom:1px solid var(--line);
+    text-transform:uppercase;font-size:11px;letter-spacing:.05em;padding-top:14px}
+  .pill{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;font-weight:600}
+  .pill.make{background:rgba(74,163,255,.18);color:var(--accent)}
+  .pill.buy{background:rgba(210,153,34,.18);color:var(--warn)}
+  footer{padding:14px 24px;color:var(--muted);font-size:12px;border-top:1px solid var(--line);
+    max-width:90ch}
+  footer a{color:var(--accent)}
+  .note{color:var(--warn);font-size:12px;margin-top:8px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Wirtschaftlichkeitsrechner — LoRaWAN-Heizungssteuerung für Gebäude</h1>
+  <p>Modell mit Default-Annahmen, <strong>keine Garantie</strong>. Unsicher? Preset
+  laden und nur überschreiben, was du weißt. Zahlen & Quellen:
+  <code>building-typology.md</code>, <code>model.md</code>, <code>preliminary-research.md</code>.</p>
+</header>
+
+<div class="wrap">
+  <!-- INPUTS -->
+  <div class="col inputs">
+    <h2>Eingaben</h2>
+    <div class="presets">
+      <div>
+        <label>Größe (Preset)</label>
+        <select id="sizePreset">
+          <option value="klein">Klein — Mehrfamilienhaus</option>
+          <option value="mittel" selected>Mittel — Wohnkomplex</option>
+          <option value="gross">Groß — Bürokomplex</option>
+        </select>
+      </div>
+      <div>
+        <label>Bauart / Alter (Preset)</label>
+        <select id="conPreset">
+          <option value="neubau">Neubau (GEG/EH-55)</option>
+          <option value="saniert">Saniert</option>
+          <option value="altbau" selected>Altbau (Vollziegel)</option>
+          <option value="plattenbau">Plattenbau / Stahlbeton</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="row">
+      <div><label>Heizkörper (Aktuatoren)</label><input id="radiators" type="number" min="1"></div>
+      <div><label>Geschosse</label><input id="floors" type="number" min="1"></div>
+    </div>
+    <div class="row">
+      <div><label>Wohn-/Nutzfläche (m²)</label><input id="area" type="number" min="1"></div>
+      <div><label>Heizintensität (kWh/m²·a)</label><input id="intensity" type="number" min="1"></div>
+    </div>
+    <div class="row">
+      <div><label>Ersparnis-Anteil (%)</label><input id="savings" type="number" step="0.1" min="0"></div>
+      <div><label>Energiepreis (€/kWh)</label><input id="price" type="number" step="0.01" min="0"></div>
+    </div>
+    <div class="row">
+      <div><label>Horizont (Jahre)</label><input id="horizon" type="number" min="1"></div>
+      <div></div>
+    </div>
+    <div class="check">
+      <input id="balancing" type="checkbox">
+      <label for="balancing">Hydraulischer Abgleich (≈ verdoppelt die Ersparnis, eigene Kosten)</label>
+    </div>
+    <div class="check">
+      <input id="reuseGw" type="checkbox" checked>
+      <label for="reuseGw">Vorhandenes Gateway nutzen (WHZ) — Grenzkosten 0</label>
+    </div>
+
+    <details>
+      <summary>Erweiterte Annahmen (Kosten, Buy-Benchmark)</summary>
+      <div class="row">
+        <div><label>Kosten / Aktuator (€)</label><input id="costAct" type="number"></div>
+        <div><label>Montage / Aktuator (€)</label><input id="installAct" type="number"></div>
+      </div>
+      <div class="row">
+        <div><label>Gateway-Kosten (€)</label><input id="gwCost" type="number"></div>
+        <div><label>Abgleich-Kosten / HK (€)</label><input id="balCost" type="number"></div>
+      </div>
+      <div class="row">
+        <div><label>Buy: Thermostat (€)</label><input id="buyTh" type="number"></div>
+        <div><label>Buy: Zentrale (€)</label><input id="buyHub" type="number"></div>
+      </div>
+      <div class="row">
+        <div><label>Buy: Geräte / Zentrale</label><input id="buyCap" type="number"></div>
+        <div><label>Diskontsatz (%) — Info</label><input id="discount" type="number" step="0.5"></div>
+      </div>
+      <div class="note">Buy = Homematic IP CCU3 (proprietär, kein LoRaWAN) als Benchmark.</div>
+    </details>
+  </div>
+
+  <!-- RESULTS -->
+  <div class="col results">
+    <h2>Ergebnis</h2>
+    <div id="verdict" class="verdict">
+      <div class="big" id="vTitle">—</div>
+      <div class="sub" id="vSub">—</div>
+    </div>
+    <table>
+      <tr class="head"><td>Nutzen</td><td></td></tr>
+      <tr><td>Baseline Heizenergie</td><td id="rBaseline">—</td></tr>
+      <tr><td>Nutzen / Jahr</td><td id="rBenefit">—</td></tr>
+      <tr><td>Nutzen / Heizkörper·Jahr</td><td id="rBenefitRad">—</td></tr>
+
+      <tr class="head"><td><span class="pill make">Make</span> eigenes LoRaWAN</td><td></td></tr>
+      <tr><td>Aktuatoren (HK × (Kosten+Montage))</td><td id="rMakeAct">—</td></tr>
+      <tr><td>Gateways</td><td id="rMakeGw">—</td></tr>
+      <tr><td>Hydraulischer Abgleich</td><td id="rMakeBal">—</td></tr>
+      <tr><td><strong>Make Gesamt (CAPEX)</strong></td><td id="rMakeTotal">—</td></tr>
+      <tr><td>Amortisation (Make)</td><td id="rMakePb">—</td></tr>
+      <tr><td>Netto über Horizont</td><td id="rMakeNet">—</td></tr>
+
+      <tr class="head"><td><span class="pill buy">Buy</span> Homematic IP CCU3</td><td></td></tr>
+      <tr><td>Zentralen (≤250 Geräte)</td><td id="rBuyHubs">—</td></tr>
+      <tr><td><strong>Buy Gesamt (CAPEX)</strong></td><td id="rBuyTotal">—</td></tr>
+      <tr><td>Amortisation (Buy)</td><td id="rBuyPb">—</td></tr>
+
+      <tr class="head"><td>Make vs. Buy</td><td></td></tr>
+      <tr><td>Günstiger (CAPEX)</td><td id="rCheaper">—</td></tr>
+    </table>
+    <div class="note" id="rWarn"></div>
+  </div>
+</div>
+
+<footer>
+  Modell-Defaults gegründet auf IWU TABULA, Destatis/Zensus 2022, ista/TU Dortmund,
+  Heizspiegel und der Geräte-/Energierecherche. Pro-Heizkörper-Logik &amp;
+  Rückrechnung: siehe ADR-0021. <strong>Konservative Schätzung, kein Endurteil.</strong>
+</footer>
+
+<script>
+const SIZE = {
+  klein:  {radiators:35,  floors:4, area:500},
+  mittel: {radiators:120, floors:6, area:1500},
+  gross:  {radiators:92,  floors:6, area:1800},
+};
+const CON = {
+  neubau:     {intensity:70,  base:0.04, bal:0.08, gwPerFloors:2.5},
+  saniert:    {intensity:90,  base:0.06, bal:0.12, gwPerFloors:3.5},
+  altbau:     {intensity:160, base:0.10, bal:0.18, gwPerFloors:4.5},
+  plattenbau: {intensity:140, base:0.12, bal:0.21, gwPerFloors:4.0},
+};
+const D = {  // editable defaults
+  price:0.12, horizon:10, costAct:90, installAct:20, gwCost:200, balCost:25,
+  buyTh:50, buyHub:180, buyCap:250, discount:3,
+};
+const $ = id => document.getElementById(id);
+const eur = x => Math.round(x).toLocaleString('de-DE') + ' €';
+const yr  = x => (isFinite(x) ? x.toFixed(1).replace('.', ',') + ' J.' : '∞');
+
+function loadSize(){
+  const s = SIZE[$('sizePreset').value];
+  $('radiators').value = s.radiators; $('floors').value = s.floors; $('area').value = s.area;
+  recalc();
+}
+function loadCon(){
+  const c = CON[$('conPreset').value];
+  $('intensity').value = c.intensity;
+  $('savings').value = ($('balancing').checked ? c.bal : c.base) * 100;
+  recalc();
+}
+function onBalance(){  // re-apply savings from current construction preset
+  const c = CON[$('conPreset').value];
+  $('savings').value = ($('balancing').checked ? c.bal : c.base) * 100;
+  recalc();
+}
+function initDefaults(){
+  for(const k in D) if($(k)) $(k).value = D[k];
+}
+
+function recalc(){
+  const radiators = +$('radiators').value || 0;
+  const floors    = +$('floors').value || 1;
+  const area      = +$('area').value || 0;
+  const intensity = +$('intensity').value || 0;
+  const savings   = (+$('savings').value || 0) / 100;
+  const price     = +$('price').value || 0;
+  const horizon   = +$('horizon').value || 1;
+  const balancing = $('balancing').checked;
+  const reuseGw   = $('reuseGw').checked;
+  const costAct = +$('costAct').value||0, installAct = +$('installAct').value||0;
+  const gwCost = +$('gwCost').value||0, balCost = +$('balCost').value||0;
+  const buyTh = +$('buyTh').value||0, buyHub = +$('buyHub').value||0, buyCap = +$('buyCap').value||1;
+  const gwPerFloors = CON[$('conPreset').value].gwPerFloors;
+
+  // Benefit
+  const baseline = intensity * area;                 // kWh/yr
+  const benefit  = baseline * savings * price;        // €/yr
+  const benefitRad = radiators ? benefit / radiators : 0;
+
+  // Make
+  const gwCount = Math.max(1, Math.ceil(floors / gwPerFloors));
+  const actCost = radiators * (costAct + installAct);
+  const gwTotal = reuseGw ? 0 : gwCount * gwCost;
+  const balTotal = balancing ? radiators * balCost : 0;
+  const makeTotal = actCost + gwTotal + balTotal;
+  const makePb = benefit > 0 ? makeTotal / benefit : Infinity;
+  const makeNet = benefit * horizon - makeTotal;
+
+  // Buy (Homematic IP CCU3)
+  const buyHubs = Math.max(1, Math.ceil(radiators / buyCap));
+  const buyTotal = radiators * buyTh + buyHubs * buyHub + balTotal;
+  const buyPb = benefit > 0 ? buyTotal / benefit : Infinity;
+
+  // Verdict
+  const ok = makePb <= horizon;
+  const v = $('verdict');
+  v.className = 'verdict ' + (ok ? 'good' : 'bad');
+  $('vTitle').textContent = ok ? 'Wirtschaftlich ✓' : 'Nicht wirtschaftlich ✗';
+  $('vSub').textContent = 'Make amortisiert in ' + yr(makePb)
+    + ' (Horizont ' + horizon + ' J.) · ' + radiators + ' Heizkörper';
+
+  $('rBaseline').textContent = Math.round(baseline).toLocaleString('de-DE') + ' kWh/a';
+  $('rBenefit').textContent = eur(benefit) + '/a';
+  $('rBenefitRad').textContent = eur(benefitRad) + '/a';
+  $('rMakeAct').textContent = eur(actCost);
+  $('rMakeGw').textContent = reuseGw ? '0 € (' + gwCount + ' vorhanden)' : eur(gwTotal) + ' (' + gwCount + ')';
+  $('rMakeBal').textContent = balancing ? eur(balTotal) : '— (aus)';
+  $('rMakeTotal').textContent = eur(makeTotal);
+  $('rMakePb').textContent = yr(makePb);
+  $('rMakeNet').textContent = eur(makeNet);
+  $('rBuyHubs').textContent = buyHubs;
+  $('rBuyTotal').textContent = eur(buyTotal);
+  $('rBuyPb').textContent = yr(buyPb);
+  $('rCheaper').textContent = makeTotal <= buyTotal
+    ? 'Make (−' + eur(buyTotal - makeTotal) + ')'
+    : 'Buy (−' + eur(makeTotal - buyTotal) + ')';
+
+  let warn = [];
+  if(radiators > buyCap) warn.push('Buy braucht ' + buyHubs + ' Zentralen — Consumer-Hub-Limit (' + buyCap + '/Hub).');
+  if(reuseGw) warn.push('Make-Vorteil: vorhandenes WHZ-Gateway, Grenzkosten 0.');
+  $('rWarn').textContent = warn.join(' ');
+}
+
+// wire up
+['sizePreset'].forEach(id=>$(id).addEventListener('change', loadSize));
+['conPreset'].forEach(id=>$(id).addEventListener('change', loadCon));
+$('balancing').addEventListener('change', onBalance);
+document.querySelectorAll('input,select').forEach(el=>el.addEventListener('input', recalc));
+
+initDefaults();
+loadSize();   // sets size fields + recalc
+loadCon();    // sets construction fields + recalc
+</script>
+</body>
+</html>
