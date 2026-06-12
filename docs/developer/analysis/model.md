@@ -102,3 +102,32 @@ for a second opinion. No fresh measurement campaign for v1.
 | Energy price | €0.12 / kWh | conservative German institutional gas/district-heat; **confirm** |
 | Discount rate | 3% | institutional |
 | **Target buildings X / Y** | **TBD** | name 1–2 real WHZ buildings to instantiate the model |
+
+## 9. Input presets — the interactive front-end
+
+The model is driven from an HTML page: free-entry fields for what the user knows,
+plus **two preset dropdowns** that load defaults for the rest (KISS: unsure → load
+a preset, then override what you know). The two axes are **orthogonal** — a
+medium-size building can be Neubau or Altbau.
+
+**Axis 1 — Size tier** (scale → actuator_count, floors, footprint). The PO's three
+exemplary scenarios:
+
+| Tier | Example class | Dwelling units | Floors | Living area (m²) | Radiators |
+|---|---|---|---|---|---|
+| **Klein** | Mehrfamilienhaus | TBD | TBD | TBD | TBD |
+| **Mittel** | Größerer Wohnkomplex | TBD | TBD | TBD | TBD |
+| **Groß** | Bürokomplex / Super-Komplex | TBD | TBD | TBD | TBD |
+
+**Axis 2 — Construction / age** (type → archetype = intensity + savings + RF class):
+
+| Preset | Archetype (§3) | Era / method | Intensity | RF class |
+|---|---|---|---|---|
+| **Neubau** | A modern | GEG / Effizienzhaus, concrete frame | TBD | TBD |
+| **Saniert** | B renovated | retrofit insulation | TBD | TBD |
+| **Altbau** | C old | pre-1980 masonry | TBD | TBD |
+| **Plattenbau / RC** | D institutional | 1960s–70s reinforced concrete | TBD | TBD |
+
+`TBD` defaults are filled by the **building-typology deep-research** (IWU TABULA,
+Destatis / Zensus 2022, BBSR non-residential typology). Every preset value stays
+editable; presets are a starting point, not a constraint.
