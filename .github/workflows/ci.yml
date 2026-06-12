@@ -15,6 +15,19 @@ on:
   workflow_dispatch:
 
 jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install chirpstack-api
+        run: pip install chirpstack-api==4.18.0
+      - name: Run provisioning unit tests
+        run: python -m unittest discover -s provisioning -p "test_*.py"
+
   docs:
     runs-on: ubuntu-latest
     steps:

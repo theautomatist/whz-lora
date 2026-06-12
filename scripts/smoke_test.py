@@ -17,7 +17,8 @@ Performs an end-to-end smoke test against a running ChirpStack v4 stack:
 4. Subscribes to the MQTT uplink topic and waits up to 30 seconds for
    the event.
 5. Verifies that anonymous MQTT connections are rejected.
-6. Exits 0 on success, non-zero with a clear error message on failure.
+6. Asserts that the OTAA key path works (CreateKeys / GetKeys round-trip).
+7. Exits 0 on success, non-zero with a clear error message on failure.
 
 Required environment variables (set via .env or CI secrets):
   MQTT_TEST_USERNAME      — MQTT username for test subscriber
@@ -48,13 +49,22 @@ from cryptography.hazmat.primitives.ciphers.algorithms import AES
 from cryptography.hazmat.backends import default_backend
 
 # gRPC stubs from chirpstack-api package
-from chirpstack_api.api import tenant_pb2, tenant_pb2_grpc
-from chirpstack_api.api import application_pb2, application_pb2_grpc
-from chirpstack_api.api import device_profile_pb2, device_profile_pb2_grpc
 from chirpstack_api.api import device_pb2, device_pb2_grpc
 from chirpstack_api.api import gateway_pb2, gateway_pb2_grpc
-from chirpstack_api.api import internal_pb2, internal_pb2_grpc
-from chirpstack_api.common import common_pb2
+from chirpstack_api.api import tenant_pb2_grpc
+from chirpstack_api.api import application_pb2_grpc
+from chirpstack_api.api import device_profile_pb2_grpc
+
+# Shared gRPC core — authentication, channel, find-or-create helpers.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from chirpstack_client import (
+    get_auth_token as _get_auth_token,
+    grpc_metadata,
+    find_or_create_tenant as _find_or_create_tenant,
+    find_or_create_application as _find_or_create_application,
+    find_or_create_device_profile as _find_or_create_device_profile,
+    set_device_keys_idempotent,
+)
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -75,6 +85,12 @@ DEVICE_EUI = "0102030405060708"
 DEVICE_NAME = "whz-smoke-test-device"
 GATEWAY_EUI = "aabbccddee010203"
 
+# OTAA smoke-test device identifiers.
+OTAA_PROFILE_NAME = "whz-smoke-otaa-profile"
+OTAA_DEVICE_EUI = "0102030405060709"
+OTAA_DEVICE_NAME = "whz-smoke-otaa-device"
+OTAA_TEST_APP_KEY = "0102030405060708090a0b0c0d0e0f10"  # 32 hex chars
+
 # ABP session keys and address — deterministic test values.
 # All-zeros NwkSKey / AppSKey are intentionally weak; this is test-only.
 ABP_DEV_ADDR = "01020304"
@@ -91,137 +107,46 @@ def die(message: str, code: int = 1) -> None:
     sys.exit(code)
 
 
-def grpc_metadata(token: str) -> list:
-    return [("authorization", f"Bearer {token}")]
-
-
-def _is_placeholder(value: str) -> bool:
-    return not value or value.startswith("change-me")
-
-
-# ---------------------------------------------------------------------------
-# Authentication
-# ---------------------------------------------------------------------------
-
-
 def get_auth_token(channel: grpc.Channel) -> str:
-    """
-    Return a valid bearer token for ChirpStack gRPC calls.
-
-    If CHIRPSTACK_API_KEY is set and is not a placeholder, use it directly.
-    Otherwise login with admin credentials to obtain a JWT.
-    """
+    """Wrapper that logs and delegates to the shared client helper."""
     api_key = os.environ.get("CHIRPSTACK_API_KEY", "")
-    if api_key and not _is_placeholder(api_key):
+    if api_key and not api_key.startswith("change-me"):
         print("[smoke_test] Using CHIRPSTACK_API_KEY from environment.")
-        return api_key
-
-    admin_user = os.environ.get("CHIRPSTACK_ADMIN_USER", "admin")
-    admin_pass = os.environ.get("CHIRPSTACK_ADMIN_PASS", "admin")
-
-    print(
-        f"[smoke_test] CHIRPSTACK_API_KEY not set or placeholder — "
-        f"logging in as {admin_user!r} to obtain JWT."
-    )
-    stub = internal_pb2_grpc.InternalServiceStub(channel)
-    try:
-        resp = stub.Login(
-            internal_pb2.LoginRequest(email=admin_user, password=admin_pass)
+    else:
+        admin_user = os.environ.get("CHIRPSTACK_ADMIN_USER", "admin")
+        print(
+            f"[smoke_test] CHIRPSTACK_API_KEY not set or placeholder — "
+            f"logging in as {admin_user!r} to obtain JWT."
         )
-        print("[smoke_test] Login successful, JWT obtained.")
-        return resp.jwt
+    try:
+        token = _get_auth_token(channel)
     except grpc.RpcError as e:
         die(
             f"Login failed ({e.code()}): {e.details()}. "
             "Set CHIRPSTACK_ADMIN_USER / CHIRPSTACK_ADMIN_PASS correctly."
         )
-
-
-# ---------------------------------------------------------------------------
-# gRPC provisioning — find-or-create
-# ---------------------------------------------------------------------------
+    print("[smoke_test] Auth token obtained.")
+    return token
 
 
 def find_or_create_tenant(stub, meta: list) -> str:
-    req = tenant_pb2.ListTenantsRequest(limit=100)
-    resp = stub.List(req, metadata=meta)
-    for t in resp.result:
-        if t.name == TENANT_NAME:
-            print(f"[smoke_test] Tenant already exists: {t.id}")
-            return t.id
-
-    resp = stub.Create(
-        tenant_pb2.CreateTenantRequest(
-            tenant=tenant_pb2.Tenant(
-                name=TENANT_NAME,
-                description="Created by smoke_test.py",
-                can_have_gateways=True,
-            )
-        ),
-        metadata=meta,
-    )
-    print(f"[smoke_test] Tenant created: {resp.id}")
-    return resp.id
+    result = _find_or_create_tenant(stub, meta, TENANT_NAME)
+    print(f"[smoke_test] Tenant: {result}")
+    return result
 
 
 def find_or_create_application(stub, meta: list, tenant_id: str) -> str:
-    req = application_pb2.ListApplicationsRequest(limit=100, tenant_id=tenant_id)
-    resp = stub.List(req, metadata=meta)
-    for a in resp.result:
-        if a.name == APP_NAME:
-            print(f"[smoke_test] Application already exists: {a.id}")
-            return a.id
-
-    resp = stub.Create(
-        application_pb2.CreateApplicationRequest(
-            application=application_pb2.Application(
-                name=APP_NAME,
-                description="Created by smoke_test.py",
-                tenant_id=tenant_id,
-            )
-        ),
-        metadata=meta,
-    )
-    print(f"[smoke_test] Application created: {resp.id}")
-    return resp.id
+    result = _find_or_create_application(stub, meta, tenant_id, APP_NAME)
+    print(f"[smoke_test] Application: {result}")
+    return result
 
 
 def find_or_create_device_profile(stub, meta: list, tenant_id: str) -> str:
-    req = device_profile_pb2.ListDeviceProfilesRequest(
-        limit=100, tenant_id=tenant_id
+    result = _find_or_create_device_profile(
+        stub, meta, tenant_id, DEVICE_PROFILE_NAME, supports_otaa=False
     )
-    resp = stub.List(req, metadata=meta)
-    for dp in resp.result:
-        if dp.name == DEVICE_PROFILE_NAME:
-            print(f"[smoke_test] Device profile already exists: {dp.id}")
-            return dp.id
-
-    resp = stub.Create(
-        device_profile_pb2.CreateDeviceProfileRequest(
-            device_profile=device_profile_pb2.DeviceProfile(
-                name=DEVICE_PROFILE_NAME,
-                description="Created by smoke_test.py",
-                tenant_id=tenant_id,
-                region=common_pb2.Region.EU868,
-                mac_version=common_pb2.MacVersion.LORAWAN_1_0_3,
-                reg_params_revision=common_pb2.RegParamsRevision.RP002_1_0_3,
-                adr_algorithm_id="default",
-                payload_codec_runtime=device_profile_pb2.CodecRuntime.JS,
-                payload_codec_script=(
-                    "function decodeUplink(input) {\n"
-                    "  var hex = Array.from(input.bytes)"
-                    ".map(function(b){return b.toString(16).padStart(2,'0')}).join('');\n"
-                    "  return { data: { raw: hex } };\n"
-                    "}\n"
-                    "function encodeDownlink(input) { return { bytes: [] }; }\n"
-                ),
-                supports_otaa=False,
-            )
-        ),
-        metadata=meta,
-    )
-    print(f"[smoke_test] Device profile created: {resp.id}")
-    return resp.id
+    print(f"[smoke_test] Device profile (ABP): {result}")
+    return result
 
 
 def find_or_create_gateway(stub, meta: list, tenant_id: str) -> None:
@@ -638,6 +563,73 @@ def main() -> None:
             f"application/{app_id}/device/{DEVICE_EUI}/event/+. "
             "Check 'docker compose logs chirpstack' for errors."
         )
+
+    # ------------------------------------------------------------------
+    # Step 5 — OTAA key path assertion
+    #           Creates an OTAA device profile + device, sets OTAA keys
+    #           via CreateKeys (or UpdateKeys on re-run), then reads them
+    #           back with GetKeys and asserts nwk_key matches.
+    # ------------------------------------------------------------------
+    print("[smoke_test] Step 5 — asserting OTAA key path ...")
+    try:
+        dev_stub = device_pb2_grpc.DeviceServiceStub(channel)
+        dp_stub = device_profile_pb2_grpc.DeviceProfileServiceStub(channel)
+
+        otaa_profile_id = _find_or_create_device_profile(
+            dp_stub, meta, tenant_id, OTAA_PROFILE_NAME, supports_otaa=True
+        )
+        print(f"[smoke_test] OTAA device profile: {otaa_profile_id}")
+
+        # Find or create OTAA device.
+        try:
+            existing = dev_stub.Get(
+                device_pb2.GetDeviceRequest(dev_eui=OTAA_DEVICE_EUI),
+                metadata=meta,
+            )
+            print(f"[smoke_test] OTAA device already exists: {existing.device.dev_eui}")
+        except grpc.RpcError as e:
+            if e.code() != grpc.StatusCode.NOT_FOUND:
+                raise
+            dev_stub.Create(
+                device_pb2.CreateDeviceRequest(
+                    device=device_pb2.Device(
+                        dev_eui=OTAA_DEVICE_EUI,
+                        name=OTAA_DEVICE_NAME,
+                        description="Created by smoke_test.py OTAA assertion",
+                        application_id=app_id,
+                        device_profile_id=otaa_profile_id,
+                        is_disabled=False,
+                    )
+                ),
+                metadata=meta,
+            )
+            print(f"[smoke_test] OTAA device created: {OTAA_DEVICE_EUI}")
+
+        # Set OTAA keys idempotently via the shared helper (GetKeys-first;
+        # ChirpStack returns INTERNAL, not ALREADY_EXISTS, on re-create).
+        key_status = set_device_keys_idempotent(
+            dev_stub, meta, OTAA_DEVICE_EUI, OTAA_TEST_APP_KEY
+        )
+        print(f"[smoke_test] OTAA keys {key_status} for: {OTAA_DEVICE_EUI}")
+
+        # Read back and assert.
+        resp = dev_stub.GetKeys(
+            device_pb2.GetDeviceKeysRequest(dev_eui=OTAA_DEVICE_EUI),
+            metadata=meta,
+        )
+        returned_nwk_key = resp.device_keys.nwk_key
+        if returned_nwk_key != OTAA_TEST_APP_KEY:
+            die(
+                f"OTAA key assertion failed: expected nwk_key={OTAA_TEST_APP_KEY!r}, "
+                f"got {returned_nwk_key!r}"
+            )
+        print(
+            f"[smoke_test] OTAA key assertion PASSED — "
+            f"nwk_key={returned_nwk_key} round-tripped correctly."
+        )
+
+    except grpc.RpcError as e:
+        die(f"OTAA key path assertion failed: {e.code()} — {e.details()}")
 
     print("[smoke_test] SUCCESS — end-to-end verification passed.")
     sys.exit(0)

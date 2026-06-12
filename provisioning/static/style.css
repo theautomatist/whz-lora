@@ -1,0 +1,269 @@
+/* style.css — mobile-first, minimal, large touch targets */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --color-bg: #f5f5f5;
+  --color-surface: #ffffff;
+  --color-primary: #1a6aab;
+  --color-primary-dark: #145289;
+  --color-ok: #1d7a3a;
+  --color-ok-bg: #d4edda;
+  --color-err: #842029;
+  --color-err-bg: #f8d7da;
+  --color-warn: #664d03;
+  --color-warn-bg: #fff3cd;
+  --color-info: #0c5460;
+  --color-info-bg: #d1ecf1;
+  --color-border: #dee2e6;
+  --color-text: #212529;
+  --color-muted: #6c757d;
+  --radius: 6px;
+  --spacing: 1rem;
+}
+
+body {
+  font-family: system-ui, -apple-system, sans-serif;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+header {
+  background: var(--color-primary);
+  color: #fff;
+  padding: var(--spacing);
+}
+
+header h1 {
+  font-size: 1.25rem;
+  margin-top: 0.5rem;
+}
+
+header nav {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 0.25rem;
+}
+
+header nav a {
+  color: #fff;
+  text-decoration: none;
+  font-weight: 600;
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius);
+}
+
+header nav a:hover {
+  background: var(--color-primary-dark);
+}
+
+main {
+  padding: var(--spacing);
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+section {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: var(--spacing);
+  margin-bottom: var(--spacing);
+}
+
+h2 {
+  font-size: 1.1rem;
+  margin-bottom: var(--spacing);
+}
+
+/* Forms */
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+label {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+input[type="text"],
+input[type="file"] {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  font-size: 1rem;
+  min-height: 2.75rem;
+  background: var(--color-surface);
+}
+
+input[type="text"]:focus {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
+button {
+  min-height: 2.75rem;
+  padding: 0.75rem 1.5rem;
+  background: var(--color-primary);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius);
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  align-self: flex-start;
+}
+
+button:hover {
+  background: var(--color-primary-dark);
+}
+
+.btn-delete {
+  background: var(--color-err-bg);
+  color: var(--color-err);
+  border: 1px solid var(--color-err);
+  font-size: 0.875rem;
+  padding: 0.4rem 0.8rem;
+  min-height: 2rem;
+}
+
+.btn-delete:hover {
+  background: var(--color-err);
+  color: #fff;
+}
+
+/* Hint text */
+.hint {
+  color: var(--color-muted);
+  font-size: 0.85rem;
+  font-weight: 400;
+}
+
+/* Banners */
+.banner {
+  padding: var(--spacing);
+  border-radius: var(--radius);
+  margin-bottom: var(--spacing);
+  font-size: 1rem;
+}
+
+.banner-ok {
+  background: var(--color-ok-bg);
+  color: var(--color-ok);
+  border: 1px solid #badbcc;
+}
+
+.banner-err {
+  background: var(--color-err-bg);
+  color: var(--color-err);
+  border: 1px solid #f5c2c7;
+}
+
+/* Definition list */
+dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.4rem 1rem;
+  margin-bottom: var(--spacing);
+}
+
+dt {
+  font-weight: 600;
+  color: var(--color-muted);
+}
+
+code {
+  font-family: monospace;
+  font-size: 0.9em;
+  background: #eee;
+  padding: 0.1em 0.3em;
+  border-radius: 3px;
+}
+
+/* Tables */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: var(--spacing);
+  font-size: 0.9rem;
+  overflow-x: auto;
+  display: block;
+}
+
+th, td {
+  text-align: left;
+  padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+
+th {
+  background: var(--color-bg);
+  font-weight: 600;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+tr:last-child td {
+  border-bottom: none;
+}
+
+/* Row status colouring in import result */
+tr.row-error td {
+  background: #fff5f5;
+}
+
+tr.row-created td {
+  background: #f0fff4;
+}
+
+/* Badges */
+.badge {
+  display: inline-block;
+  padding: 0.2em 0.5em;
+  border-radius: 3px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.badge-ok  { background: var(--color-ok-bg);   color: var(--color-ok);   }
+.badge-err { background: var(--color-err-bg);  color: var(--color-err);  }
+.badge-warn{ background: var(--color-warn-bg); color: var(--color-warn); }
+.badge-info{ background: var(--color-info-bg); color: var(--color-info); }
+
+/* State dots */
+.state-dot {
+  font-size: 1rem;
+}
+
+.state-online     { color: #1d7a3a; }
+.state-joined     { color: #b45309; }
+.state-provisioned{ color: #9ca3af; }
+
+footer {
+  text-align: center;
+  padding: var(--spacing);
+  color: var(--color-muted);
+  font-size: 0.85rem;
+}
+
+a {
+  color: var(--color-primary);
+}
+
+/* Desktop: wider form labels */
+@media (min-width: 600px) {
+  button {
+    width: auto;
+  }
+}

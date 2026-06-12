@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Result — whz-lora Provisioning{% endblock %}
+{% block content %}
+
+{% if import_results is defined %}
+  {# ---- CSV import result table ---- #}
+  <h2>Import Result</h2>
+  {% set error_count = import_results | selectattr("status", "equalto", "error") | list | length %}
+  {% set ok_count = import_results | length - error_count %}
+  <p>
+    <strong>{{ ok_count }}</strong> succeeded,
+    <strong>{{ error_count }}</strong> failed
+    ({{ import_results | length }} rows total).
+  </p>
+  <table>
+    <thead>
+      <tr>
+        <th>Device</th>
+        <th>Status</th>
+        <th>Detail</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in import_results %}
+      <tr class="row-{{ row.status }}">
+        <td>{{ row.label }}</td>
+        <td>
+          {% if row.status == "created" %}
+            <span class="badge badge-ok">created</span>
+          {% elif row.status == "keys-updated" %}
+            <span class="badge badge-warn">keys-updated</span>
+          {% elif row.status == "exists" %}
+            <span class="badge badge-info">exists</span>
+          {% else %}
+            <span class="badge badge-err">error</span>
+          {% endif %}
+        </td>
+        <td>{{ row.reason or "" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p><a href="/">Back to provisioning</a> &mdash; <a href="/dashboard">Dashboard</a></p>
+
+{% elif deleted is defined and deleted %}
+  {# ---- Delete success ---- #}
+  <div class="banner banner-ok">
+    <strong>Deleted:</strong> Device <code>{{ dev_eui }}</code> has been removed from ChirpStack.
+  </div>
+  <p><a href="/">Back to provisioning</a> &mdash; <a href="/dashboard">Dashboard</a></p>
+
+{% elif success %}
+  {# ---- Single-device success ---- #}
+  <div class="banner banner-ok">
+    <strong>
+      {% if status == "created" %}Device created{% elif status == "keys-updated" %}Keys updated{% else %}Device already exists{% endif %}
+    </strong>
+    &mdash; <code>{{ dev_eui }}</code>
+  </div>
+  <dl>
+    <dt>Device name</dt><dd>{{ device_name }}</dd>
+    <dt>DevEUI</dt><dd><code>{{ dev_eui }}</code></dd>
+    <dt>Profile</dt><dd>{{ profile }}</dd>
+    <dt>Status</dt><dd>{{ status }}</dd>
+  </dl>
+  {% if status in ("created", "keys-updated") %}
+  <p>OTAA keys set &mdash; device will join over-the-air via the gateway.</p>
+  {% endif %}
+  <p><a href="/">Provision another</a> &mdash; <a href="/dashboard">Dashboard</a></p>
+
+{% else %}
+  {# ---- Error ---- #}
+  <div class="banner banner-err">
+    <strong>Error</strong>{% if dev_eui %} for <code>{{ dev_eui }}</code>{% endif %}:
+    {{ error }}
+  </div>
+  <p><a href="/">Back to provisioning</a></p>
+{% endif %}
+
+{% endblock %}

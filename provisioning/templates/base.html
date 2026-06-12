@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}whz-lora Provisioning{% endblock %}</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header>
+    <nav>
+      <a href="/">Provision</a>
+      <a href="/dashboard">Dashboard</a>
+    </nav>
+    <h1>whz-lora Actuator Provisioning</h1>
+  </header>
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+  <footer>
+    <p>ChirpStack v4 &mdash; WHZ LoRaWAN</p>
+  </footer>
+</body>
+</html>

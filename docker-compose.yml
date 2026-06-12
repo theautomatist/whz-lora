@@ -109,6 +109,32 @@ services:
       timeout: 5s
       retries: 10
 
+  provisioning-app:
+    build:
+      context: .
+      dockerfile: provisioning/Dockerfile
+    restart: unless-stopped
+    environment:
+      - CHIRPSTACK_HOST=chirpstack:8080
+      - CHIRPSTACK_API_KEY=${CHIRPSTACK_API_KEY}
+      - CHIRPSTACK_ADMIN_USER=${CHIRPSTACK_ADMIN_USER:-admin}
+      - CHIRPSTACK_ADMIN_PASS=${CHIRPSTACK_ADMIN_PASS:-admin}
+      - PROVISIONING_TENANT=${PROVISIONING_TENANT:-ChirpStack}
+      - PROVISIONING_APPLICATION=${PROVISIONING_APPLICATION:-WHZ-Stellantriebe}
+      - PROVISIONING_PROFILE=${PROVISIONING_PROFILE:-WHZ-Stellantrieb-ClassA-OTAA}
+      - PROVISIONING_AUTH_USER=${PROVISIONING_AUTH_USER:-}
+      - PROVISIONING_AUTH_PASS=${PROVISIONING_AUTH_PASS:-}
+    ports:
+      - "8092:8092"
+    depends_on:
+      chirpstack:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0) if urllib.request.urlopen('http://localhost:8092/healthz').status==200 else sys.exit(1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
 volumes:
   postgresqldata:
   redisdata:

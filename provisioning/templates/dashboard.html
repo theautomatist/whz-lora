@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — whz-lora Provisioning{% endblock %}
+{% block content %}
+
+<h2>Device Dashboard &mdash; {{ application }}</h2>
+<p><a href="/dashboard">Refresh</a></p>
+
+{% if error %}
+  <div class="banner banner-err">
+    <strong>Could not load devices:</strong> {{ error }}
+  </div>
+{% elif not devices %}
+  <p>No devices provisioned yet. <a href="/">Provision a device.</a></p>
+{% else %}
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>DevEUI</th>
+        <th>State</th>
+        <th>Last Seen (UTC)</th>
+        <th>RSSI</th>
+        <th>SNR</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for dev in devices %}
+      <tr>
+        <td>{{ dev.name }}</td>
+        <td><code>{{ dev.dev_eui }}</code></td>
+        <td>
+          {% if dev.state == "online" %}
+            <span class="state-dot state-online" title="online">&#9679;</span> online
+          {% elif dev.state == "joined" %}
+            <span class="state-dot state-joined" title="joined">&#9679;</span> joined
+          {% else %}
+            <span class="state-dot state-provisioned" title="provisioned">&#9679;</span> provisioned
+          {% endif %}
+        </td>
+        <td>
+          {% if dev.last_seen %}
+            {{ dev.last_seen.strftime("%Y-%m-%d %H:%M:%S") }}
+          {% else %}
+            &mdash;
+          {% endif %}
+        </td>
+        <td>{% if dev.rssi is not none %}{{ "%.1f"|format(dev.rssi) }} dBm{% else %}&mdash;{% endif %}</td>
+        <td>{% if dev.snr is not none %}{{ "%.1f"|format(dev.snr) }} dB{% else %}&mdash;{% endif %}</td>
+        <td>
+          <form method="post" action="/delete"
+                onsubmit="return confirmDelete(this)"
+                style="display:inline">
+            <input type="hidden" name="dev_eui" value="{{ dev.dev_eui }}">
+            <input type="hidden" name="confirm" value="delete">
+            <button type="submit" class="btn-delete">Delete</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endif %}
+
+<script>
+function confirmDelete(form) {
+  var eui = form.querySelector('[name=dev_eui]').value;
+  return window.confirm('Delete device ' + eui + '?\nThis cannot be undone.');
+}
+</script>
+
+{% endblock %}

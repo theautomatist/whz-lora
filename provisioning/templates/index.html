@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Provision Device — whz-lora{% endblock %}
+{% block content %}
+<section>
+  <h2>Provision Single Device</h2>
+  <form method="post" action="/provision" autocomplete="off">
+    <label for="name">Device Name</label>
+    <input type="text" id="name" name="name" placeholder="e.g. Actuator-01" required>
+
+    <label for="dev_eui">DevEUI <span class="hint">(16 hex chars)</span></label>
+    <input type="text" id="dev_eui" name="dev_eui" placeholder="0102030405060708"
+           pattern="[0-9a-fA-F :]{16,23}" maxlength="23" required
+           inputmode="text" autocorrect="off" autocapitalize="off" spellcheck="false">
+
+    <label for="join_eui">JoinEUI <span class="hint">(16 hex chars, optional)</span></label>
+    <input type="text" id="join_eui" name="join_eui" placeholder="0000000000000000 (default)"
+           pattern="[0-9a-fA-F :]{0,23}" maxlength="23"
+           inputmode="text" autocorrect="off" autocapitalize="off" spellcheck="false">
+
+    <label for="app_key">AppKey <span class="hint">(32 hex chars)</span></label>
+    <input type="text" id="app_key" name="app_key" placeholder="0102030405060708090a0b0c0d0e0f10"
+           pattern="[0-9a-fA-F :-]{32,47}" maxlength="47" required
+           inputmode="text" autocorrect="off" autocapitalize="off" spellcheck="false">
+
+    <button type="submit">Provision Device</button>
+  </form>
+</section>
+
+<section>
+  <h2>Bulk CSV Import</h2>
+  <p class="hint">
+    CSV must have a header row. Required columns: <code>dev_eui</code>, <code>app_key</code>.<br>
+    Optional: <code>join_eui</code>, <code>name</code>, <code>class</code>.<br>
+    Column aliases accepted: <code>DevEUI</code>, <code>AppKey</code>, <code>AppEUI</code>, etc.
+  </p>
+  <form method="post" action="/import" enctype="multipart/form-data">
+    <label for="csvfile">CSV File</label>
+    <input type="file" id="csvfile" name="csvfile" accept=".csv,text/csv" required>
+    <button type="submit">Import CSV</button>
+  </form>
+</section>
+{% endblock %}
