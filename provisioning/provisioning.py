@@ -14,6 +14,7 @@ import threading
 import grpc
 
 from chirpstack_api.api import device_pb2, device_pb2_grpc
+from chirpstack_api.api import gateway_pb2, gateway_pb2_grpc
 from chirpstack_api.api import tenant_pb2_grpc
 from chirpstack_api.api import application_pb2_grpc
 from chirpstack_api.api import device_profile_pb2_grpc
@@ -240,6 +241,55 @@ def list_device_states() -> list:
             state_info = _device_state(dev_stub, meta, item)
             results.append(state_info)
 
+        return results
+
+    return _call_with_auth_retry(_do)
+
+
+# Map ChirpStack GatewayState enum (NEVER_SEEN=0, ONLINE=1, OFFLINE=2) → label.
+_GW_STATE = {0: "never-seen", 1: "online", 2: "offline"}
+
+
+def list_gateways() -> list:
+    """
+    Return gateway state dicts for the provisioning tenant.
+
+    Each dict: gateway_id, name, state ("online" | "offline" | "never-seen"),
+    last_seen (datetime or None). Paginates to avoid truncation.
+    """
+    def _do(channel, meta):
+        tenant_id, _, _ = _resolve_ids(channel, meta)
+        gw_stub = gateway_pb2_grpc.GatewayServiceStub(channel)
+
+        PAGE = 100
+        offset = 0
+        all_items = []
+        while True:
+            resp = gw_stub.List(
+                gateway_pb2.ListGatewaysRequest(
+                    tenant_id=tenant_id, limit=PAGE, offset=offset
+                ),
+                metadata=meta,
+            )
+            all_items.extend(resp.result)
+            if len(all_items) >= resp.total_count:
+                break
+            offset += PAGE
+
+        results = []
+        for item in all_items:
+            last_seen = None
+            if item.HasField("last_seen_at"):
+                ts = item.last_seen_at
+                last_seen = datetime.datetime.fromtimestamp(
+                    ts.seconds + ts.nanos / 1e9, tz=datetime.timezone.utc
+                )
+            results.append({
+                "gateway_id": item.gateway_id,
+                "name": item.name,
+                "state": _GW_STATE.get(item.state, "unknown"),
+                "last_seen": last_seen,
+            })
         return results
 
     return _call_with_auth_retry(_do)

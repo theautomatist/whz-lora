@@ -154,7 +154,10 @@ records what was removed and why. The entry format is defined in
   Desktop), gibt einen Stellantrieb per Formular ein oder lädt eine CSV mit
   einer Zeile pro Gerät hoch, und sieht im Inbetriebnahme-Dashboard pro Gerät
   eine Drei-Zustands-Ampel ⚪ Provisioniert → 🟡 Gejoint → 🟢 Online (erster
-  Uplink), mit Zeitpunkt und — soweit verfügbar — RSSI/SNR. Einzelne Geräte
+  Uplink), mit Zeitpunkt und — soweit verfügbar — RSSI/SNR. Das Dashboard
+  listet außerdem die im Tenant registrierten Gateways mit Status
+  (online/offline/never-seen) und Last-Seen, damit der Betreiber die
+  Gateway-Erreichbarkeit vor dem Geräte-Join prüfen kann. Einzelne Geräte
   können bestätigungspflichtig gelöscht werden.
 - Acceptance criteria:
   - Das Einzelformular legt Gerät **und** OTAA-Keys in ChirpStack an; bei

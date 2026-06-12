@@ -91,6 +91,13 @@ Provisioning and commissioning are decoupled: you can enrol a batch at your desk
 (devices still boxed → all ⚪), then later, on-site over VPN, mount each actuator
 and watch its row turn 🟡 then 🟢. Press **Refresh** to update.
 
+### Gateways
+
+The top of the dashboard lists every **gateway** registered in the system with its
+state — 🟢 online, 🔴 offline, or ⚪ never seen — and when it was last heard from.
+Check here first: a device can only join if a gateway is **online** and in range.
+If the list is empty, register your gateway in the ChirpStack UI (`:8080`) first.
+
 ## Delete a device
 
 On the dashboard, deleting a device removes it from ChirpStack. It requires an

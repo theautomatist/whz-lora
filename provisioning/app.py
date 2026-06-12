@@ -277,8 +277,10 @@ async def csv_import(
 @app.get("/dashboard", response_class=HTMLResponse, dependencies=_auth_dep)
 async def dashboard(request: Request):
     devices = []
+    gateways = []
     error = None
     try:
+        gateways = prov.list_gateways()
         devices = prov.list_device_states()
     except grpc.RpcError as e:
         error = f"gRPC error ({e.code().name}): {e.details()}"
@@ -290,6 +292,7 @@ async def dashboard(request: Request):
         {
             "request": request,
             "devices": devices,
+            "gateways": gateways,
             "error": error,
             "application": prov.PROVISIONING_APPLICATION,
         },

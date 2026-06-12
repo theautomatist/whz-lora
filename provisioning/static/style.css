@@ -249,6 +249,7 @@ tr.row-created td {
 .state-online     { color: #1d7a3a; }
 .state-joined     { color: #b45309; }
 .state-provisioned{ color: #9ca3af; }
+.state-offline    { color: #b91c1c; }
 
 footer {
   text-align: center;
