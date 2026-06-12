@@ -40,6 +40,12 @@ the concept paper proper (a `/onboarding` revision) is itself an open question
 The model is assembled from parameter blocks. Each block is a building-specific
 input, a research-grounded catalog, or a computed result.
 
+**Build constraint (PO).** The self-built option is **pure LoRaWAN** with
+**components freely available on the open market** — no proprietary RF.
+Proprietary smart-heating systems are *not* excluded from the study; they enter
+as the **buy** side of a make-vs-buy comparison (see below and RQ7), benchmarked
+against the self-built network's cost *and* its administration/operation overhead.
+
 | Block | Name | Kind | Feeds |
 |---|---|---|---|
 | A | Building model | input (the "building X / Y") | B |
@@ -87,6 +93,21 @@ input, a research-grounded catalog, or a computed result.
 - Back-calculation: maximum allowable cost for payback ≤ horizon; compare to D.
 - Sensitivity analysis across the levers (§4).
 
+### Make vs. buy (comparison axis)
+
+The verdict (F) is computed for **two scenarios** and compared:
+
+- **Make** — a self-operated **LoRaWAN** network from open-market components
+  (blocks A–E), *including* the cost of running its own management /
+  administration (LNS hosting, provisioning, monitoring).
+- **Buy** — a complete **commercial** smart-heating system (e.g. Homematic IP
+  and alternatives): central gateway/bridge + radiator thermostats + app/cloud.
+  What is in the box, per-building cost, protocol, recurring/cloud cost and who
+  administers it are researched in RQ7.
+
+The make side is open LoRaWAN by deliberate choice; proprietary systems live on
+the buy side. The comparison is a core output of the study, not a footnote.
+
 ## 4. Evaluation lenses — perspectives × levers
 
 Every design choice is judged from five stakeholder perspectives against four
@@ -124,6 +145,10 @@ Each becomes a decision; a recommended default is noted.
    *Rec: decide after the preliminary research.*
 7. **Output format** — interactive HTML + PDF report (the PO wanted both).
    *Rec: confirm in the grill.*
+8. **Comparison baseline** — which turnkey commercial systems are the reference
+   for the buy side, and at what building size is the comparison drawn?
+   *Rec: Homematic IP as the anchor + 1–2 alternatives; compare at whole-floor
+   and whole-building size.*
 
 ## 7. Preliminary research questions (founded briefs)
 
@@ -144,3 +169,6 @@ Blaue").
   typical % / € savings, payback periods.
 - **RQ6 → model:** open datasets, path-loss models, and simulators / GitHub
   repos for LoRa coverage & link budget that the dynamic model could reuse.
+- **RQ7 → F (buy side):** turnkey commercial smart-heating systems (Homematic IP
+  and alternatives) — what is included, protocol, per-building cost, recurring /
+  cloud cost, administration model — as the make-vs-buy benchmark.
