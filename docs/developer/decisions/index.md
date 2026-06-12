@@ -31,3 +31,8 @@ documentation step of the directive lifecycle, not afterwards.
 - [ADR-0016 — Branch Protection on main: deferred](adr-0016.md)
 - [ADR-0017 — Verification runs locally; CI deferred until self-hosted GitLab move](adr-0017.md)
 - [ADR-0018 — Gateway management over USB-NDIS, with Windows-host firewall rules](adr-0018.md)
+- [ADR-0020 — Device catalog: LoRaWAN-native actuators only; proprietary as buy-side benchmark](adr-0020.md)
+- [ADR-0021 — Per-radiator parametric economic model with building archetypes](adr-0021.md)
+
+_ADR-0019 is reserved for the in-flight provisioning-app work (F-0005) on its
+feature branch; it will appear here when that branch merges._

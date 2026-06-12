@@ -126,29 +126,41 @@ analytical lens over blocks D/E, not separate models.
 - A final, authoritative cost statement — the model gives conservative
   estimates, not guarantees.
 
-## 6. Open questions for the grill
+## 6. Decisions from the grill
 
-Each becomes a decision; a recommended default is noted.
+Resolved during the grill (recorded in [ADR-0020](../decisions/adr-0020.md),
+[ADR-0021](../decisions/adr-0021.md) and the [model design](model.md); glossary in
+[CONTEXT.md](CONTEXT.md)). Items marked **[PO]** are policy defaults — runnable but
+overridable.
 
-1. **Payback horizon** for "economical" — device lifetime (~10 yr)? an
-   institutional threshold? *Rec: parameterise; default 5–10 yr.*
-2. **Building scope** — a fixed set of archetypes, or fully parametric?
-   *Rec: 3–4 archetypes plus parametric inputs.*
-3. **Whose money** — CAPEX by the operator (WHZ) vs. benefit to the tenant; who
-   pays, who saves? *Rec: model both; default operator-funded.*
-4. **Benefit definition** — energy saved only, or also comfort / labour /
-   monitoring value? *Rec: start energy-only, note the rest.*
-5. **Device reality** — LoRaWAN-native TRVs vs. proprietary + bridge?
-   *Rec: resolve via RQ4 before fixing the catalog.*
-6. **Concept-paper / team impact** — does this purpose warrant an `/onboarding`
-   revision and/or a research specialist agent (RF + economics)?
-   *Rec: decide after the preliminary research.*
-7. **Output format** — interactive HTML + PDF report (the PO wanted both).
-   *Rec: confirm in the grill.*
-8. **Comparison baseline** — which turnkey commercial systems are the reference
-   for the buy side, and at what building size is the comparison drawn?
-   *Rec: Homematic IP as the anchor + 1–2 alternatives; compare at whole-floor
-   and whole-building size.*
+1. **Unit of analysis** — one whole Building, parametric; apartment = small
+   Building; campus = sum of Buildings (out of scope v1).
+2. **Parameters** — minimal operator set: archetype, actuator count, energy price,
+   horizon, balancing flag. The verdict is **per radiator** (size cancels for the
+   yes/no); size is kept only for absolute € and gateway sizing.
+3. **Building scope** — 3–4 named **archetypes**, each bundling a thermal and an RF
+   profile; everything else defaults + a sensitivity (tornado) check.
+4. **Device catalog** — Make uses **LoRaWAN-native actuators only**; proprietary
+   systems live solely on the Buy side (ADR-0020).
+5. **Benefit** — energy-cost savings only in v1 (comfort / labour noted, not
+   monetised); conservative literature savings, not vendor claims; **hydraulic
+   balancing** modelled as an explicit on/off co-measure (≈ doubles savings, has
+   its own cost).
+6. **Verdict** — back-calculation: max allowable cost for payback ≤ horizon;
+   headline = simple payback, NPV as a check.
+7. **Make admin/ops** — included (LNS hosting, provisioning, monitoring); the
+   one-time integration is largely the already-built provisioning app (F-0005).
+8. **Buy benchmark** — Homematic IP CCU3 as the anchor + one professional
+   alternative; compared at whole-floor and whole-building size, respecting hub
+   ceilings.
+9. **Model build** — KISS parametric model (Python notebook + module); simulators
+   (ns-3 / FLoRa) reserved for later RF calibration only (ADR-0021).
+10. **Team / concept paper** — no new specialist (KISS); fold the study purpose
+    into the concept paper via `/onboarding` after the model v1 exists.
+11. **Output** — interactive HTML + static PDF report.
+12. **[PO]** Perspective = institutional owner-operator (no split incentive);
+    horizon = 10 yr; energy price = €0.12/kWh; discount = 3%. Real target buildings
+    **X / Y still to be named** by the PO to instantiate the model.
 
 ## 7. Preliminary research questions (founded briefs)
 
