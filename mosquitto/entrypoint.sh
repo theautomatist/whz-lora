@@ -11,6 +11,10 @@ mkdir -p /mosquitto/data
 chown -R mosquitto:mosquitto /mosquitto/data
 
 # Create / overwrite the passwd file with the two required users.
+# Remove any file persisted in the named volume first: on a reused volume
+# 'mosquitto_passwd -c' fails with "File exists", which crash-loops the
+# container on every restart that is not preceded by 'docker compose down -v'.
+rm -f "$PASSWD_FILE"
 mosquitto_passwd -b -c "$PASSWD_FILE" \
     "$CHIRPSTACK_MQTT_USERNAME" "$CHIRPSTACK_MQTT_PASSWORD"
 mosquitto_passwd -b "$PASSWD_FILE" \
