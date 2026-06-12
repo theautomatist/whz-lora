@@ -31,3 +31,4 @@ documentation step of the directive lifecycle, not afterwards.
 - [ADR-0016 — Branch Protection on main: deferred](adr-0016.md)
 - [ADR-0017 — Verification runs locally; CI deferred until self-hosted GitLab move](adr-0017.md)
 - [ADR-0018 — Gateway management over USB-NDIS, with Windows-host firewall rules](adr-0018.md)
+- [ADR-0019 — Own provisioning app for actuators: a narrow exception to Non-Goal #5](adr-0019.md)

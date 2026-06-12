@@ -53,6 +53,7 @@ nav:
       - ADR-0016: decisions/adr-0016.md
       - ADR-0017: decisions/adr-0017.md
       - ADR-0018: decisions/adr-0018.md
+      - ADR-0019: decisions/adr-0019.md
 
 markdown_extensions:
   - admonition

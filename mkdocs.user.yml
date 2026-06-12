@@ -23,6 +23,7 @@ nav:
   - Home: index.md
   - Getting Started: getting-started.md
   - Kerlink iFemtoCell Bring-up: kerlink-ifemtocell-bring-up.md
+  - Provisioning Actuators: provisioning-actuators.md
   - Guides: guides.md
   - FAQ: faq.md
 

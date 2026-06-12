@@ -14,6 +14,7 @@ dependencies.
 | **F-0001 — Gateway connection** | ⏳ active for the gateway path (Kerlink iFemtoCell Evolution 868 live on KerOS 6.3.0); real-sensor uplink pending hardware |
 | **F-0002 — Device management** | 🪪 simulator-mode covered; real-device codec work follows once the first sensor is on the bench |
 | **F-0003 — MQTT forwarding** | 🪪 broker live, ACL enforced, sample subscriber documented; full coverage tied to F-0002 |
+| **F-0005 — Actuator provisioning app** | 🆕 in progress (issue #6): mobile web UI to enrol OTAA actuators + commissioning dashboard |
 
 The smoke-test exercises the full pipeline end-to-end against the
 simulator (`scripts/smoke_test.py`); a real Kerlink Wirnet iFemtoCell
@@ -36,6 +37,11 @@ A bundled Docker-Compose stack that delivers:
   virtual gateway and device via gRPC, injects a MIC-valid LoRaWAN
   data uplink over UDP, and confirms the decoded JSON event lands on
   MQTT — the canonical verification check
+- A **provisioning app** ([`provisioning/`](provisioning/), host port
+  `:8092`) — a mobile-capable web UI to enrol OTAA actuators (single form
+  or CSV bulk) with a commissioning dashboard showing whether each device
+  has joined and is sending. See
+  [docs/user/provisioning-actuators.md](docs/user/provisioning-actuators.md)
 
 ```mermaid
 flowchart LR
@@ -132,6 +138,7 @@ GitLab CI port.
 ├─ codecs/                     Device codecs (JS) + node:test unit tests
 ├─ scripts/smoke_test.py       Verification check
 ├─ scripts/requirements-test.txt
+├─ provisioning/               Actuator provisioning web app (FastAPI)
 ├─ docs/                       mkdocs sites (user + developer)
 └─ .claude/                    AI team agents, hooks, skills, MCP wiring
 ```

@@ -1,7 +1,7 @@
 # Project Concept Paper
 
 - Project: whz-lora
-- Last updated: 2026-05-26
+- Last updated: 2026-06-12
 - Template version: <version>
 - Onboarding status: complete
 
@@ -54,7 +54,11 @@ Auswerteketten weiterleitbar sein.
 - Kein Roaming zu öffentlichen Netzen (TTN, Helium).
 - Keine eigene Hardware-Entwicklung.
 - Keine produktive SLA / kein 24/7-Betriebskonzept.
-- Keine eigene Anwendungs-UI über die vom LNS mitgelieferte UI hinaus.
+- Keine eigene Anwendungs-UI über die vom LNS mitgelieferte UI hinaus — mit
+  einer einzigen, eng umrissenen Ausnahme: eine mobiltaugliche Provisioning-
+  und Inbetriebnahme-App für OTAA-Aktuatoren (F-0005), nur im WHZ-Netz/VPN
+  erreichbar, ohne eigene Persistenz, ohne Re-Implementierung vorhandener
+  LNS-Funktionen (siehe ADR-0019).
 - Kein eigener Persistenz-Layer in dieser Iteration (LNS-interne
   Speicherung + Forwarding genügt).
 
@@ -118,8 +122,9 @@ Seeded für die Feature-Registry am Ende des Onboardings:
   Uplink-Events nach dem Standard-Schema des gewählten LNS
   (z.B. `application/{id}/device/{eui}/event/up`).
 - **Browser-UI** des LNS für die Administration.
-- *Keine* HTTP-Webhooks, *keine* eigene REST-API, *keine* eigene
-  Anwendungs-UI in dieser Iteration.
+- *Keine* HTTP-Webhooks, *keine* eigene REST-API. Eigene Anwendungs-UI nur
+  als eng umrissene Ausnahme: die Provisioning- und Inbetriebnahme-App für
+  OTAA-Aktuatoren (F-0005, WHZ-Netz/VPN, ohne eigene Persistenz; ADR-0019).
 
 ### Payload-Decodierung
 
@@ -366,7 +371,8 @@ vorzumerken:
 
 1. ChirpStack-Provisioning-Skript: Devices und Gateways via gRPC-API
    reproduzierbar anlegen (statt UI-Klicks). Sinnvoll, sobald mehr als
-   2–3 Devices.
+   2–3 Devices. → Realisiert und um eine mobiltaugliche UI erweitert in
+   F-0005 (ADR-0019); der gRPC-Kern liegt in `scripts/chirpstack_client.py`.
 2. Custom ChirpStack-MCP-Bridge: optional, nur falls die `postgres`-MCP
    für Lese-Zugriffe nicht ausreicht.
 

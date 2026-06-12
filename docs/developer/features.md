@@ -137,3 +137,57 @@ records what was removed and why. The entry format is defined in
 - Realised by: n/a
 - Linked directives / ADRs: ADR-0014, ADR-0015, ADR-0017, PR #2
 - History: 2026-05-26 added; 2026-05-26 status → active (PR #2)
+
+### F-0005 — Aktuator-Provisioning- & Inbetriebnahme-App
+
+- Status: proposed (im Bau über Issue #6; wird mit Gate 2 auf active gesetzt)
+- Summary: Eine mobiltaugliche Web-App (nur im WHZ-Netz/VPN erreichbar), mit
+  der OTAA-Aktuatoren (Stellantriebe) einzeln oder per CSV-Bulk-Import in
+  ChirpStack eingebucht werden — inklusive direktem Feedback, ob ein Gerät
+  tatsächlich gejoint hat und sendet. Die App ist eine eng umrissene Ausnahme
+  von Non-Goal #5 (siehe ADR-0019).
+- Problem solved: DevEUI und AppKey sind lange Hex-Ketten; bei manueller
+  Eingabe entstehen Tippfehler, Geräte sind dann nicht eingeloggt und es fällt
+  zu spät auf. Die App reduziert Tippfehler und macht den „ist es online?"-
+  Status pro Gerät unmittelbar sichtbar.
+- User-facing behavior: Der Betreiber öffnet die App im Browser (Handy oder
+  Desktop), gibt einen Stellantrieb per Formular ein oder lädt eine CSV mit
+  einer Zeile pro Gerät hoch, und sieht im Inbetriebnahme-Dashboard pro Gerät
+  eine Drei-Zustands-Ampel ⚪ Provisioniert → 🟡 Gejoint → 🟢 Online (erster
+  Uplink), mit Zeitpunkt und — soweit verfügbar — RSSI/SNR. Einzelne Geräte
+  können bestätigungspflichtig gelöscht werden.
+- Acceptance criteria:
+  - Das Einzelformular legt Gerät **und** OTAA-Keys in ChirpStack an; bei
+    LoRaWAN 1.0.x steht der AppKey in `DeviceKeys.nwk_key`, `app_key` = 32
+    Hex-Nullen (per `GetKeys` rücklesbar); das Gerät kann über das Gateway
+    OTAA-joinen.
+  - CSV-Bulk-Import: eine Zeile pro Gerät, pro-Zeile-Ergebnis (angelegt /
+    Keys aktualisiert / Fehler+Grund), fährt über fehlerhafte Zeilen hinweg;
+    Re-Import ist idempotent (keine Duplikate); Hex-Längen (16/16/32) werden
+    vor dem Schreiben geprüft.
+  - Die hochgeladene CSV bzw. der AppKey wird **nie** auf Platte, in Logs oder
+    ins Git geschrieben — nur im Arbeitsspeicher der Anfrage; ChirpStack/
+    PostgreSQL ist der einzige Ruheort des Schlüssels.
+  - Das Dashboard zeigt pro Gerät ⚪/🟡/🟢 live aus ChirpStack (keine eigene
+    DB), mit Last-Seen und (best effort) RSSI/SNR; Aktualisierung on-demand.
+  - Ein Gerät kann über die App aus ChirpStack gelöscht werden (mit expliziter
+    Bestätigung).
+  - Geräte landen unter einer konfigurierbaren Application (Default
+    `WHZ-Stellantriebe`) mit einem Klasse-A-OTAA-Geräteprofil (EU868,
+    LoRaWAN 1.0.x).
+  - Die App ist ein einzelner neuer Docker-Compose-Service, nur im
+    Host-/WHZ-Netz erreichbar (kein öffentlicher Zugang), spricht gRPC mit
+    ChirpStack (kein REST-Proxy). Optionale HTTP-Basic-Auth über `.env`.
+  - Der gRPC-Kern liegt in `scripts/chirpstack_client.py` und wird von
+    `smoke_test.py` **und** der App genutzt; der bestehende Smoke-Test bleibt
+    grün. Die Verifikation übt den zuvor ungetesteten OTAA-`CreateKeys`-Pfad.
+- Dependencies: F-0001 (Gateway-Anbindung), F-0002 (Geräte-Verwaltung),
+  F-0004 (Reproduzierbares Setup)
+- Interfaces & data: HTTP-UI (TCP/8092, WHZ-Netz/VPN), gRPC zu ChirpStack
+  (`chirpstack:8080`), CSV-Upload (transient). Keine eigene Persistenz.
+- Bewusst draußen / Roadmap: QR-Scanner, OCR-Labelerkennung, MQTT-Live-Push,
+  Raumzuweisung, Klasse-C/Netzgeräte, öffentliche Internet-Exposition,
+  Nutzer-bezogene Authentifizierung.
+- Realised by: `scripts/chirpstack_client.py`, `provisioning/`
+- Linked directives / ADRs: Issue #6, ADR-0019
+- History: 2026-06-12 added (Issue #6, Grilling-Session); Spec per ADR-0019

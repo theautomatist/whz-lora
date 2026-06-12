@@ -386,6 +386,7 @@ Der lokale Verifikationsablauf für eine Direktive:
 docker compose up -d --wait                    # Stack hochfahren
 py -3.12 scripts/smoke_test.py                 # End-to-End-Smoke-Test
 node --test codecs/*.test.js                   # Codec-Unit-Tests
+python -m unittest discover -s provisioning -p "test_*.py"   # Provisioning-Unit-Tests
 docker compose down -v                         # sauberer Teardown
 ```
 
