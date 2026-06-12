@@ -133,7 +133,8 @@ exemplary scenarios:
 Defaults and their sources are in [building-typology.md](building-typology.md)
 (IWU TABULA, Destatis / Zensus 2022, ista, Heizspiegel). Every preset value stays
 editable in the **[calculator](model-calculator.html)**; presets are a starting
-point, not a constraint.
+point, not a constraint. The full print/PDF study report is **[report.html](report.html)**
+(includes the virtual-company process chain, cost flow and full-cost vs. core-cost analysis).
 
 ## 10. Cost inputs (sourced defaults)
 
