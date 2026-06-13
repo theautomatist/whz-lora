@@ -162,6 +162,36 @@
 </table>
 <div class="box key"><b>Kernbefund:</b> Der dominante versteckte Hebel ist das <b>laufende Monitoring/Admin</b> (≈ 960 €/a für ein Einzelgebäude) — es frisst ein Drittel des Nutzens. Es ist aber stark <b>skalierbar</b>: über mehrere Gebäude verteilt sinkt es pro Gebäude drastisch. Zusammen mit dem <b>Energieträger</b> (Fernwärme) entscheidet die <b>Portfolio-Größe</b> über die Wirtschaftlichkeit — nicht die Gerätehardware.</div>
 
+<h3>Sensitivität — Einfluss je Stellschraube</h3>
+<p>Der ~10,3-Jahre-Wert ist ein irreführender Punktwert. Die Amortisation ist eine <b>Bandbreite</b>; diese Stellschrauben bewegen sie (Balken = Spanne, grün = besser/kürzer, rot = schlechter):</p>
+<img src="assets/tornado.svg" alt="Sensitivität je Stellschraube" style="width:100%;max-width:760px;display:block;margin:10px auto;border:1px solid var(--line);border-radius:6px">
+<table>
+<tr><th>#</th><th>Stellschraube</th><th>Einfluss auf Payback</th><th>Maßnahme / Hebel</th></tr>
+<tr><td>1</td><td><b>Einsparquote</b> (10 %, 5–12 %)</td><td>dominant: 10→5 % ≈ 83 J.; 10→15 % ≈ 5,5 J.</td><td>Band-Mitte ~9 %, Rebound-Abschlag, am Testbed kalibrieren</td></tr>
+<tr><td>2</td><td><b>Monitoring (OPEX)</b> (960 €/a)</td><td>größte kontrollierbare: →~7,1 J. (Portfolio ~6,5)</td><td>event-getrieben statt Routine; Portfolio-Fixkosten</td></tr>
+<tr><td>3</td><td><b>Stundensatz</b> (80 €/h Verkauf)</td><td>Multiplikator: 80→50 €/h ≈ 7–8 J.</td><td>Urteil zum WHZ-Kostensatz (45–65 €/h)</td></tr>
+<tr><td>4</td><td><b>Energieträger</b> (Gas 0,12)</td><td>Fernwärme 0,16 = +33 % ≈ 6,5 J.</td><td>realen Gebäude-Tarif nutzen</td></tr>
+<tr><td>5</td><td><b>Survey / Zweit-Gateway</b></td><td>−520 € + verstecktes 6-Geschoss-Risiko</td><td>Installateur-Tag weg; GW-Kontingenz im Angebot</td></tr>
+<tr><td>6</td><td><b>Hydraul. Abgleich</b> (9.000 €)</td><td>verdoppelt Ersparnis → ~5,7 J. (FW ~4,0)</td><td>eigene Co-Maßnahme mit eigenem Payback</td></tr>
+<tr><td>7</td><td><b>Aktor-Mengenpreis</b> (70 €)</td><td>weichste CAPEX-Zahl: −15 % → ~4,1 J.</td><td>echtes 120-Stück-Angebot (dnt & MClimate)</td></tr>
+</table>
+
+<h3>Kritischer Review — drei Korrekturen, die das Urteil verschieben</h3>
+<div class="box key">
+<b>1. Kein Punktwert — eine Bandbreite:</b> ehrlich ~5,5 J. (Fernwärme, abgeglichen, amortisiert) bis &gt;&gt;20 J. (Gas, 5 %, Einzelgebäude).<br>
+<b>2. Kostensatz statt Verkaufssatz:</b> das Make/Buy-Urteil mit dem WHZ-Grenzkostensatz rechnen, nicht mit 80 €/h.<br>
+<b>3. Versunkene Kosten nicht doppelt zählen:</b> F-0005, selbst gehosteter LNS und das vorhandene Gateway sind „sunk" — in der Prozesskette aber teils erneut berechnet (Schritte 5, 6, 8). Abbaubarer Overhead: ~1.500 €.
+</div>
+<table>
+<tr><th>Szenario</th><th class="num">Amortisation</th></tr>
+<tr><td>Gebucht (loaded+ops · Gas · 10 % · Einzelgebäude)</td><td class="num">~10,3 J.</td></tr>
+<tr><td>Bereinigt (Kostensatz + Monitoring event-getrieben)</td><td class="num">~7–8 J.</td></tr>
+<tr><td>… mit Fernwärme (0,16 €/kWh)</td><td class="num">~6,5 J.</td></tr>
+<tr><td>… mit hydraulischem Abgleich (Fernwärme)</td><td class="num ok">~4,0 J.</td></tr>
+<tr><td>Pessimistisch (Gas · 5 % Ersparnis · Einzelgebäude)</td><td class="num no">&gt;&gt;20 J.</td></tr>
+</table>
+<p class="src">Vollständig: <a href="report-a-prozesskette.pdf">Report A — Prozesskette (PDF)</a> · <a href="report-b-kostenanalyse.pdf">Report B — Kostenanalyse (PDF)</a>.</p>
+
 <!-- ============ 6. FUNKABDECKUNG ============ -->
 <h2>6. Funkabdeckung &amp; Auslegung (Sizing)</h2>
 <p>868-MHz-Indoor-Ausbreitung ist gut vermessen: Pfadverlust-Exponent n ≈ 2–4, ~10 dB pro Stahlbetondecke, 15–20 dB pro Stahlbetonwand, Ziegel 10–15 dB. Empirisch deckt <b>ein Gateway grob ~5 Etagen / ~30 m</b> in schwerem Mehrgeschossbau ab; ein einzelnes zentrales Gateway versorgte ein 4-Geschosser durchgängig. EU868-Grenze: 14 dBm ERP, Duty-Cycle 1 %. Es gibt <b>keine Indoor-16-Kanal-Gateways</b> in dieser Preisklasse — Verdichtung heißt mehr 8-Kanal-Gateways.</p>
@@ -233,8 +263,8 @@
 
 <footer>
 whz-lora · Wirtschaftlichkeits- &amp; Auslegungsstudie · Vorkalkulation mit belegten Default-Annahmen, kein verbindliches Angebot.
-Interaktives Modell: <a href="model-calculator.html">model-calculator.html</a> · Methodik &amp; Quellen: <code>model.md</code>, <code>preliminary-research.md</code>, <code>building-typology.md</code>, ADR-0020/0021.
-Drucken → „Als PDF speichern" erzeugt den Report als PDF.
+Interaktives Modell: <a href="model-calculator.html">model-calculator.html</a> · PDF-Reports: <a href="report-a-prozesskette.pdf">A — Prozesskette</a>, <a href="report-b-kostenanalyse.pdf">B — Kostenanalyse</a> · Methodik &amp; Quellen: <code>model.md</code>, <code>preliminary-research.md</code>, <code>building-typology.md</code>, ADR-0020/0021.
+Drucken → „Als PDF speichern" erzeugt diesen Report als PDF.
 </footer>
 
 </div>
