@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="372" viewBox="0 0 720 372" font-family="Segoe UI, Arial, sans-serif">
+  <rect width="720" height="372" fill="#ffffff"/>
+  <text x="12" y="24" font-size="14" font-weight="700" fill="#1a2230">Sensitivität — Einfluss je Stellschraube auf die Amortisation</text>
+  <text x="12" y="40" font-size="11" fill="#5b6876">Referenzgebäude Mittel/Altbau, vollkostenbelastet (Basis 10,3 Jahre). Balken = Amortisation am unteren/oberen Ende der plausiblen Spanne.</text>
+
+  <!-- base line -->
+  <line x1="410" y1="48" x2="410" y2="330" stroke="#1a2230" stroke-width="1.5" stroke-dasharray="4 3"/>
+  <text x="410" y="60" font-size="10" fill="#1a2230" text-anchor="middle">Basis 10,3 J.</text>
+
+  <!-- x axis -->
+  <line x1="200" y1="330" x2="700" y2="330" stroke="#d9e0e8"/>
+  <g font-size="10" fill="#5b6876" text-anchor="middle">
+    <text x="200" y="344">4</text><text x="300" y="344">7</text><text x="400" y="344">10</text>
+    <text x="500" y="344">13</text><text x="600" y="344">16</text><text x="700" y="344">19</text>
+    <text x="450" y="362" fill="#5b6876">Amortisation (Jahre) — links = besser (kürzer), rechts = schlechter</text>
+  </g>
+
+  <!-- rows: green = better side, red = worse side -->
+  <g font-size="11" fill="#1a2230">
+    <!-- 1 Energie -->
+    <text x="6" y="71">Energiepreis / -träger</text>
+    <rect x="223" y="58" width="187" height="18" fill="#1a7f37"/><rect x="410" y="58" width="267" height="18" fill="#b42318"/>
+    <text x="219" y="71" font-size="10" text-anchor="end" fill="#1a7f37">4,7</text><text x="681" y="71" font-size="10" fill="#b42318">18,3</text>
+    <!-- 2 Ersparnis -->
+    <text x="6" y="107">Ersparnis-%</text>
+    <rect x="320" y="94" width="90" height="18" fill="#1a7f37"/><rect x="410" y="94" width="183" height="18" fill="#b42318"/>
+    <text x="316" y="107" font-size="10" text-anchor="end" fill="#1a7f37">7,6</text><text x="597" y="107" font-size="10" fill="#b42318">15,8</text>
+    <!-- 3 Abgleich -->
+    <text x="6" y="143">Hydraul. Abgleich</text>
+    <rect x="283" y="130" width="127" height="18" fill="#1a7f37"/>
+    <text x="279" y="143" font-size="10" text-anchor="end" fill="#1a7f37">6,5</text><text x="414" y="143" font-size="10" fill="#5b6876">aus</text>
+    <!-- 4 OPEX -->
+    <text x="6" y="179">Betrieb / Skalierung</text>
+    <rect x="290" y="166" width="120" height="18" fill="#1a7f37"/>
+    <text x="286" y="179" font-size="10" text-anchor="end" fill="#1a7f37">6,7</text>
+    <!-- 5 TRV -->
+    <text x="6" y="215">Gerätepreis (TRV)</text>
+    <rect x="360" y="202" width="50" height="18" fill="#1a7f37"/><rect x="410" y="202" width="27" height="18" fill="#b42318"/>
+    <text x="356" y="215" font-size="10" text-anchor="end" fill="#1a7f37">8,8</text><text x="441" y="215" font-size="10" fill="#b42318">11,1</text>
+    <!-- 6 Montage -->
+    <text x="6" y="251">Montage</text>
+    <rect x="383" y="238" width="27" height="18" fill="#1a7f37"/><rect x="410" y="238" width="47" height="18" fill="#b42318"/>
+    <text x="379" y="251" font-size="10" text-anchor="end" fill="#1a7f37">9,5</text><text x="461" y="251" font-size="10" fill="#b42318">11,7</text>
+    <!-- 7 Overhead -->
+    <text x="6" y="287">Prozess-Overhead</text>
+    <rect x="370" y="274" width="40" height="18" fill="#1a7f37"/><rect x="410" y="274" width="27" height="18" fill="#b42318"/>
+    <text x="366" y="287" font-size="10" text-anchor="end" fill="#1a7f37">9,1</text><text x="441" y="287" font-size="10" fill="#b42318">11,1</text>
+    <!-- 8 Gateway -->
+    <text x="6" y="323">Gateway (neu)</text>
+    <rect x="410" y="310" width="8" height="18" fill="#b42318"/>
+    <text x="422" y="323" font-size="10" fill="#b42318">10,5</text>
+  </g>
+</svg>
