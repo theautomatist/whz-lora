@@ -1,0 +1,1149 @@
+{
+ "sections": [
+  {
+   "title": "Grundvoraussetzung",
+   "questions": [
+    {
+     "id": "V1",
+     "question": "Werden die Räume über Heizkörper (Radiatoren) mit Thermostatventil beheizt?",
+     "description": "Funk-Thermostate ersetzen den Drehknopf am Ventil eines wassergeführten Heizkörpers. Sie funktionieren NUR dort. Bei Fußbodenheizung, Decken-/Luftheizung oder Fan-Coil-Geräten ist diese Lösung nicht anwendbar — dann entfällt der gesamte Anwendungsfall. Bitte zuerst klären.",
+     "field_type": "ja_nein",
+     "options": [],
+     "onsite": false,
+     "feeds": "Grundvoraussetzung (K.-o.)"
+    }
+   ]
+  },
+  {
+   "title": "A — Gebäude & Konstruktion",
+   "questions": [
+    {
+     "id": "A1",
+     "section": "A — Gebäude & Konstruktion",
+     "question": "In welcher Bauepoche wurde das Gebäude errichtet?",
+     "description": "Gemeint ist das ungefähre Baujahr des Hauptgebäudes. Das Baualter ist der wichtigste Hinweis darauf, wie gut das Haus gedämmt ist und wie viel Heizenergie es verbraucht — und damit, ob sich eine automatische Heizungsregelung lohnt. Ältere Häuser verlieren mehr Wärme, sparen also mehr. Sie finden das Baujahr im Bauantrag, Kaufvertrag, Energieausweis oder in der Hausakte; eine grobe Einordnung in eine der Epochen genügt.",
+     "field_type": "auswahl_einfach",
+     "onsite": false,
+     "feeds": "Archetyp (A–D) → Heizintensität, Einsparband, Funk-Klasse",
+     "options": [
+      "vor 1949",
+      "1949–1957",
+      "1958–1990 (DDR / Plattenbau)",
+      "1991–2001",
+      "2002 bis heute (GEG / EnEV)",
+      "unbekannt"
+     ]
+    },
+    {
+     "id": "A2",
+     "section": "A — Gebäude & Konstruktion",
+     "question": "Aus welchem Hauptmaterial besteht die tragende Außenwand?",
+     "description": "Die tragende Außenwand ist die dicke, lasttragende Mauer der Gebäudehülle (nicht eine leichte Trennwand innen). Das Material beeinflusst zwei Dinge: wie warm das Haus hält und wie stark es das Funksignal dämpft. Wichtig ist vor allem, ob die Wand Stahlbeton enthält — die Stahlmatte darin wirkt wie ein Drahtkäfig und blockiert Funk besonders stark. Backstein/Ziegel dämpft das Funksignal am wenigsten. Wenn Sie es nicht sicher wissen, hilft oft der Energieausweis, die Baubeschreibung oder das Baualter (Plattenbau = Stahlbeton).",
+     "field_type": "auswahl_einfach",
+     "onsite": false,
+     "feeds": "Archetyp + Funk-Klasse (RF)",
+     "options": [
+      "Vollziegel / Backstein",
+      "Stahlbeton (Ortbeton)",
+      "Stahlbeton-Sandwich Plattenbau (WBS 70)",
+      "Kalksandstein / Porenbeton",
+      "Holz",
+      "gemischt / unbekannt"
+     ]
+    },
+    {
+     "id": "A3",
+     "section": "A — Gebäude & Konstruktion",
+     "question": "Wurde nachträglich eine Außendämmung (Wärmedämm-Verbundsystem / WDVS) an der Fassade angebracht?",
+     "description": "Ein Wärmedämm-Verbundsystem (WDVS) ist eine nachträglich auf die Fassade geklebte oder gedübelte Dämmschicht (meist Styropor- oder Mineralwollplatten unter einem neuen Außenputz). Man erkennt es daran, dass die Außenwand merklich dicker ist als die Fensterlaibung erwarten lässt, und am Klopfen klingt sie eher hohl/weich. Eine solche Sanierung senkt den Heizverbrauch stark und verschiebt das Gebäude vom 'unsaniert' zum 'saniert'-Profil. Antworten Sie 'Nein', wenn die Fassade unverändert original ist.",
+     "field_type": "ja_nein",
+     "onsite": false,
+     "feeds": "Archetyp (saniert vs. unsaniert) → Heizintensität, Einsparband",
+     "options": []
+    },
+    {
+     "id": "A4",
+     "section": "A — Gebäude & Konstruktion",
+     "question": "Welche Verglasung haben die Fenster überwiegend?",
+     "description": "Gemeint ist, wie viele Glasscheiben die Fenster haben und ob sie eine spezielle Wärmeschutz-Beschichtung tragen. Das ist doppelt wichtig: bessere Fenster sparen Heizenergie, ABER moderne Wärmeschutzfenster haben eine hauchdünne Metallbeschichtung auf dem Glas (Low-E), die das Funksignal stark blockiert — sie sind für die Funkabdeckung der schwierigste Fall. So erkennen Sie es: Einfachglas = eine Scheibe. Isolierglas = zwei Scheiben mit Luftspalt. Wärmeschutzglas (Low-E) hat oft einen leicht grünlich/bläulichen Schimmer, wenn man schräg durchschaut; im Zweifel verrät es die Aufschrift im Randabstandhalter zwischen den Scheiben oder der Fensterpass.",
+     "field_type": "auswahl_einfach",
+     "onsite": false,
+     "feeds": "Archetyp + Funk-Klasse (RF: Low-E-Glas = Dämpfer)",
+     "options": [
+      "Einfachverglasung (Klarglas, 1 Scheibe)",
+      "Zweifach-Isolierglas ohne Beschichtung",
+      "Zwei-/Dreifach-Wärmeschutz (Low-E, metallbeschichtet)",
+      "gemischt",
+      "unbekannt"
+     ]
+    },
+    {
+     "id": "A5",
+     "section": "A — Gebäude & Konstruktion",
+     "question": "Falls es ein Plattenbau ist: Welche Bauserie?",
+     "description": "Plattenbauten der DDR wurden in standardisierten Serien gebaut, deren Wandaufbau bekannt ist. Die Serie verrät die genaue Dicke und Bewehrung der Stahlbeton-Platten und damit, wie stark Funk gedämpft wird. Falls es KEIN Plattenbau ist, wählen Sie 'kein Plattenbau'. Die Serie steht oft in den Bauunterlagen oder ist über das Baujahr und den Standort recherchierbar; WBS 70 ist die häufigste.",
+     "field_type": "auswahl_einfach",
+     "onsite": false,
+     "feeds": "Archetyp D + Funk-Klasse (Wandaufbau)",
+     "options": [
+      "WBS 70",
+      "P2 / Q3A",
+      "andere DDR-Serie",
+      "kein Plattenbau",
+      "unbekannt"
+     ]
+    },
+    {
+     "id": "A6",
+     "section": "A — Gebäude & Konstruktion",
+     "question": "Liegt ein Energieausweis für das Gebäude vor?",
+     "description": "Der Energieausweis ist ein offizielles Dokument (Pflicht bei Verkauf/Vermietung), das angibt, wie viel Energie das Gebäude verbraucht. Er ist die genaueste Quelle für den Heizbedarf und ersetzt grobe Schätzungen. Diese Frage klärt nur, OB ein solches Dokument existiert — die Kennzahlen daraus erfassen wir in den nächsten beiden Fragen.",
+     "field_type": "ja_nein",
+     "onsite": false,
+     "feeds": "Heizintensität (Baseline-Verfeinerung)",
+     "options": []
+    },
+    {
+     "id": "A6a",
+     "section": "A — Gebäude & Konstruktion",
+     "question": "Welche Effizienzklasse weist der Energieausweis aus?",
+     "description": "Falls ein Energieausweis vorliegt (siehe vorige Frage): Die Effizienzklasse ist eine Buchstabennote von A+ (sehr sparsam) bis H (sehr hoch im Verbrauch), wie die Energielabel auf Haushaltsgeräten. Sie steht groß auf einer Farbskala auf dem Ausweis. Eine schlechte Klasse (G/H) bedeutet hohen Verbrauch und damit mehr Sparpotenzial. Falls kein Ausweis vorliegt oder keine Klasse genannt ist, lassen Sie das Feld leer.",
+     "field_type": "auswahl_einfach",
+     "onsite": false,
+     "feeds": "Heizintensität (Baseline-Verfeinerung)",
+     "options": [
+      "A+",
+      "A",
+      "B",
+      "C",
+      "D",
+      "E",
+      "F",
+      "G",
+      "H",
+      "kein Ausweis / nicht angegeben"
+     ]
+    },
+    {
+     "id": "A6b",
+     "section": "A — Gebäude & Konstruktion",
+     "question": "Welcher Endenergie-Kennwert in kWh/m²·a steht im Energieausweis?",
+     "description": "Falls ein Energieausweis vorliegt: Dies ist die zentrale Zahl darauf — der Energieverbrauch pro Quadratmeter und Jahr, angegeben in 'kWh/(m²·a)'. Sie steht meist als Zahl auf demselben Farbband wie die Effizienzklasse (z. B. 150 kWh/m²·a). Je höher die Zahl, desto mehr Heizenergie und desto mehr Sparpotenzial. Tragen Sie nur die Zahl ein (ohne Einheit). Falls kein Ausweis vorliegt, lassen Sie das Feld leer.",
+     "field_type": "zahl",
+     "onsite": false,
+     "feeds": "Heizintensität (Baseline-Verfeinerung, präziser als Default)",
+     "options": []
+    },
+    {
+     "id": "A7",
+     "section": "A — Gebäude & Konstruktion",
+     "question": "Ist das Gebäude einheitlich gebaut (eine Bauphase, ein Material)?",
+     "description": "Diese Frage prüft, ob das ganze Gebäude aus einem Guss ist oder ob es Teile aus unterschiedlichen Zeiten/Materialien gibt — etwa einen späteren Anbau, eine Aufstockung oder einen modernen Glas-Vorbau an einem Altbau. Das ist wichtig, weil verschiedene Bauteile unterschiedlich dämmen und Funk unterschiedlich durchlassen; ein gemischtes Gebäude muss man eventuell in Zonen aufteilen. Antworten Sie 'Ja', wenn alles aus derselben Epoche und Bauweise stammt; 'Nein', wenn es abweichende Anbauten/Aufstockungen gibt.",
+     "field_type": "ja_nein",
+     "onsite": false,
+     "feeds": "Archetyp-Zuordnung (Homogenität / Zonierung)",
+     "options": []
+    },
+    {
+     "id": "A8a",
+     "section": "A — Gebäude & Konstruktion",
+     "question": "Wie dick sind die Außenwände ungefähr (gemessen an der Fensterlaibung)?",
+     "description": "Nur nötig, wenn Baualter oder Wandmaterial unbekannt sind — die Wanddicke hilft dann, das Baualter zu schätzen. So messen Sie: Öffnen Sie ein Fenster und messen Sie die Tiefe der seitlichen Fensterleibung (der Abstand von der Außenkante der Wand bis zur Innenkante), mit Zollstock oder Maßband, in Zentimetern. Dünne Wände (~20–25 cm) deuten auf Beton/Fertigteil, dicke (~38 cm und mehr) auf alten Vollziegel. Tragen Sie die Dicke in cm ein. Diese Angabe ist nur durch Nachmessen vor Ort verlässlich.",
+     "field_type": "zahl",
+     "onsite": true,
+     "feeds": "Archetyp (Baualter-Schätzung bei Unbekannt)",
+     "options": []
+    },
+    {
+     "id": "A8b",
+     "section": "A — Gebäude & Konstruktion",
+     "question": "Fühlt sich die Außenwand massiv-kalt oder leicht/hohl an?",
+     "description": "Nur nötig, wenn das Wandmaterial unbekannt ist. Klopfen Sie an die Außenwand und fassen Sie sie an: Eine massive Wand (Ziegel, Beton) fühlt sich schwer, kalt und fest an und klingt dumpf; eine leichte Wand (Trockenbau, Holzständer) klingt hohl und fühlt sich wärmer und weniger fest an. Das unterscheidet schweren Massivbau (dämpft Funk stark, hält Wärme träge) von Leichtbau. Diese Einschätzung ist nur vor Ort durch Anfassen/Klopfen möglich.",
+     "field_type": "auswahl_einfach",
+     "onsite": true,
+     "feeds": "Archetyp + Funk-Klasse (Massivität)",
+     "options": [
+      "massiv-kalt (Ziegel / Beton)",
+      "leicht / hohl (Trockenbau / Holz)",
+      "uneindeutig"
+     ]
+    },
+    {
+     "id": "A9",
+     "section": "A — Gebäude & Konstruktion",
+     "question": "Enthält die Dämmung eine metallische Dampfsperre oder kaschierte Alu-Folie?",
+     "description": "Eine Dampfsperre ist eine dünne Folie in der Dämmung (oft in Dächern, Decken oder Innendämmungen), die Feuchtigkeit fernhält. Hat sie eine glänzende Aluminium-Beschichtung, wirkt sie wie eine durchgehende Metallschicht und blockiert Funk fast vollständig — ein versteckter, oft übersehener Funkkiller. Sichtbar wird sie nur an offenen Stellen: in abgehängten Decken, am Dachboden zwischen den Sparren, an Revisionsklappen — als silbrig glänzende, folienartige Schicht. Diese Prüfung ist nur vor Ort möglich.",
+     "field_type": "ja_nein",
+     "onsite": true,
+     "feeds": "Funk-Klasse (RF: metallbedampfte Dämmung = starker Dämpfer)",
+     "options": []
+    }
+   ]
+  },
+  {
+   "title": "B — Geometrie, Geschosse & Räume",
+   "questions": [
+    {
+     "id": "B1",
+     "section": "B — Geometrie, Geschosse & Räume",
+     "question": "Wie viele oberirdische, beheizte Vollgeschosse hat das Gebäude?",
+     "description": "Gemeint sind die normalen Stockwerke über dem Erdboden, in denen geheizt wird und in denen man sich aufhält (Erdgeschoss mitzählen). Ein 'Vollgeschoss' ist ein normales Stockwerk in voller Höhe, kein niedriges Dach- oder Zwischengeschoss. Wir brauchen die Zahl, weil jede Geschossdecke das Funksignal dämpft: je mehr Geschosse übereinander, desto eher wird ein zweites Funk-Empfangsgerät (Gateway) nötig. Antwort: einfach die Stockwerke zählen, vom Erdgeschoss bis zum obersten normalen Stockwerk.",
+     "field_type": "zahl",
+     "onsite": false,
+     "feeds": "floors → Gateway-Sizing (RF), absolute CAPEX",
+     "options": []
+    },
+    {
+     "id": "B2",
+     "section": "B — Geometrie, Geschosse & Räume",
+     "question": "Gibt es ein beheiztes Kellergeschoss mit Heizkörpern?",
+     "description": "Manche Keller haben Heizkörper (z. B. beheizte Werkstätten, Hausmeisterräume, Büro im Untergeschoss), die meisten nicht. Wir fragen das getrennt von den normalen Stockwerken, weil so ein Geschoss zusätzliche Heizkörper und ein weiteres Funk-Hindernis bedeutet. Antwort 'Ja', wenn im Untergeschoss mindestens ein Heizkörper hängt, der im Winter warm wird.",
+     "field_type": "ja_nein",
+     "onsite": false,
+     "feeds": "floors / actuator_count → Sizing",
+     "options": []
+    },
+    {
+     "id": "B3",
+     "section": "B — Geometrie, Geschosse & Räume",
+     "question": "Falls ja: Wie viele beheizte Kellergeschosse mit Heizkörpern gibt es?",
+     "description": "Nur ausfüllen, wenn die vorige Frage mit 'Ja' beantwortet wurde. Gemeint ist die Anzahl der Untergeschosse (z. B. 1. Untergeschoss, 2. Untergeschoss), in denen tatsächlich Heizkörper sitzen. Bei nur einem beheizten Keller hier '1' eintragen.",
+     "field_type": "zahl",
+     "onsite": false,
+     "feeds": "floors / actuator_count → Sizing",
+     "options": []
+    },
+    {
+     "id": "B4",
+     "section": "B — Geometrie, Geschosse & Räume",
+     "question": "Gibt es ein beheiztes Dachgeschoss mit Heizkörpern?",
+     "description": "Ein ausgebautes, bewohntes oder genutztes Dachgeschoss mit eigenen Heizkörpern (Wohnung, Büro, Seminarraum unter dem Dach). Ein reiner, kalter Dachboden ohne Heizung zählt nicht. Wir fragen es getrennt, weil das Dachgeschoss meist am weitesten vom Funk-Empfangsgerät (Gateway) entfernt ist und damit der kritischste Punkt für die Funkreichweite. Antwort 'Ja', wenn unter dem Dach geheizte Räume mit Heizkörpern liegen.",
+     "field_type": "ja_nein",
+     "onsite": false,
+     "feeds": "floors / actuator_count → Sizing",
+     "options": []
+    },
+    {
+     "id": "B5",
+     "section": "B — Geometrie, Geschosse & Räume",
+     "question": "Falls ja: Wie viele beheizte Dachgeschosse mit Heizkörpern gibt es?",
+     "description": "Nur ausfüllen, wenn die vorige Frage mit 'Ja' beantwortet wurde. In der Regel ist das '1'. Mehr als eines kommt nur bei sehr großen oder mehrteiligen Gebäuden vor.",
+     "field_type": "zahl",
+     "onsite": false,
+     "feeds": "floors / actuator_count → Sizing",
+     "options": []
+    },
+    {
+     "id": "B6",
+     "section": "B — Geometrie, Geschosse & Räume",
+     "question": "Wie groß ist die gesamte beheizte Fläche des Gebäudes in Quadratmetern (m²)?",
+     "description": "Die Summe aller Raumflächen, die im Winter geheizt werden, über alle Stockwerke zusammengerechnet, in Quadratmetern. Diese Zahl steht oft im Mietvertrag, im Energieausweis oder in den Bauunterlagen ('beheizte Fläche' oder 'Nutzfläche'). Wir brauchen sie, weil der Heizenergie-Verbrauch und damit die mögliche Ersparnis grob mit der Fläche steigt. Wenn nur die Wohn-/Nutzfläche pro Stockwerk bekannt ist, diese addieren. Schätzung ist erlaubt, bitte möglichst realistisch.",
+     "field_type": "zahl",
+     "onsite": false,
+     "feeds": "footprint_m2 → Baseline-Energie, absolute Ersparnis",
+     "options": []
+    },
+    {
+     "id": "B7",
+     "section": "B — Geometrie, Geschosse & Räume",
+     "question": "Ist die beheizte Fläche pro Stockwerk in etwa gleich groß?",
+     "description": "Wir wollen wissen, ob die Stockwerke ungefähr gleich groß sind (z. B. ein gestapelter Standardgrundriss, in jedem Stockwerk dieselbe Fläche) oder ob sie sich stark unterscheiden (z. B. großes Erdgeschoss, kleines Dachgeschoss). Antwort 'Ja', wenn alle Geschosse ungefähr gleich groß sind; 'Nein', wenn ein oder mehrere Geschosse deutlich größer oder kleiner sind. Das hilft uns, die Fläche und Heizkörper sinnvoll auf die Stockwerke zu verteilen.",
+     "field_type": "ja_nein",
+     "onsite": false,
+     "feeds": "footprint_m2-Verteilung → Sizing pro Geschoss",
+     "options": []
+    },
+    {
+     "id": "B8",
+     "section": "B — Geometrie, Geschosse & Räume",
+     "question": "Falls die Stockwerke unterschiedlich groß sind: Wie groß ist die beheizte Fläche je Stockwerk in m²?",
+     "description": "Nur ausfüllen, wenn die vorige Frage mit 'Nein' beantwortet wurde. Bitte je Stockwerk eine Fläche angeben, z. B. 'EG 600, 1. OG 500, 2. OG 400'. Frei in Worten eintragen. Diese Angabe hilft, Heizkörper und Funk-Last realistisch auf die Etagen zu verteilen, wenn sie nicht gleichmäßig sind.",
+     "field_type": "text",
+     "onsite": false,
+     "feeds": "footprint_m2-Verteilung → Sizing pro Geschoss",
+     "options": []
+    },
+    {
+     "id": "B9",
+     "section": "B — Geometrie, Geschosse & Räume",
+     "question": "Sind die Stockwerke baulich gleich aufgebaut (gleicher Grundriss übereinander)?",
+     "description": "Gemeint ist, ob die Stockwerke denselben Grundriss haben und gleich angeordnet sind (typisch für Wohn- und Bürohäuser: jede Etage gleich) oder ob sie ganz unterschiedlich aufgeteilt sind. Das ist nicht dasselbe wie die Fläche: Stockwerke können gleich groß, aber unterschiedlich aufgeteilt sein. Antwort 'Ja' bei gleichem, gestapeltem Standardgrundriss. Das vereinfacht die Hochrechnung der Heizkörper- und Gerätezahlen.",
+     "field_type": "ja_nein",
+     "onsite": false,
+     "feeds": "Hochrechnung actuator_count je Geschoss",
+     "options": []
+    },
+    {
+     "id": "B10",
+     "section": "B — Geometrie, Geschosse & Räume",
+     "question": "Wie viele beheizte Räume gibt es insgesamt (ohne Flure)?",
+     "description": "Bitte alle beheizten Räume im ganzen Gebäude zählen, in denen Heizkörper hängen — also Wohn-, Schlaf-, Büro-, Seminar-, Aufenthaltsräume usw. Flure, Treppenhäuser und reine Durchgangszonen NICHT mitzählen (die werden in einer eigenen Frage erfasst). Faustregel im Modell: ein Heizkörper je beheiztem Raum. Diese Zahl hilft, die Gesamtzahl der zu regelnden Heizkörper abzuschätzen, falls noch nicht jeder Heizkörper einzeln gezählt wurde. Schätzung ist erlaubt.",
+     "field_type": "zahl",
+     "onsite": false,
+     "feeds": "actuator_count (Näherung) → Sizing, CAPEX",
+     "options": []
+    },
+    {
+     "id": "B11",
+     "section": "B — Geometrie, Geschosse & Räume",
+     "question": "Wie verteilen sich die beheizten Räume auf die Stockwerke?",
+     "description": "Bitte grob angeben, wie viele beheizte Räume in welchem Stockwerk liegen, z. B. 'EG 12, 1. OG 14, 2. OG 14, DG 6'. Frei in Worten eintragen. Das hilft uns zu sehen, in welchem Stockwerk die meisten Geräte sitzen und ob die Funkversorgung dort ausreicht. Wenn die Stockwerke alle gleich aufgeteilt sind, genügt z. B. 'jede Etage ca. 14 Räume'.",
+     "field_type": "text",
+     "onsite": false,
+     "feeds": "actuator_count-Verteilung → Sizing pro Geschoss",
+     "options": []
+    },
+    {
+     "id": "B12",
+     "section": "B — Geometrie, Geschosse & Räume",
+     "question": "Wie viele zu regelnde Heizkörper gibt es im ganzen Gebäude insgesamt?",
+     "description": "Die Gesamtzahl aller Heizkörper, die später ein funkgesteuertes Ventil bekommen sollen — durchgezählt im ganzen Gebäude. Das ist die wichtigste Mengenzahl der ganzen Kalkulation: jeder Heizkörper kostet rund 110 Euro (Gerät + Montage). Verlässlich ist diese Zahl nur durch tatsächliches Abzählen vor Ort, weil Pläne oft veraltet sind und manche Räume mehrere oder versteckte Heizkörper haben. Wenn noch nicht abgezählt wurde, vorerst die Raumzahl (Frage B10) als Näherung nehmen und das hier offen lassen.",
+     "field_type": "zahl",
+     "onsite": true,
+     "feeds": "actuator_count → CAPEX, Sizing, Verdict",
+     "options": []
+    },
+    {
+     "id": "B13",
+     "section": "B — Geometrie, Geschosse & Räume",
+     "question": "Gibt es Räume mit zwei oder mehr Heizkörpern (z. B. große Säle oder Hörsäle)?",
+     "description": "In großen Räumen (Säle, Hörsäle, große Büros, Werkstätten) hängen oft mehrere Heizkörper an verschiedenen Wänden. Jeder davon braucht ein eigenes Ventil. Wir fragen das, damit die Heizkörperzahl nicht zu niedrig geschätzt wird, wenn man nur Räume zählt. Antwort 'Ja', wenn es solche Räume gibt. Nur durch Hinschauen vor Ort sicher feststellbar.",
+     "field_type": "ja_nein",
+     "onsite": true,
+     "feeds": "actuator_count-Korrektur",
+     "options": []
+    },
+    {
+     "id": "B14",
+     "section": "B — Geometrie, Geschosse & Räume",
+     "question": "Falls ja: Wie viele Heizkörper hängen in diesen Mehrfach-Räumen zusätzlich (über den ersten je Raum hinaus)?",
+     "description": "Nur ausfüllen, wenn die vorige Frage mit 'Ja' beantwortet wurde. Beispiel: Ein Hörsaal hat 4 Heizkörper — das sind 3 zusätzliche über den einen hinaus, den man bei 'ein Heizkörper pro Raum' schon gezählt hat. Bitte diese zusätzlichen Heizkörper aus allen Mehrfach-Räumen zusammenzählen. Nur durch Zählen vor Ort verlässlich.",
+     "field_type": "zahl",
+     "onsite": true,
+     "feeds": "actuator_count-Korrektur",
+     "options": []
+    },
+    {
+     "id": "B15",
+     "section": "B — Geometrie, Geschosse & Räume",
+     "question": "Gibt es Heizkörper in Bereichen, die NICHT geregelt werden sollen (Flure, Treppenhaus, WC/Sanitär, Nebenräume)?",
+     "description": "Manche Heizkörper sollen bewusst außen vor bleiben, etwa im Treppenhaus, in Fluren oder in selten genutzten Nebenräumen — dort lohnt sich die Einzelregelung kaum oder sie ist nicht gewünscht. Wir fragen das, um die Gerätezahl nicht zu hoch anzusetzen. Antwort 'Ja', wenn es solche ausgenommenen Heizkörper gibt. Verlässlich nur durch Begehung.",
+     "field_type": "ja_nein",
+     "onsite": true,
+     "feeds": "actuator_count-Abzug",
+     "options": []
+    },
+    {
+     "id": "B16",
+     "section": "B — Geometrie, Geschosse & Räume",
+     "question": "Falls ja: Wie viele Heizkörper liegen in solchen ausgenommenen Bereichen?",
+     "description": "Nur ausfüllen, wenn die vorige Frage mit 'Ja' beantwortet wurde. Bitte die Heizkörper in Fluren, Treppenhaus, WC und Nebenräumen zählen, die NICHT mit einem funkgesteuerten Ventil ausgestattet werden sollen. Diese Zahl wird von der Gesamtzahl abgezogen. Nur durch Zählen vor Ort verlässlich.",
+     "field_type": "zahl",
+     "onsite": true,
+     "feeds": "actuator_count-Abzug",
+     "options": []
+    },
+    {
+     "id": "B17",
+     "section": "B — Geometrie, Geschosse & Räume",
+     "question": "Wie viele getrennte Treppenhäuser bzw. senkrechte Versorgungszonen gibt es?",
+     "description": "Ein Treppenhaus bzw. eine 'Steigzone' ist der senkrechte Schacht, durch den Treppe, Leitungen und Funk zwischen den Stockwerken laufen. Große Gebäude haben oft mehrere getrennte Treppenhäuser (z. B. ein Ost- und ein West-Aufgang). Das ist wichtig, weil ein Funk-Empfangsgerät (Gateway) zentral an so einem Schacht oft mehrere Etagen auf einmal versorgt. Mehrere getrennte Treppenhäuser können bedeuten, dass mehr als ein Gateway nötig ist. Bitte die Anzahl eintragen.",
+     "field_type": "zahl",
+     "onsite": false,
+     "feeds": "Gateway-Sizing, Zweit-Gateway-Risiko",
+     "options": []
+    },
+    {
+     "id": "B18",
+     "section": "B — Geometrie, Geschosse & Räume",
+     "question": "Wo liegen diese Treppenhäuser im Gebäude?",
+     "description": "Bitte angeben, wo die Treppenhäuser sitzen: eher zentral (in der Mitte des Gebäudes) oder am Rand bzw. an der Außenwand. Mehrere Antworten möglich, wenn es mehrere Treppenhäuser an verschiedenen Stellen gibt. Eine zentrale Lage ist günstig, weil ein dort platziertes Funk-Empfangsgerät (Gateway) in alle Richtungen ungefähr gleich weit reicht; eine Randlage funkt dagegen nur in eine Richtung gut.",
+     "field_type": "auswahl_mehrfach",
+     "onsite": false,
+     "feeds": "Gateway-Standortwahl, Sizing",
+     "options": [
+      "zentral (Gebäudemitte)",
+      "am Rand / an der Außenwand",
+      "gemischt (mehrere an verschiedenen Stellen)",
+      "unbekannt"
+     ]
+    }
+   ]
+  },
+  {
+   "title": "C — Heizung, Energie & Einsparung",
+   "questions": [
+    {
+     "id": "C1",
+     "section": "C — Heizung, Energie & Einsparung",
+     "question": "Womit wird das Gebäude beheizt?",
+     "description": "Der Energieträger der Heizung — also was verbrannt oder genutzt wird, um Wärme zu erzeugen. Das steht auf der Heizkostenabrechnung oder ist am Heizkessel/Hausanschluss ablesbar. Diese Angabe ist eine der wichtigsten überhaupt: Sie bestimmt den Preis pro Kilowattstunde Wärme — und damit, wie viel Euro jede eingesparte Kilowattstunde wert ist. Fernwärme ist z. B. meist deutlich teurer als Gas, wodurch sich die Anlage schneller lohnt. Bitte die zutreffende Heizart anklicken.",
+     "field_type": "auswahl_einfach",
+     "onsite": false,
+     "feeds": "energy_price → Benefit, Verdict (stärkster Hebel)",
+     "options": [
+      "Erdgas",
+      "Fernwärme",
+      "Heizöl",
+      "Wärmepumpe",
+      "Pellets / Biomasse",
+      "Sonstiges",
+      "unbekannt"
+     ]
+    },
+    {
+     "id": "C2",
+     "section": "C — Heizung, Energie & Einsparung",
+     "question": "Wie hoch ist der Arbeitspreis für die Heizenergie in Euro pro Kilowattstunde (EUR/kWh)?",
+     "description": "Der 'Arbeitspreis' ist der Preis für die tatsächlich verbrauchte Wärme, gerechnet je Kilowattstunde (kWh) — ohne die feste Grundgebühr und ohne den Leistungspreis. Er steht auf der Heizkosten- oder Gasabrechnung, oft als 'ct/kWh' (Cent pro Kilowattstunde; 12 ct entsprechen 0,12 EUR). Bitte den Netto-Wert (ohne Mehrwertsteuer) eintragen, falls erkennbar, sonst den ausgewiesenen Wert. Zur Orientierung: Gas liegt aktuell um 0,12 EUR/kWh, Fernwärme oft um 0,16 EUR/kWh. Wenn unbekannt, leer lassen — dann rechnen wir mit einem Standardwert.",
+     "field_type": "zahl",
+     "onsite": false,
+     "feeds": "energy_price → Benefit, Verdict (stärkster Hebel)",
+     "options": []
+    },
+    {
+     "id": "C3",
+     "section": "C — Heizung, Energie & Einsparung",
+     "question": "Wie hoch ist der jährliche Heizenergie-Verbrauch in Kilowattstunden (kWh)?",
+     "description": "Die im Jahr verbrauchte Wärmemenge, in Kilowattstunden (kWh), möglichst nur für die Raumheizung (also ohne Warmwasser, falls getrennt ausgewiesen). Diese Zahl steht auf der Jahresabrechnung. Sie ist genauer als eine Schätzung über die Fläche, weil sie den tatsächlichen Verbrauch dieses konkreten Gebäudes abbildet. Damit lässt sich die mögliche Euro-Ersparnis belastbarer berechnen. Wenn unbekannt oder nicht trennbar, leer lassen — dann schätzen wir aus Fläche und Gebäudetyp.",
+     "field_type": "zahl",
+     "onsite": false,
+     "feeds": "Baseline (realer kWh) → Ersparnis",
+     "options": []
+    },
+    {
+     "id": "C4",
+     "section": "C — Heizung, Energie & Einsparung",
+     "question": "Wie hoch sind die jährlichen Heizkosten in Euro laut letzter Abrechnung?",
+     "description": "Der Euro-Betrag, der im Jahr für die Heizung gezahlt wird, laut der letzten Jahresabrechnung. Diese Zahl ist nützlich als Gegenprobe zur Verbrauchs- und Preisrechnung und macht greifbar, wie groß die mögliche Ersparnis in Euro überhaupt sein kann (z. B. sind 8 % von 10.000 EUR rund 800 EUR im Jahr). Wenn die Abrechnung auch Warmwasser enthält, hier trotzdem den Gesamt-Heizkostenbetrag eintragen und die nächste Frage beachten.",
+     "field_type": "zahl",
+     "onsite": false,
+     "feeds": "Baseline-Gegenprobe, Benefit-Plausibilisierung",
+     "options": []
+    },
+    {
+     "id": "C5",
+     "section": "C — Heizung, Energie & Einsparung",
+     "question": "Enthält die Heizkostenabrechnung auch Warmwasser, und ist der Heizungsanteil getrennt ausgewiesen?",
+     "description": "Oft stehen Heizung und Warmwasser zusammen auf einer Abrechnung. Für unsere Rechnung zählt nur die Raumheizung, weil unsere Ventile nur die Heizkörper regeln, nicht das Warmwasser. Wir müssen also wissen, ob der Warmwasser-Anteil schon herausgerechnet werden kann. Bitte die zutreffende Variante anklicken. 'Getrennt' heißt, auf der Abrechnung stehen Heizung und Warmwasser mit eigenen Beträgen.",
+     "field_type": "auswahl_einfach",
+     "onsite": false,
+     "feeds": "Baseline-Bereinigung (WW-Abzug)",
+     "options": [
+      "nur Raumheizung (kein Warmwasser enthalten)",
+      "Heizung + Warmwasser, getrennt ausgewiesen",
+      "Heizung + Warmwasser, nicht getrennt",
+      "unbekannt"
+     ]
+    },
+    {
+     "id": "C6",
+     "section": "C — Heizung, Energie & Einsparung",
+     "question": "Wurde an der Heizung bereits ein hydraulischer Abgleich durchgeführt?",
+     "description": "Beim 'hydraulischen Abgleich' wird der Wasserdurchfluss durch alle Heizkörper so eingestellt, dass jeder gleichmäßig warm wird — sonst werden nahe Heizkörper überversorgt und entfernte bleiben kühl. Das ist eine separate Maßnahme am Heizungssystem (nicht Teil unserer Funkventile), aber wichtig, weil sie die mögliche Energie-Ersparnis ungefähr verdoppelt. Wir fragen, ob er schon gemacht wurde. Wenn ja und das Verfahren bekannt ist: 'Verfahren B' ist die genauere, raumweise berechnete Variante, 'Verfahren A' die einfachere Näherung. Bitte die zutreffende Antwort anklicken.",
+     "field_type": "auswahl_einfach",
+     "onsite": false,
+     "feeds": "balancing flag → Savings fraction (Verdopplung)",
+     "options": [
+      "Ja, Verfahren B (genau/raumweise berechnet)",
+      "Ja, Verfahren A (vereinfacht)",
+      "Ja, Verfahren unbekannt",
+      "Nein",
+      "unbekannt"
+     ]
+    },
+    {
+     "id": "C7",
+     "section": "C — Heizung, Energie & Einsparung",
+     "question": "Gibt es Hinweise auf eine ungleichmäßige Wärmeverteilung (manche Heizkörper kalt, andere überheizt, Ventilgeräusche)?",
+     "description": "Eine 'hydraulische Schieflage' zeigt sich daran, dass im Winter manche Räume nicht richtig warm werden, während andere überheizen, oder dass Heizkörper/Ventile gluckern oder rauschen. Das ist ein praktisches Zeichen, dass ein hydraulischer Abgleich (vorige Frage) noch fehlt oder nötig wäre — und damit, dass durch ihn zusätzliche Ersparnis möglich ist. Sicher beurteilbar ist das nur vor Ort durch Nachfragen und Anfassen der Heizkörper im Heizbetrieb. Antwort 'Ja', wenn solche Hinweise bekannt sind.",
+     "field_type": "ja_nein",
+     "onsite": true,
+     "feeds": "balancing-Bedarf → Savings-Potenzial",
+     "options": []
+    },
+    {
+     "id": "C8",
+     "section": "C — Heizung, Energie & Einsparung",
+     "question": "Wie werden die Räume zeitlich genutzt?",
+     "description": "Wir wollen wissen, wie die Räume über den Tag und die Woche belegt sind. Das bestimmt, wie viel eine zeitgenaue Einzelraum-Regelung überhaupt sparen kann: In Räumen, die nur zeitweise genutzt werden (Büros werktags, Seminarräume nach Plan), kann man außerhalb der Nutzung gezielt absenken und spart viel. Durchgehend bewohnte Räume bieten weniger Sparpotenzial, weil sie sowieso fast immer warm sein müssen. Bitte die zutreffende Hauptnutzung anklicken.",
+     "field_type": "auswahl_einfach",
+     "onsite": false,
+     "feeds": "Savings fraction (Nutzungsmuster), Rebound",
+     "options": [
+      "durchgehend genutzt (Wohnen)",
+      "werktags tagsüber (Büro)",
+      "zeitweise nach Belegungsplan (z. B. Seminarräume)",
+      "stark unregelmäßig / oft leerstehend",
+      "gemischt"
+     ]
+    },
+    {
+     "id": "C9",
+     "section": "C — Heizung, Energie & Einsparung",
+     "question": "Wie wird die Heizung heute geregelt?",
+     "description": "Gemeint ist, wie die Raumtemperatur aktuell gesteuert wird, bevor die neuen Funkventile eingebaut werden. Das ist der Ausgangszustand, gegen den die Ersparnis gerechnet wird: Wo heute nur Handräder am Heizkörper sitzen, ist das Sparpotenzial am größten; wo schon teilweise smart oder per Zeitschaltuhr geregelt wird, fällt der Zusatznutzen kleiner aus. Bitte die zutreffende Variante anklicken. 'Nachtabsenkung' heißt, die zentrale Heizung fährt nachts automatisch herunter.",
+     "field_type": "auswahl_einfach",
+     "onsite": false,
+     "feeds": "Savings-Ausgangsbasis (Zusatznutzen)",
+     "options": [
+      "nur manuelle Thermostatköpfe (Handräder)",
+      "zentrale Nachtabsenkung",
+      "einzelne Zeitschaltuhren",
+      "teilweise Smart-Steuerung vorhanden",
+      "keine aktive Regelung"
+     ]
+    },
+    {
+     "id": "C10",
+     "section": "C — Heizung, Energie & Einsparung",
+     "question": "Welche normale Soll-Temperatur (Wohlfühltemperatur) ist für die Räume vorgesehen?",
+     "description": "Die Temperatur in Grad Celsius, auf die die Räume während der Nutzung geheizt werden sollen (z. B. 20 oder 21 Grad in Büros). Diese 'Komforttemperatur' ist der Ausgangspunkt; abgesenkt wird gegenüber diesem Wert. Bitte eine Zahl in Grad Celsius eintragen. Wenn unterschiedliche Räume verschiedene Werte haben, den üblichsten Wert nehmen.",
+     "field_type": "zahl",
+     "onsite": false,
+     "feeds": "Savings-Parametrierung (Soll/Absenk-Spanne)",
+     "options": []
+    },
+    {
+     "id": "C11",
+     "section": "C — Heizung, Energie & Einsparung",
+     "question": "Auf welche Temperatur soll bei Abwesenheit abgesenkt werden?",
+     "description": "Die niedrigere Temperatur in Grad Celsius, auf die ein Raum heruntergeregelt werden soll, wenn ihn gerade niemand nutzt (z. B. nachts oder am Wochenende, oft um 16–18 Grad). Je größer der Abstand zur normalen Soll-Temperatur (vorige Frage), desto mehr Energie wird gespart. Bitte eine Zahl in Grad Celsius eintragen. Wenn dazu noch keine Vorstellung besteht, leer lassen.",
+     "field_type": "zahl",
+     "onsite": false,
+     "feeds": "Savings fraction (Absenk-Tiefe)",
+     "options": []
+    },
+    {
+     "id": "C12",
+     "section": "C — Heizung, Energie & Einsparung",
+     "question": "Ist eine Absenkung bei Abwesenheit überhaupt gewünscht bzw. zulässig?",
+     "description": "Manchmal darf oder soll nicht abgesenkt werden — etwa weil Vorschriften eine Mindesttemperatur verlangen, Frostschutz nötig ist oder die Nutzer es nicht wollen. Das ist entscheidend, denn ohne erlaubte Absenkung entfällt ein großer Teil der möglichen Ersparnis. Antwort 'Ja', wenn das Absenken bei Abwesenheit grundsätzlich gewünscht und erlaubt ist; 'Nein', wenn nicht.",
+     "field_type": "ja_nein",
+     "onsite": false,
+     "feeds": "Savings fraction (Absenkung möglich?)",
+     "options": []
+    },
+    {
+     "id": "C13",
+     "section": "C — Heizung, Energie & Einsparung",
+     "question": "Gibt es Räume mit dauerhaft abweichendem Heizbedarf, die ausgenommen werden sollen (z. B. Serverraum, Archiv, Lager)?",
+     "description": "Manche Räume müssen aus technischen Gründen anders oder gar nicht geregelt werden: Serverräume sollen eher gekühlt als geheizt werden, Archive/Lager brauchen oft eine konstante, niedrige Temperatur. Solche Räume bringen wenig Sparnutzen und sollen meist außen vor bleiben. Antwort 'Ja', wenn es solche Sonderräume gibt. Verlässlich nur durch Begehung/Nachfrage vor Ort.",
+     "field_type": "ja_nein",
+     "onsite": true,
+     "feeds": "actuator_count-Abzug, Savings-Korrektur",
+     "options": []
+    },
+    {
+     "id": "C14",
+     "section": "C — Heizung, Energie & Einsparung",
+     "question": "Falls ja: Welche Sonderräume sind das, und wie sollen sie behandelt werden?",
+     "description": "Nur ausfüllen, wenn die vorige Frage mit 'Ja' beantwortet wurde. Bitte kurz auflisten, welche Räume gemeint sind (z. B. 'Serverraum 1. OG, Archiv im Keller') und wie sie behandelt werden sollen (ganz ausnehmen, konstant halten, eigene Temperatur). Frei in Worten eintragen.",
+     "field_type": "text",
+     "onsite": true,
+     "feeds": "actuator_count-Abzug, Savings-Korrektur",
+     "options": []
+    },
+    {
+     "id": "C15",
+     "section": "C — Heizung, Energie & Einsparung",
+     "question": "Wie alt ist die Heizungsanlage (in Jahren)?",
+     "description": "Das ungefähre Alter des Heizkessels bzw. der zentralen Heizungsanlage in Jahren. Das ist wichtig, weil eine sehr alte Anlage in absehbarer Zeit ausgetauscht wird — und ein Austausch (z. B. auf eine Wärmepumpe) den Energiepreis und damit die Wirtschaftlichkeit unserer Anlage stark verändern kann. Bitte das geschätzte Alter in Jahren eintragen. Wenn unbekannt, leer lassen.",
+     "field_type": "zahl",
+     "onsite": false,
+     "feeds": "Horizon/Energieträger-Risiko (Austausch absehbar?)",
+     "options": []
+    },
+    {
+     "id": "C16",
+     "section": "C — Heizung, Energie & Einsparung",
+     "question": "Steht in den nächsten rund 10 Jahren ein Austausch der Heizung oder ein Wechsel des Energieträgers an?",
+     "description": "Wir rechnen die Wirtschaftlichkeit über einen Zeitraum von etwa 10 Jahren. Wenn in dieser Zeit die Heizung getauscht wird (z. B. von Gas auf Fernwärme oder Wärmepumpe), ändert sich der Energiepreis und damit der Nutzen der Anlage. Antwort 'Ja', wenn ein Austausch oder Brennstoffwechsel geplant oder absehbar ist; 'Nein', wenn die heutige Heizung voraussichtlich bleibt; 'unbekannt', wenn unklar.",
+     "field_type": "auswahl_einfach",
+     "onsite": false,
+     "feeds": "Horizon/Energieträger-Annahme (Szenario)",
+     "options": [
+      "Ja, Austausch/Wechsel geplant oder absehbar",
+      "Nein, heutige Heizung bleibt voraussichtlich",
+      "unbekannt"
+     ]
+    },
+    {
+     "id": "C17",
+     "section": "C — Heizung, Energie & Einsparung",
+     "question": "Wer zahlt die Heizkosten — der Betreiber selbst oder werden sie auf Mieter/Nutzer umgelegt?",
+     "description": "Das entscheidet, wer von der Ersparnis tatsächlich profitiert und damit, ob sich die Investition für den Betreiber lohnt. Zahlt der Betreiber die Heizkosten selbst, kommt ihm die Ersparnis direkt zugute. Werden sie voll auf Mieter umgelegt, spart der Mieter — während der Betreiber investieren müsste (sogenanntes 'geteiltes Anreizproblem'). Bitte die zutreffende Variante anklicken.",
+     "field_type": "auswahl_einfach",
+     "onsite": false,
+     "feeds": "Perspective (wessen Geld) → Verdict-Relevanz",
+     "options": [
+      "Betreiber zahlt selbst",
+      "volle Umlage auf Mieter/Nutzer",
+      "teilweise Umlage",
+      "unbekannt"
+     ]
+    },
+    {
+     "id": "C2a",
+     "question": "Wie hoch ist der jährliche Grund-/Leistungspreis (€ pro Jahr)?",
+     "description": "Auf der Heizkostenrechnung steht neben dem Preis je Kilowattstunde (Arbeitspreis) meist eine feste Jahresgebühr (Grund- oder Leistungspreis, z. B. für Zähler/Anschlussleistung). Diese sinkt durch Energiesparen NICHT — sie ist ein nicht vermeidbarer Festposten. Bitte den jährlichen Festbetrag in Euro eintragen (falls bekannt).",
+     "field_type": "zahl",
+     "options": [],
+     "onsite": false,
+     "feeds": "Energiepreis-Zerlegung (Grundpreis)"
+    },
+    {
+     "id": "C9a",
+     "question": "Gibt es heute schon eine zentrale Nachtabsenkung oder Zeitsteuerung der Heizung?",
+     "description": "Eine Nachtabsenkung fährt die Heizung nachts automatisch herunter. Wenn so etwas bereits existiert, ist die zusätzliche Ersparnis durch Einzelraum-Thermostate kleiner (Richtung 3–4 %). 'Ja', wenn die Heizung heute schon zeitgesteuert wird.",
+     "field_type": "ja_nein",
+     "options": [],
+     "onsite": false,
+     "feeds": "Einsparquote (marginale Ersparnis)"
+    },
+    {
+     "id": "C10a",
+     "question": "Bei welcher Raumtemperatur und welchem Heizzeitplan gilt Ihr heutiger Verbrauch?",
+     "description": "Wie viel die Regelung spart, hängt vom heutigen Verhalten ab. Bitte kurz beschreiben: übliche Solltemperatur (z. B. 21 °C) und ob/wann heute abgesenkt wird (z. B. nachts / am Wochenende / gar nicht). Ohne diesen Bezug würde die Ersparnis doppelt gezählt.",
+     "field_type": "text",
+     "options": [],
+     "onsite": false,
+     "feeds": "Einsparquote (Baseline-Schedule)"
+    },
+    {
+     "id": "C12a",
+     "question": "Wie schätzen Sie die Energiepreis-Entwicklung über die nächsten ~10 Jahre ein?",
+     "description": "Steigende Energiepreise erhöhen die jährliche Ersparnis (jede gesparte kWh ist mehr wert). Bei Gas steigt zusätzlich der CO2-Preis (BEHG) bis 2030 spürbar. Eine grobe Einschätzung genügt.",
+     "field_type": "auswahl_einfach",
+     "options": [
+      "etwa stabil",
+      "leicht steigend",
+      "stark steigend (inkl. CO2-Preis)",
+      "unbekannt"
+     ],
+     "onsite": false,
+     "feeds": "Energiepreis-Zerlegung (Preispfad)"
+    }
+   ]
+  },
+  {
+   "title": "D — Heizkörper & Ventile",
+   "questions": [
+    {
+     "id": "D1",
+     "section": "D — Heizkörper & Ventile",
+     "question": "Welche Bauart haben die meisten Heizkörper im Gebäude?",
+     "description": "Gemeint ist die äußere Form der Heizkörper — daran hängt, wie schnell und einfach sich am unteren Ende ein funkgesteuerter Ventilkopf anschrauben lässt. Schauen Sie sich an, was im Gebäude überwiegt. 'Plattenheizkörper' sind die flachen, glatten weißen Platten an der Wand (heute Standard). 'Röhren-/Gliederheizkörper' sind die alten Modelle aus aneinandergereihten Rippen oder Röhren (Altbau, oft unter dem Fenster). 'Konvektor' ist ein flacher Kasten mit Lamellen, oft in einer Bodenwanne oder Nische. 'Handtuchheizkörper' sind die leiterförmigen im Bad. Wenn es bunt gemischt ist, wählen Sie 'gemischt'. Der Aufwand pro Ventil (install_per_actuator) hängt direkt davon ab.",
+     "field_type": "auswahl_einfach",
+     "onsite": true,
+     "feeds": "install_per_actuator (Montageaufwand pro Ventil)",
+     "options": [
+      "Plattenheizkörper (flache weiße Platte)",
+      "Röhren-/Gliederheizkörper (alte Rippen, Altbau)",
+      "Konvektor (Kasten mit Lamellen)",
+      "Handtuchheizkörper (Bad, leiterförmig)",
+      "gemischt",
+      "unbekannt"
+     ]
+    },
+    {
+     "id": "D2a",
+     "section": "D — Heizkörper & Ventile",
+     "question": "Welches Gewindemaß haben die vorhandenen Heizkörperventile?",
+     "description": "Das Gewindemaß ist die Größe des Anschlussgewindes, auf das der neue Funk-Ventilkopf geschraubt wird — wie die Größe eines Schraubdeckels. Stimmt es nicht, passt der neue Kopf nicht oder es wird ein Adapter nötig (Mehraufwand und Kosten). Sie erkennen es an einem aufgedruckten Maß am Ventil (z. B. 'M30 x 1,5') oder am Herstellernamen. Der mit Abstand häufigste Wert ist 'M30 x 1,5' (heutiger Standard). Wenn nichts erkennbar ist oder es gemischt aussieht, wählen Sie 'gemischt / unbekannt'. Diese und die nächste Frage gehören zusammen.",
+     "field_type": "auswahl_einfach",
+     "onsite": true,
+     "feeds": "install_per_actuator (Adapterbedarf / Montageaufwand)",
+     "options": [
+      "M30 x 1,5 (Standard)",
+      "M28 x 1,5 (Herz/Comap)",
+      "Danfoss RA",
+      "Danfoss RAVL / RAV",
+      "anderes Maß",
+      "gemischt / unbekannt"
+     ]
+    },
+    {
+     "id": "D2b",
+     "section": "D — Heizkörper & Ventile",
+     "question": "Welcher Hersteller steht auf den vorhandenen Ventilen?",
+     "description": "Der Herstellername hilft, das passende Gewinde sicher zu bestimmen — manche Hersteller (z. B. Danfoss) verwenden eigene Anschlüsse, die einen Adapter brauchen. Der Name ist meist klein in den Metallkörper des Ventils geprägt oder steht auf dem alten Thermostatkopf. Lesen Sie ihn an ein paar Heizkörpern ab. Wenn kein Name erkennbar ist, tragen Sie 'unbekannt' ein.",
+     "field_type": "text",
+     "onsite": true,
+     "feeds": "install_per_actuator (Adapterbedarf / Montageaufwand)",
+     "options": []
+    },
+    {
+     "id": "D3",
+     "section": "D — Heizkörper & Ventile",
+     "question": "Lassen sich die Ventile noch von Hand bewegen, oder sitzen sie fest?",
+     "description": "Ein Ventilstift, der durch jahrelangen Stillstand oder Kalk fest sitzt, muss vor der Montage gangbar gemacht oder das Ventil sogar getauscht werden — das verteuert den Einbau spürbar. Prüfen lässt sich das stichprobenartig: alten Kopf abschrauben und den kleinen Metallstift in der Mitte vorsichtig hineindrücken — er sollte leicht ein- und durch eine Feder wieder herausfedern. Ist er fest oder bewegt sich nur schwer, ist das Ventil festsitzend. Prüfen Sie einige verschiedene Heizkörper und wählen Sie das Gesamtbild.",
+     "field_type": "auswahl_einfach",
+     "onsite": true,
+     "feeds": "install_per_actuator (Nacharbeit/Ventiltausch erhöht Montageaufwand)",
+     "options": [
+      "überwiegend gängig",
+      "teilweise festsitzend",
+      "überwiegend festsitzend",
+      "nicht geprüft"
+     ]
+    },
+    {
+     "id": "D4",
+     "section": "D — Heizkörper & Ventile",
+     "question": "Sind an den Heizkörpern bereits elektronische oder funkgesteuerte Thermostatköpfe verbaut?",
+     "description": "Wenn schon batteriebetriebene, elektronische Köpfe sitzen (mit Display, Knöpfen oder Funk, z. B. Homematic), ist das Gewinde meist schon passend und der Tausch geht schneller — aber die Altgeräte müssen abgebaut und entsorgt werden. Sie erkennen elektronische Köpfe an einem Batteriefach, einer Digitalanzeige oder Bedienknöpfen statt eines reinen Drehrads mit Zahlen 1–5. Wählen Sie Ja, wenn solche Köpfe an einem nennenswerten Teil der Heizkörper sitzen.",
+     "field_type": "ja_nein",
+     "onsite": true,
+     "feeds": "install_per_actuator (vorhandene Köpfe ändern Montageaufwand)",
+     "options": []
+    },
+    {
+     "id": "D5",
+     "section": "D — Heizkörper & Ventile",
+     "question": "Wie viele Heizkörper sind durch Verkleidungen, Nischen oder Möbel schwer zugänglich?",
+     "description": "Heizkörper, die hinter einer Holzverkleidung, in einer tiefen Nische oder fest hinter Möbeln/Einbauten verschwinden, kosten beim Einbau deutlich mehr Zeit (freiräumen, demontieren, in beengter Lage schrauben). Zählen Sie die Heizkörper, an deren Ventil man nicht bequem mit der Hand herankommt. Tragen Sie die Stückzahl ein (0, wenn alle frei zugänglich sind). Das ist nur vor Ort sicher feststellbar.",
+     "field_type": "zahl",
+     "onsite": true,
+     "feeds": "install_per_actuator (erschwerter Zugang erhöht Montagezeit)",
+     "options": []
+    },
+    {
+     "id": "D6",
+     "section": "D — Heizkörper & Ventile",
+     "question": "Sind die Wände an den Heizkörpern fertig verputzt und nutzbar, oder noch im Rohbau/Sanierungszustand?",
+     "description": "Wir prüfen, ob das Gebäude bezugsfertig ist oder gerade umgebaut wird — in einer laufenden Baustelle (offener Putz, fehlende Böden, Staub) lässt sich nicht sauber montieren, und Termine müssen mit dem Bauablauf abgestimmt werden. 'Ja' bedeutet: Wände verputzt/gestrichen, Räume normal nutzbar. 'Nein' bedeutet: Rohbau oder aktive Sanierung am Heizkörperbereich.",
+     "field_type": "ja_nein",
+     "onsite": true,
+     "feeds": "install_per_actuator / Terminierung (Baustellenzustand erschwert Montage)",
+     "options": []
+    },
+    {
+     "id": "D2a",
+     "question": "Bei wie vielen Heizkörpern ist vermutlich ein Tausch des ganzen Ventilkörpers nötig (nicht nur des Kopfes)?",
+     "description": "Meist wird nur der drehbare Thermostatkopf abgeschraubt und der Funk-Aktor aufgesetzt — schnell, ohne Eingriff ins Heizungswasser. Bei sehr alten, festsitzenden oder unpassenden Ventilen muss das ganze Ventil getauscht werden: Heizung absperren, Wasser ablassen, Heizungsbauer statt Monteur — deutlich teurer. Schätzung genügt; 0, wenn keine.",
+     "field_type": "zahl",
+     "options": [],
+     "onsite": true,
+     "feeds": "Montagekosten-Zerlegung (Ventilkörper-Tausch)"
+    }
+   ]
+  },
+  {
+   "title": "E — Infrastruktur, Zugang & Logistik",
+   "questions": [
+    {
+     "id": "E1a",
+     "section": "E — Infrastruktur, Zugang & Logistik",
+     "question": "Ist im Gebäude bereits eine LoRaWAN-Funk-Basisstation (Gateway) installiert und in Betrieb?",
+     "description": "Das Gateway ist die Funk-Basisstation, die die Signale aller Heizkörper-Ventile empfängt (ähnlich einem WLAN-Router, aber für die LoRaWAN-Funktechnik). Ist bereits eines vorhanden und läuft, entfällt diese Anschaffung und es liegen oft schon Funk-Messwerte vor — ein großer Kostenvorteil. Sie erkennen es als kleinen Kasten mit einer oder zwei Stabantennen, meist an Strom und Netzwerk angeschlossen. Wählen Sie Ja nur, wenn es tatsächlich in Betrieb ist.",
+     "field_type": "ja_nein",
+     "onsite": false,
+     "feeds": "Vorhandenes Gateway (gateway_cost entfällt)",
+     "options": []
+    },
+    {
+     "id": "E1b",
+     "section": "E — Infrastruktur, Zugang & Logistik",
+     "question": "An welchem Standort ist das Gateway montiert (Geschoss und Raum)?",
+     "description": "Nur auszufüllen, wenn ein Gateway vorhanden ist. Der genaue Ort entscheidet, wie weit das Funksignal durch die Decken bis zum entferntesten Heizkörper reicht — und damit, ob womöglich ein zweites Gateway nötig wird (der teuerste versteckte Posten). Geben Sie Geschoss und Raum möglichst genau an (z. B. '3. OG, Flur Mitte' oder 'EG, Technikraum'). Den exakten Montagepunkt sollte man vor Ort bestätigen.",
+     "field_type": "text",
+     "onsite": true,
+     "feeds": "Zweit-Gateway-Risiko / Sizing (Gateway-Anzahl)",
+     "options": []
+    },
+    {
+     "id": "E2",
+     "section": "E — Infrastruktur, Zugang & Logistik",
+     "question": "Gibt es am Gateway-Standort eine dauerhaft nutzbare 230-V-Steckdose?",
+     "description": "Das Gateway braucht ständig Strom (Steckdose, wie für jedes Haushaltsgerät). Fehlt eine in der Nähe, muss ein Elektriker eine Leitung legen — Zusatzkosten und ein extra Termin. Prüfen Sie, ob am vorgesehenen oder vorhandenen Gateway-Platz eine normale Steckdose in Reichweite ist, die nicht über einen Schalter o. Ä. abgeschaltet wird. Wählen Sie 'unklar', wenn der Standort noch nicht feststeht.",
+     "field_type": "auswahl_einfach",
+     "onsite": true,
+     "feeds": "Montagebedingungen / Prozesskosten (Elektroarbeit)",
+     "options": [
+      "vorhanden",
+      "muss gelegt werden",
+      "unklar"
+     ]
+    },
+    {
+     "id": "E3",
+     "section": "E — Infrastruktur, Zugang & Logistik",
+     "question": "Wie wird das Gateway mit dem Internet/Netzwerk verbunden?",
+     "description": "Das Gateway muss seine Daten an die Software weiterreichen und braucht dafür eine Netzanbindung. Am einfachsten ist eine vorhandene Netzwerkdose (LAN, die rechteckige Buchse wie am PC) am Gateway-Standort. Sonst muss ein Netzwerkkabel verlegt werden (Aufwand), oder die Verbindung läuft über WLAN bzw. Mobilfunk (eigene SIM-Karte, laufende Kosten). Wählen Sie, was am Standort verfügbar bzw. geplant ist.",
+     "field_type": "auswahl_einfach",
+     "onsite": true,
+     "feeds": "Montagebedingungen / Prozesskosten (Netzanbindung)",
+     "options": [
+      "LAN-Dose vorhanden",
+      "Netzwerkkabel muss verlegt werden",
+      "WLAN",
+      "Mobilfunk geplant",
+      "keine Anbindung vorhanden"
+     ]
+    },
+    {
+     "id": "E4",
+     "section": "E — Infrastruktur, Zugang & Logistik",
+     "question": "Gibt es in Treppenhaus oder Allgemeinbereichen mehrerer Geschosse jeweils Strom und Netzwerk für ein mögliches zweites Gateway?",
+     "description": "Falls ein einzelnes Gateway nicht durch alle Etagen reicht, braucht ein zweites Gateway wieder Strom und Netzanbindung — bevorzugt in einem zugänglichen Allgemeinbereich (Treppenhaus, Flur) in einem anderen Geschoss. Diese Frage klärt vorab, ob solche Plätze überhaupt bereitstehen. Schauen Sie, in wie vielen Geschossen es im Treppenhaus/Flur sowohl eine Steckdose als auch eine Netzwerkdose gibt. 'ja, in mehreren' = an mehreren Geschossen vorhanden; 'nur einzelne' = nur an einer Stelle; 'unklar' = nicht überprüft.",
+     "field_type": "auswahl_einfach",
+     "onsite": true,
+     "feeds": "Zweit-Gateway-Risiko / Sizing (Stellplatz für Zweit-Gateway)",
+     "options": [
+      "ja, in mehreren Geschossen",
+      "nur an einzelnen Stellen",
+      "nein",
+      "unklar"
+     ]
+    },
+    {
+     "id": "E5",
+     "section": "E — Infrastruktur, Zugang & Logistik",
+     "question": "Liegen bereits Funk-Messdaten (Empfangsqualität) aus der Gateway-Inbetriebnahme vor?",
+     "description": "Beim Einrichten eines Gateways fallen Messwerte zur Empfangsqualität an — Fachbegriffe RSSI (wie stark/laut das Signal ankommt) und SNR (wie klar es sich vom Hintergrundrauschen abhebt). Liegen diese schon vor, kann man damit abschätzen, ob ein zweites Gateway nötig wird, ohne extra messen zu müssen. Wählen Sie Ja, wenn aus der Inbetriebnahme solche Messwerte dokumentiert sind. Im Zweifel fragen Sie die Person, die das Gateway aufgesetzt hat.",
+     "field_type": "ja_nein",
+     "onsite": false,
+     "feeds": "Zweit-Gateway-Risiko / Sizing (Funkreserve-Bewertung)",
+     "options": []
+    },
+    {
+     "id": "E6",
+     "section": "E — Infrastruktur, Zugang & Logistik",
+     "question": "Darf die Verkabelung des Gateways sichtbar auf der Wand (Aufputz) verlaufen, oder soll sie unter Putz verschwinden?",
+     "description": "'Aufputz' heißt: Kabel und Kabelkanäle liegen sichtbar auf der Wand — schnell und günstig montiert. 'Unterputz' heißt: Kabel wird in die Wand eingelassen und überputzt — sieht sauberer aus, ist aber deutlich aufwendiger (Stemmen, Verputzen, mehr Zeit und Kosten). Wählen Sie, was der Eigentümer/Betreiber akzeptiert. 'egal / offen', wenn keine Vorgabe besteht.",
+     "field_type": "auswahl_einfach",
+     "onsite": false,
+     "feeds": "Montagebedingungen / Prozesskosten (Verkabelungsaufwand)",
+     "options": [
+      "Aufputz akzeptabel",
+      "Unterputz gewünscht",
+      "egal / offen"
+     ]
+    },
+    {
+     "id": "E7a",
+     "section": "E — Infrastruktur, Zugang & Logistik",
+     "question": "Welche Auflagen schränken sichtbare Geräte oder bauliche Eingriffe ein?",
+     "description": "Bestimmte Schutz- oder Vertragsregeln können vorschreiben, dass nichts sichtbar verändert oder gebohrt werden darf — das verteuert oder verkompliziert die Montage. Kreuzen Sie alles Zutreffende an. 'Denkmalschutz' = das Gebäude steht unter Denkmalschutz. 'Eigentümerauflagen' = der Eigentümer macht Vorgaben (z. B. keine sichtbaren Geräte). 'Mietauflagen' = der Mietvertrag schränkt Eingriffe ein. Wählen Sie 'keine', wenn nichts davon gilt.",
+     "field_type": "auswahl_mehrfach",
+     "onsite": false,
+     "feeds": "Auflagen (Standort/Funk) — Montagebeschränkungen",
+     "options": [
+      "Denkmalschutz",
+      "Eigentümerauflagen",
+      "Mietauflagen",
+      "keine"
+     ]
+    },
+    {
+     "id": "E7b",
+     "section": "E — Infrastruktur, Zugang & Logistik",
+     "question": "Worin bestehen diese Auflagen konkret?",
+     "description": "Nur ausfüllen, wenn bei der vorigen Frage eine Auflage angekreuzt wurde. Beschreiben Sie kurz, was konkret nicht erlaubt ist — etwa 'keine sichtbaren Geräte an der Fassade', 'kein Bohren in tragende Wände', 'Genehmigung der Denkmalbehörde nötig'. Diese Angabe hilft einzuschätzen, ob versteckte Montage oder Sondergenehmigungen nötig werden.",
+     "field_type": "text",
+     "onsite": false,
+     "feeds": "Auflagen (Standort/Funk) — Montagebeschränkungen",
+     "options": []
+    },
+    {
+     "id": "E8a",
+     "section": "E — Infrastruktur, Zugang & Logistik",
+     "question": "Wer organisiert den Zutritt zu den Räumen?",
+     "description": "Für die Montage muss jemand die Türen öffnen bzw. den Zugang freigeben. Wir wollen wissen, an wen man sich dafür wendet — das bestimmt, wie planbar die Installationstermine sind. Tragen Sie die zuständige Stelle/Person ein (z. B. 'Hausmeister', 'Hausverwaltung', 'Mieter selbst', 'Pförtner/Empfang').",
+     "field_type": "text",
+     "onsite": false,
+     "feeds": "Montagebedingungen / Prozesskosten (Zugangsorganisation)",
+     "options": []
+    },
+    {
+     "id": "E8b",
+     "section": "E — Infrastruktur, Zugang & Logistik",
+     "question": "In welchen Zeitfenstern ist der Zugang möglich?",
+     "description": "Enge Zugangszeiten (z. B. nur werktags 8–16 Uhr, nur nach Voranmeldung) verlängern die Installation und können mehrere Anfahrten nötig machen. Beschreiben Sie, wann gearbeitet werden darf (z. B. 'werktags 7–17 Uhr', 'jederzeit nach Absprache', 'nur außerhalb der Bürozeiten').",
+     "field_type": "text",
+     "onsite": false,
+     "feeds": "Montagebedingungen / Prozesskosten (Terminierung)",
+     "options": []
+    },
+    {
+     "id": "E8c",
+     "section": "E — Infrastruktur, Zugang & Logistik",
+     "question": "Sind manche Räume nur nach Einzelterminierung mit Mietern/Nutzern zugänglich?",
+     "description": "Räume, die man nur einzeln mit dem jeweiligen Mieter/Nutzer terminieren kann, sind der größte Zeitfresser bei der Montage (Absprachen, verpasste Termine, mehrere Anfahrten). Wählen Sie Ja, wenn ein nennenswerter Teil der Räume so abgestimmt werden muss. Bei der nächsten Frage geben Sie dann den Anteil genauer an.",
+     "field_type": "ja_nein",
+     "onsite": false,
+     "feeds": "Montagebedingungen / Prozesskosten (Terminierungsaufwand)",
+     "options": []
+    },
+    {
+     "id": "E9",
+     "section": "E — Infrastruktur, Zugang & Logistik",
+     "question": "Welcher Anteil der Räume mit Heizkörpern ist frei zugänglich (in Prozent)?",
+     "description": "'Frei zugänglich' heißt: man kommt ohne Einzelabsprache mit einem Mieter hinein (z. B. über den Hausmeister/Generalschlüssel, Allgemeinräume, Büros). Der Rest ist zutrittsgebunden (nur mit einzelnem Mietertermin). Je höher der frei zugängliche Anteil, desto schneller und billiger die Montage. Tragen Sie eine Prozentzahl von 0 bis 100 ein (z. B. 70, wenn etwa sieben von zehn Räumen ohne Mieterabsprache betretbar sind).",
+     "field_type": "zahl",
+     "onsite": false,
+     "feeds": "Montagebedingungen / Prozesskosten (Anteil zutrittsgebundener Räume)",
+     "options": []
+    },
+    {
+     "id": "E10",
+     "section": "E — Infrastruktur, Zugang & Logistik",
+     "question": "Steht ein abschließbarer Lager-/Stellplatz für die Hardware während der Installation zur Verfügung?",
+     "description": "Die Ventile werden in Wellen montiert; in der Zeit muss die gelieferte Hardware sicher und trocken gelagert werden (sonst Diebstahl-/Schadensrisiko oder tägliches Hin- und Hertransportieren). Gemeint ist ein abschließbarer Raum, Schrank oder Container im oder am Gebäude. Wählen Sie Ja, wenn so ein Platz bereitgestellt werden kann. Vor Ort zu bestätigen.",
+     "field_type": "ja_nein",
+     "onsite": true,
+     "feeds": "Montagebedingungen / Prozesskosten (Logistik/Lagerung)",
+     "options": []
+    },
+    {
+     "id": "E11",
+     "section": "E — Infrastruktur, Zugang & Logistik",
+     "question": "Läuft auf dem WHZ-Server bereits eine ChirpStack-Netzwerksoftware, die dieses Gebäude mitverwalten kann?",
+     "description": "ChirpStack ist die zentrale Software (der 'Netzwerkserver'), die alle Funk-Ventile verwaltet und ihre Daten entschlüsselt — gewissermaßen das Gehirn des Netzes. Läuft sie bereits, fallen für dieses Gebäude keine Einrichtungs- und Hosting-Kosten an (sie gelten als bereits bezahlt). Muss dagegen eine eigene Instanz aufgesetzt werden, entsteht einmaliger Mehraufwand. Wählen Sie Ja, wenn die laufende Software das Gebäude einfach mit aufnehmen kann; im Zweifel fragen Sie den IT-Verantwortlichen der WHZ.",
+     "field_type": "ja_nein",
+     "onsite": false,
+     "feeds": "Make-OPEX / LNS-Hosting (eigene Instanz nötig?)",
+     "options": []
+    },
+    {
+     "id": "E8a",
+     "question": "Wie viele Räume mit Heizkörper müssen für die Montage betreten werden?",
+     "description": "Für jeden Heizkörper muss der Raum zugänglich sein. Die Zahl der zu betretenden Räume (nicht der Geräte) bestimmt den Terminier-Aufwand — organisatorisch der teuerste Teil, besonders bei vermieteten Wohnungen. Falls unklar: Anzahl der Räume mit Heizkörper eintragen.",
+     "field_type": "zahl",
+     "options": [],
+     "onsite": false,
+     "feeds": "Zutritts-/Terminieraufwand"
+    },
+    {
+     "id": "E8b",
+     "question": "Mit welcher Quote rechnen Sie, dass Räume beim ersten Termin NICHT zugänglich sind (No-Show)?",
+     "description": "Erfahrungsgemäß sind nicht alle Räume beim ersten Anlauf zugänglich (niemand da, Schlüssel fehlt). Diese Nachzügler erzeugen einen zweiten Anfahrtstermin. Übliche Größenordnung 10–20 %.",
+     "field_type": "auswahl_einfach",
+     "options": [
+      "unter 10 %",
+      "10–20 %",
+      "über 20 %",
+      "unbekannt"
+     ],
+     "onsite": false,
+     "feeds": "Zutritts-/Resttermin-Welle"
+    }
+   ]
+  },
+  {
+   "title": "F — Funk & Abdeckung",
+   "questions": [
+    {
+     "id": "F1",
+     "section": "F — Funk & Abdeckung",
+     "question": "Aus welchem Material bestehen die Geschossdecken?",
+     "description": "Die Geschossdecke ist die waagerechte Trennfläche zwischen zwei Etagen (der Boden des oberen / die Decke des unteren Raums). Sie ist für die Funkabdeckung der WICHTIGSTE Faktor, weil das Funksignal von einem zentralen Gateway durch alle Decken nach oben/unten durchdringen muss. Entscheidend ist die Stahlbewehrung: bewehrter Stahlbeton hat ein engmaschiges Stahlgitter, das wie ein Drahtkäfig (Faradaykäfig) wirkt und Funk pro Etage stark dämpft — viel stärker als Beton ohne Stahl, Holzbalken oder Ziegelgewölbe. So erkennen Sie es: moderne/DDR-Bauten = meist bewehrter Stahlbeton; Altbau = oft Holzbalken oder Ziegelgewölbe (im Keller sichtbar). Nur vor Ort sicher feststellbar.",
+     "field_type": "auswahl_einfach",
+     "onsite": true,
+     "feeds": "Funk-Klasse / Zweit-Gateway-Risiko (dominanter Dämpfer)",
+     "options": [
+      "Stahlbeton bewehrt",
+      "Beton unbewehrt",
+      "Holzbalken",
+      "Ziegel-Gewölbe",
+      "gemischt",
+      "unbekannt"
+     ]
+    },
+    {
+     "id": "F2",
+     "section": "F — Funk & Abdeckung",
+     "question": "Sind die Geschossdecken durchgehend, oder gibt es vertikale Öffnungen, durch die Funk zwischen den Etagen 'durchschlüpfen' kann?",
+     "description": "Wenn die Decken durchgehend massiv sind, muss das Funksignal sie überall durchdringen. Gibt es dagegen senkrechte Öffnungen über mehrere Etagen — ein offenes Treppenauge (der Luftraum in der Mitte einer offenen Treppe), Installationsschächte (senkrechte Kanäle für Rohre/Kabel), offene Galerien oder Wanddurchbrüche — kann das Signal hier ungehindert nach oben/unten gelangen und umgeht die dämpfenden Decken. Solche 'Funk-Bypässe' können ein zweites Gateway überflüssig machen. So erkennen Sie es: Stehen Sie im Treppenhaus und schauen Sie, ob Sie mehrere Etagen weit nach oben/unten sehen. Nur vor Ort beurteilbar.",
+     "field_type": "auswahl_mehrfach",
+     "onsite": true,
+     "feeds": "Zweit-Gateway-Risiko / Sizing (vertikale Funkpfade)",
+     "options": [
+      "durchgehend (keine Öffnungen)",
+      "offenes Treppenauge",
+      "Installationsschächte",
+      "offene Galerien",
+      "mehrere Wanddurchbrüche"
+     ]
+    },
+    {
+     "id": "F3",
+     "section": "F — Funk & Abdeckung",
+     "question": "Sind die Innenwände überwiegend massiv oder leicht?",
+     "description": "Innenwände sind die Trennwände zwischen Räumen auf derselben Etage. Massive Innenwände (Beton, Ziegel, Kalksandstein) dämpfen Funk deutlich; leichte Trennwände (Gipskarton/Trockenbau auf Metall- oder Holzständern, mit Hohlraum) lassen Funk fast ungehindert durch. Das bestimmt, wie weit ein Gateway innerhalb einer Etage reicht. So erkennen Sie es: Klopfen Sie an die Wand — massiv klingt dumpf und fest, leicht klingt hohl. Ein Nagel/Dübel geht in Leichtbau leicht hinein, in Massivwand nicht. Nur vor Ort beurteilbar.",
+     "field_type": "auswahl_einfach",
+     "onsite": true,
+     "feeds": "Funk-Klasse / horizontale Reichweite je Gateway",
+     "options": [
+      "überwiegend massiv (Beton / Ziegel)",
+      "überwiegend leicht (Trockenbau)",
+      "gemischt",
+      "unbekannt"
+     ]
+    },
+    {
+     "id": "F4",
+     "section": "F — Funk & Abdeckung",
+     "question": "Welche größeren metallischen Bauteile oder Funk-Störquellen befinden sich auf der Funkstrecke?",
+     "description": "Große Metallflächen reflektieren oder blockieren Funk und können einzelne Bereiche abschatten; bestimmte Geräte stören zusätzlich das genutzte 868-MHz-Band. Kreuzen Sie alles an, was im Gebäude vorkommt — Mehrfachnennung möglich. Erläuterungen: Aufzugsschacht = meist ein Metallkasten, der Funk komplett blockiert; Metallständerwände = Trockenbauwände mit Metallprofilen; Blechverkleidung/-fassade = Metallpaneele an Wand/Fassade; metallbedampfte Dämmung = Dämmung mit Alu-Folie (siehe Frage A9); Klimakanäle = große Metall-Luftkanäle unter der Decke; '868-MHz-Störer' = Geräte, die im selben Funkband senden (manche Funk-Steckdosen, Babyfone, Wetterstationen). Wählen Sie 'keine', wenn nichts davon zutrifft. Nur vor Ort vollständig erfassbar.",
+     "field_type": "auswahl_mehrfach",
+     "onsite": true,
+     "feeds": "Funk-Klasse / lokale Abschattung / Zweit-Gateway-Risiko",
+     "options": [
+      "keine",
+      "Aufzugsschacht",
+      "Metallständerwände",
+      "Blechverkleidung / Blechfassade",
+      "metallbedampfte Dämmung",
+      "Klimakanäle",
+      "868-MHz-Störquellen",
+      "andere große Metallbauteile"
+     ]
+    },
+    {
+     "id": "F5",
+     "section": "F — Funk & Abdeckung",
+     "question": "Wie viele Stahl-Brandschutztüren (z. B. T30 / T90) liegen auf der Funkstrecke zwischen Gateway und den entferntesten Heizkörpern?",
+     "description": "Brandschutztüren sind schwere, oft selbstschließende Türen aus Stahl, die im Brandfall Abschnitte abriegeln (Kennzeichnung meist T30 oder T90 auf einem Schild am Türblatt oder Rahmen). Jede solche Stahltür dämpft das Funksignal zusätzlich, ähnlich einer Metallwand. Zählen Sie, wie viele davon zwischen dem Gateway-Standort und den am weitesten entfernten Heizkörpern im Weg stehen (typisch in Fluren, Treppenhäusern, zwischen Brandabschnitten). Tragen Sie die Anzahl ein (0, wenn keine). Nur durch Begehung zählbar.",
+     "field_type": "zahl",
+     "onsite": true,
+     "feeds": "Zweit-Gateway-Risiko (zusätzliche Streckendämpfung)",
+     "options": []
+    },
+    {
+     "id": "F6a",
+     "section": "F — Funk & Abdeckung",
+     "question": "Wie viele Geschosse liegen zwischen dem Gateway und dem entferntesten zu regelnden Heizkörper?",
+     "description": "Das Gateway ist die Funk-Basisstation; der entfernteste Heizkörper ist der ungünstigste Fall für die Funkverbindung. Zählen Sie, durch wie viele Geschossdecken das Signal zwischen Gateway und diesem Heizkörper hindurch muss (z. B. Gateway im 1. OG, entferntester Heizkörper im 5. OG = 4 Decken/Geschosse Abstand). Jede Etage kostet Funkreserve. Tragen Sie die Anzahl der dazwischenliegenden Geschosse ein. Nur durch Begehung ermittelbar.",
+     "field_type": "zahl",
+     "onsite": true,
+     "feeds": "Zweit-Gateway-Test (vertikale Streckendämpfung)",
+     "options": []
+    },
+    {
+     "id": "F6b",
+     "section": "F — Funk & Abdeckung",
+     "question": "Wie groß ist die horizontale Distanz (in Metern) zwischen dem Gateway und dem entferntesten zu regelnden Heizkörper?",
+     "description": "Gemeint ist die waagerechte Entfernung 'Luftlinie' innerhalb der Etage(n) zwischen der Funk-Basisstation (Gateway) und dem am weitesten entfernten Heizkörper, in Metern. Größere Distanz schwächt das Signal zusätzlich. So bestimmen Sie es: grob aus dem Grundriss abmessen oder vor Ort abschätzen/abschreiten (ein Schritt ≈ 0,7 m). Tragen Sie die Distanz in Metern ein. Nur durch Begehung verlässlich.",
+     "field_type": "zahl",
+     "onsite": true,
+     "feeds": "Zweit-Gateway-Test (horizontale Streckendämpfung)",
+     "options": []
+    },
+    {
+     "id": "F6c",
+     "section": "F — Funk & Abdeckung",
+     "question": "Wie viele Innenwände liegen auf dieser Funkstrecke zwischen Gateway und entferntestem Heizkörper?",
+     "description": "Zählen Sie, durch wie viele Innenwände (Trennwände zwischen Räumen, siehe Frage F3) das Funksignal auf dem Weg vom Gateway zum entferntesten Heizkörper hindurch muss. Jede Wand — besonders massive — dämpft das Signal. So ermitteln Sie es: den ungünstigsten Weg im Grundriss nachzeichnen und die durchquerten Wände zählen. Tragen Sie die Anzahl ein. Nur durch Begehung/Grundriss-Begang ermittelbar.",
+     "field_type": "zahl",
+     "onsite": true,
+     "feeds": "Zweit-Gateway-Test (horizontale Streckendämpfung)",
+     "options": []
+    },
+    {
+     "id": "F7",
+     "section": "F — Funk & Abdeckung",
+     "question": "Reicht die gemessene Funkreserve am entferntesten Heizkörper auch im langsamsten, robustesten Sendemodus (SF12) noch aus?",
+     "description": "Dies ist die entscheidende Messung für die Frage 'reicht ein Gateway oder braucht es ein zweites'. Mit einem Test-Funkgerät (Test-Node) wird am entferntesten Heizkörper die Empfangsqualität gemessen: RSSI (Empfangsstärke) und SNR (Abstand zum Rauschen). 'SF12' ist der robusteste, langsamste Sendemodus — wenn selbst er noch durchkommt, ist Reserve da. Faustregel: Das Signal muss über etwa −137 dBm liegen, plus eine Sicherheitsmarge (Fade-Margin) für zuverlässigen Betrieb. 'Ja' = genug Reserve (ein Gateway reicht), 'Nein' = Reserve aufgebraucht (zweites Gateway wahrscheinlich nötig). Nur mit einer echten Vor-Ort-Messung mit Test-Node feststellbar.",
+     "field_type": "ja_nein",
+     "onsite": true,
+     "feeds": "Zweit-Gateway-Entscheidung (der definitive Test)",
+     "options": []
+    },
+    {
+     "id": "F8",
+     "section": "F — Funk & Abdeckung",
+     "question": "Falls die Funkreserve nicht ausreicht: Gibt es einen geeigneten Standort für ein zweites Gateway?",
+     "description": "Nur relevant, wenn die vorige Messung (F7) zeigt, dass ein Gateway nicht reicht. Ein zweites Gateway braucht drei Dinge am Standort: eine dauerhafte Stromversorgung (Steckdose), eine Netzanbindung (LAN-Kabel, WLAN oder Mobilfunk) und eine möglichst zentrale Lage, von der aus es die unterversorgten Bereiche erreicht (z. B. in einem mittleren Geschoss). 'Ja' = ein solcher Standort existiert; 'Nein' = kein passender Standort gefunden (das wäre ein ernstes Problem). Nur durch Begehung beurteilbar.",
+     "field_type": "ja_nein",
+     "onsite": true,
+     "feeds": "Zweit-Gateway-Kontingenz / Sizing",
+     "options": []
+    },
+    {
+     "id": "F9",
+     "section": "F — Funk & Abdeckung",
+     "question": "Ist das Gebäude in funktechnisch getrennte Bauteile oder Flügel gegliedert (z. B. durch durchgehende Brandwände)?",
+     "description": "Manche Gebäude bestehen aus mehreren Bauteilen/Flügeln, die durch durchgehende Brandwände (massive, vom Keller bis zum Dach reichende Trennwände) voneinander getrennt sind. Solche Wände dämpfen Funk so stark, dass jeder Flügel praktisch ein eigenes Funknetz braucht — was die Zahl der nötigen Gateways direkt erhöht. So erkennen Sie es: ein langgestreckter oder L-/U-förmiger Bau mit erkennbaren Gebäudefugen oder einem klaren 'Knick' deutet auf mehrere Bauteile hin; durchgehende Brandwände findet man im Grundriss als durchlaufende dicke Linien. Wählen Sie, in wie viele getrennte Baukörper das Gebäude gegliedert ist.",
+     "field_type": "auswahl_einfach",
+     "onsite": false,
+     "feeds": "Zweit-Gateway-Risiko / Sizing (Anzahl Funkzonen)",
+     "options": [
+      "ein zusammenhängender Baukörper",
+      "zwei Flügel",
+      "drei oder mehr Flügel",
+      "unbekannt"
+     ]
+    }
+   ]
+  },
+  {
+   "title": "G — Kaufmännisches & Rahmenbedingungen",
+   "questions": [
+    {
+     "id": "G1",
+     "question": "Kann der Betreiber die Mehrwertsteuer als Vorsteuer zurückholen (vorsteuerabzugsberechtigt)?",
+     "description": "Unternehmen/Betriebe mit umsatzsteuerpflichtigen Einnahmen holen die in Rechnungen enthaltene Mehrwertsteuer beim Finanzamt zurück — für sie zählt der Netto-Preis. Nicht vorsteuerabzugsberechtigte Stellen zahlen brutto (≈ 19 % mehr). Im Zweifel die Buchhaltung fragen.",
+     "field_type": "auswahl_einfach",
+     "options": [
+      "ja (Netto rechnen)",
+      "nein (Brutto)",
+      "unbekannt"
+     ],
+     "onsite": false,
+     "feeds": "USt-Flag (alle Quellen ex-VAT)"
+    },
+    {
+     "id": "G2",
+     "question": "Soll eine Förderung (z. B. BEG/BAFA für den hydraulischen Abgleich) eingerechnet werden?",
+     "description": "Für den hydraulischen Abgleich und manche Maßnahmen gibt es staatliche Zuschüsse (oft ~15–20 %). Ob förderfähig, klärt ein Fördermittel-Check. Hier nur, ob wir eine Förderung im Szenario berücksichtigen.",
+     "field_type": "auswahl_einfach",
+     "options": [
+      "ja, einrechnen",
+      "nein",
+      "noch zu prüfen"
+     ],
+     "onsite": false,
+     "feeds": "Förder-Toggle (pre/post subsidy)"
+    },
+    {
+     "id": "G3",
+     "question": "Falls hydraulischer Abgleich geplant: Verfahren A (rechnerisch) oder B (raumweise gemessen) — und sind voreinstellbare Ventile / eine neue Pumpe nötig?",
+     "description": "Verfahren A schätzt rechnerisch, B misst raumweise (genauer, oft gefordert). Fehlen voreinstellbare Ventile oder eine Hocheffizienzpumpe, kommen einmalige Zusatzkosten je Gebäude hinzu. Falls kein Abgleich geplant: 'kein Abgleich'.",
+     "field_type": "auswahl_einfach",
+     "options": [
+      "Verfahren A",
+      "Verfahren B",
+      "noch offen",
+      "kein Abgleich"
+     ],
+     "onsite": false,
+     "feeds": "Abgleich-Zerlegung (fix je Gebäude + variabel)"
+    },
+    {
+     "id": "G4",
+     "question": "Welche Batterie-/Gerätelebensdauer gibt der Hersteller des gewählten Thermostats an (Jahre)?",
+     "description": "Die Investition muss sich amortisieren, BEVOR Geräte/Batterien ersetzt werden müssen. Herstellerangaben (oft 5–10 Jahre) sind idealisiert; diese Zahl ist die Obergrenze für einen sinnvollen Amortisationshorizont.",
+     "field_type": "zahl",
+     "options": [],
+     "onsite": false,
+     "feeds": "Horizont vs. Lebensdauer (Abbruchkriterium)"
+    },
+    {
+     "id": "G5",
+     "question": "Aus wessen Sicht wird gerechnet — investiert der Betreiber und spart selbst, oder investiert er, während ein Mieter spart (geteilter Nutzen)?",
+     "description": "Sind Investor und Nutznießer dieselbe Stelle (Eigennutzung), ist die Rechnung eindeutig. Bei Vermietung zahlt oft der Eigentümer die Technik, während der Mieter die Heizkosten spart — dann braucht es z. B. eine Umlage, sonst rechnet es sich für den Investor nicht.",
+     "field_type": "auswahl_einfach",
+     "options": [
+      "Betreiber investiert und spart selbst",
+      "Betreiber investiert, Mieter spart (Split)",
+      "unklar"
+     ],
+     "onsite": false,
+     "feeds": "Perspektive / Split-Incentive"
+    }
+   ]
+  }
+ ]
+}

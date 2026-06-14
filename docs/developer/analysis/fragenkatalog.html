@@ -1,0 +1,644 @@
+<!DOCTYPE html><html lang="de"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fragenkatalog — Gebäudespezifische Kostenkalkulation</title>
+<style>
+:root{--ink:#1a2230;--muted:#5b6876;--line:#d9e0e8;--accent:#1f6feb;--warn:#9a6700;--soft:#f5f8fb}
+body{font:15px/1.5 system-ui,Segoe UI,Arial,sans-serif;color:var(--ink);max-width:820px;margin:0 auto;padding:24px}
+h1{font-size:1.5rem;margin:0 0 4px}h2{font-size:1.1rem;border-top:2px solid var(--ink);margin-top:26px;padding-top:10px}
+.lead{color:var(--muted);font-size:.92rem}
+.q{background:var(--soft);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:10px 0}
+.qt{font-weight:600}.d{color:var(--muted);font-size:.86rem;margin:4px 0 8px}
+.on{color:var(--warn);font-weight:700}
+label.opt{display:block;margin:3px 0;cursor:pointer}
+input.num{width:160px;padding:6px;border:1px solid var(--line);border-radius:6px}
+textarea.txt{width:100%;padding:6px;border:1px solid var(--line);border-radius:6px;font:inherit}
+.actions{position:sticky;bottom:0;background:#fff;border-top:1px solid var(--line);padding:10px 0;margin-top:20px}
+button{background:var(--accent);color:#fff;border:0;border-radius:7px;padding:9px 16px;font-weight:600;cursor:pointer}
+@media print{.actions{display:none}body{max-width:none}}
+</style></head><body>
+<h1>Fragenkatalog — Gebäudespezifische Kostenkalkulation</h1>
+<p class="lead">LoRaWAN-Einzelraumregelung · Erhebungsbogen für ein konkretes Gebäude.
+Anklicken bzw. eintragen; <span class="on">✎</span> = nur vor Ort feststellbar.
+Über „Drucken → Als PDF speichern" entsteht ein ausgefülltes PDF.</p>
+<form>
+<h2>Grundvoraussetzung</h2>
+<div class="q">
+<div class="qt">V1 Werden die Räume über Heizkörper (Radiatoren) mit Thermostatventil beheizt?</div>
+<div class="d">Funk-Thermostate ersetzen den Drehknopf am Ventil eines wassergeführten Heizkörpers. Sie funktionieren NUR dort. Bei Fußbodenheizung, Decken-/Luftheizung oder Fan-Coil-Geräten ist diese Lösung nicht anwendbar — dann entfällt der gesamte Anwendungsfall. Bitte zuerst klären.</div>
+<label class="opt"><input type="radio" name="V1" value="Ja"> Ja</label>
+<label class="opt"><input type="radio" name="V1" value="Nein"> Nein</label>
+</div>
+<h2>A — Gebäude &amp; Konstruktion</h2>
+<div class="q">
+<div class="qt">A1 In welcher Bauepoche wurde das Gebäude errichtet?</div>
+<div class="d">Gemeint ist das ungefähre Baujahr des Hauptgebäudes. Das Baualter ist der wichtigste Hinweis darauf, wie gut das Haus gedämmt ist und wie viel Heizenergie es verbraucht — und damit, ob sich eine automatische Heizungsregelung lohnt. Ältere Häuser verlieren mehr Wärme, sparen also mehr. Sie finden das Baujahr im Bauantrag, Kaufvertrag, Energieausweis oder in der Hausakte; eine grobe Einordnung in eine der Epochen genügt.</div>
+<label class="opt"><input type="radio" name="A1" value="vor 1949"> vor 1949</label>
+<label class="opt"><input type="radio" name="A1" value="1949–1957"> 1949–1957</label>
+<label class="opt"><input type="radio" name="A1" value="1958–1990 (DDR / Plattenbau)"> 1958–1990 (DDR / Plattenbau)</label>
+<label class="opt"><input type="radio" name="A1" value="1991–2001"> 1991–2001</label>
+<label class="opt"><input type="radio" name="A1" value="2002 bis heute (GEG / EnEV)"> 2002 bis heute (GEG / EnEV)</label>
+<label class="opt"><input type="radio" name="A1" value="unbekannt"> unbekannt</label>
+</div>
+<div class="q">
+<div class="qt">A2 Aus welchem Hauptmaterial besteht die tragende Außenwand?</div>
+<div class="d">Die tragende Außenwand ist die dicke, lasttragende Mauer der Gebäudehülle (nicht eine leichte Trennwand innen). Das Material beeinflusst zwei Dinge: wie warm das Haus hält und wie stark es das Funksignal dämpft. Wichtig ist vor allem, ob die Wand Stahlbeton enthält — die Stahlmatte darin wirkt wie ein Drahtkäfig und blockiert Funk besonders stark. Backstein/Ziegel dämpft das Funksignal am wenigsten. Wenn Sie es nicht sicher wissen, hilft oft der Energieausweis, die Baubeschreibung oder das Baualter (Plattenbau = Stahlbeton).</div>
+<label class="opt"><input type="radio" name="A2" value="Vollziegel / Backstein"> Vollziegel / Backstein</label>
+<label class="opt"><input type="radio" name="A2" value="Stahlbeton (Ortbeton)"> Stahlbeton (Ortbeton)</label>
+<label class="opt"><input type="radio" name="A2" value="Stahlbeton-Sandwich Plattenbau (WBS 70)"> Stahlbeton-Sandwich Plattenbau (WBS 70)</label>
+<label class="opt"><input type="radio" name="A2" value="Kalksandstein / Porenbeton"> Kalksandstein / Porenbeton</label>
+<label class="opt"><input type="radio" name="A2" value="Holz"> Holz</label>
+<label class="opt"><input type="radio" name="A2" value="gemischt / unbekannt"> gemischt / unbekannt</label>
+</div>
+<div class="q">
+<div class="qt">A3 Wurde nachträglich eine Außendämmung (Wärmedämm-Verbundsystem / WDVS) an der Fassade angebracht?</div>
+<div class="d">Ein Wärmedämm-Verbundsystem (WDVS) ist eine nachträglich auf die Fassade geklebte oder gedübelte Dämmschicht (meist Styropor- oder Mineralwollplatten unter einem neuen Außenputz). Man erkennt es daran, dass die Außenwand merklich dicker ist als die Fensterlaibung erwarten lässt, und am Klopfen klingt sie eher hohl/weich. Eine solche Sanierung senkt den Heizverbrauch stark und verschiebt das Gebäude vom &#x27;unsaniert&#x27; zum &#x27;saniert&#x27;-Profil. Antworten Sie &#x27;Nein&#x27;, wenn die Fassade unverändert original ist.</div>
+<label class="opt"><input type="radio" name="A3" value="Ja"> Ja</label>
+<label class="opt"><input type="radio" name="A3" value="Nein"> Nein</label>
+</div>
+<div class="q">
+<div class="qt">A4 Welche Verglasung haben die Fenster überwiegend?</div>
+<div class="d">Gemeint ist, wie viele Glasscheiben die Fenster haben und ob sie eine spezielle Wärmeschutz-Beschichtung tragen. Das ist doppelt wichtig: bessere Fenster sparen Heizenergie, ABER moderne Wärmeschutzfenster haben eine hauchdünne Metallbeschichtung auf dem Glas (Low-E), die das Funksignal stark blockiert — sie sind für die Funkabdeckung der schwierigste Fall. So erkennen Sie es: Einfachglas = eine Scheibe. Isolierglas = zwei Scheiben mit Luftspalt. Wärmeschutzglas (Low-E) hat oft einen leicht grünlich/bläulichen Schimmer, wenn man schräg durchschaut; im Zweifel verrät es die Aufschrift im Randabstandhalter zwischen den Scheiben oder der Fensterpass.</div>
+<label class="opt"><input type="radio" name="A4" value="Einfachverglasung (Klarglas, 1 Scheibe)"> Einfachverglasung (Klarglas, 1 Scheibe)</label>
+<label class="opt"><input type="radio" name="A4" value="Zweifach-Isolierglas ohne Beschichtung"> Zweifach-Isolierglas ohne Beschichtung</label>
+<label class="opt"><input type="radio" name="A4" value="Zwei-/Dreifach-Wärmeschutz (Low-E, metallbeschichtet)"> Zwei-/Dreifach-Wärmeschutz (Low-E, metallbeschichtet)</label>
+<label class="opt"><input type="radio" name="A4" value="gemischt"> gemischt</label>
+<label class="opt"><input type="radio" name="A4" value="unbekannt"> unbekannt</label>
+</div>
+<div class="q">
+<div class="qt">A5 Falls es ein Plattenbau ist: Welche Bauserie?</div>
+<div class="d">Plattenbauten der DDR wurden in standardisierten Serien gebaut, deren Wandaufbau bekannt ist. Die Serie verrät die genaue Dicke und Bewehrung der Stahlbeton-Platten und damit, wie stark Funk gedämpft wird. Falls es KEIN Plattenbau ist, wählen Sie &#x27;kein Plattenbau&#x27;. Die Serie steht oft in den Bauunterlagen oder ist über das Baujahr und den Standort recherchierbar; WBS 70 ist die häufigste.</div>
+<label class="opt"><input type="radio" name="A5" value="WBS 70"> WBS 70</label>
+<label class="opt"><input type="radio" name="A5" value="P2 / Q3A"> P2 / Q3A</label>
+<label class="opt"><input type="radio" name="A5" value="andere DDR-Serie"> andere DDR-Serie</label>
+<label class="opt"><input type="radio" name="A5" value="kein Plattenbau"> kein Plattenbau</label>
+<label class="opt"><input type="radio" name="A5" value="unbekannt"> unbekannt</label>
+</div>
+<div class="q">
+<div class="qt">A6 Liegt ein Energieausweis für das Gebäude vor?</div>
+<div class="d">Der Energieausweis ist ein offizielles Dokument (Pflicht bei Verkauf/Vermietung), das angibt, wie viel Energie das Gebäude verbraucht. Er ist die genaueste Quelle für den Heizbedarf und ersetzt grobe Schätzungen. Diese Frage klärt nur, OB ein solches Dokument existiert — die Kennzahlen daraus erfassen wir in den nächsten beiden Fragen.</div>
+<label class="opt"><input type="radio" name="A6" value="Ja"> Ja</label>
+<label class="opt"><input type="radio" name="A6" value="Nein"> Nein</label>
+</div>
+<div class="q">
+<div class="qt">A6a Welche Effizienzklasse weist der Energieausweis aus?</div>
+<div class="d">Falls ein Energieausweis vorliegt (siehe vorige Frage): Die Effizienzklasse ist eine Buchstabennote von A+ (sehr sparsam) bis H (sehr hoch im Verbrauch), wie die Energielabel auf Haushaltsgeräten. Sie steht groß auf einer Farbskala auf dem Ausweis. Eine schlechte Klasse (G/H) bedeutet hohen Verbrauch und damit mehr Sparpotenzial. Falls kein Ausweis vorliegt oder keine Klasse genannt ist, lassen Sie das Feld leer.</div>
+<label class="opt"><input type="radio" name="A6a" value="A+"> A+</label>
+<label class="opt"><input type="radio" name="A6a" value="A"> A</label>
+<label class="opt"><input type="radio" name="A6a" value="B"> B</label>
+<label class="opt"><input type="radio" name="A6a" value="C"> C</label>
+<label class="opt"><input type="radio" name="A6a" value="D"> D</label>
+<label class="opt"><input type="radio" name="A6a" value="E"> E</label>
+<label class="opt"><input type="radio" name="A6a" value="F"> F</label>
+<label class="opt"><input type="radio" name="A6a" value="G"> G</label>
+<label class="opt"><input type="radio" name="A6a" value="H"> H</label>
+<label class="opt"><input type="radio" name="A6a" value="kein Ausweis / nicht angegeben"> kein Ausweis / nicht angegeben</label>
+</div>
+<div class="q">
+<div class="qt">A6b Welcher Endenergie-Kennwert in kWh/m²·a steht im Energieausweis?</div>
+<div class="d">Falls ein Energieausweis vorliegt: Dies ist die zentrale Zahl darauf — der Energieverbrauch pro Quadratmeter und Jahr, angegeben in &#x27;kWh/(m²·a)&#x27;. Sie steht meist als Zahl auf demselben Farbband wie die Effizienzklasse (z. B. 150 kWh/m²·a). Je höher die Zahl, desto mehr Heizenergie und desto mehr Sparpotenzial. Tragen Sie nur die Zahl ein (ohne Einheit). Falls kein Ausweis vorliegt, lassen Sie das Feld leer.</div>
+<input class="num" type="number" step="any" name="A6b">
+</div>
+<div class="q">
+<div class="qt">A7 Ist das Gebäude einheitlich gebaut (eine Bauphase, ein Material)?</div>
+<div class="d">Diese Frage prüft, ob das ganze Gebäude aus einem Guss ist oder ob es Teile aus unterschiedlichen Zeiten/Materialien gibt — etwa einen späteren Anbau, eine Aufstockung oder einen modernen Glas-Vorbau an einem Altbau. Das ist wichtig, weil verschiedene Bauteile unterschiedlich dämmen und Funk unterschiedlich durchlassen; ein gemischtes Gebäude muss man eventuell in Zonen aufteilen. Antworten Sie &#x27;Ja&#x27;, wenn alles aus derselben Epoche und Bauweise stammt; &#x27;Nein&#x27;, wenn es abweichende Anbauten/Aufstockungen gibt.</div>
+<label class="opt"><input type="radio" name="A7" value="Ja"> Ja</label>
+<label class="opt"><input type="radio" name="A7" value="Nein"> Nein</label>
+</div>
+<div class="q">
+<div class="qt">A8a <span class="on">✎</span> Wie dick sind die Außenwände ungefähr (gemessen an der Fensterlaibung)?</div>
+<div class="d">Nur nötig, wenn Baualter oder Wandmaterial unbekannt sind — die Wanddicke hilft dann, das Baualter zu schätzen. So messen Sie: Öffnen Sie ein Fenster und messen Sie die Tiefe der seitlichen Fensterleibung (der Abstand von der Außenkante der Wand bis zur Innenkante), mit Zollstock oder Maßband, in Zentimetern. Dünne Wände (~20–25 cm) deuten auf Beton/Fertigteil, dicke (~38 cm und mehr) auf alten Vollziegel. Tragen Sie die Dicke in cm ein. Diese Angabe ist nur durch Nachmessen vor Ort verlässlich.</div>
+<input class="num" type="number" step="any" name="A8a">
+</div>
+<div class="q">
+<div class="qt">A8b <span class="on">✎</span> Fühlt sich die Außenwand massiv-kalt oder leicht/hohl an?</div>
+<div class="d">Nur nötig, wenn das Wandmaterial unbekannt ist. Klopfen Sie an die Außenwand und fassen Sie sie an: Eine massive Wand (Ziegel, Beton) fühlt sich schwer, kalt und fest an und klingt dumpf; eine leichte Wand (Trockenbau, Holzständer) klingt hohl und fühlt sich wärmer und weniger fest an. Das unterscheidet schweren Massivbau (dämpft Funk stark, hält Wärme träge) von Leichtbau. Diese Einschätzung ist nur vor Ort durch Anfassen/Klopfen möglich.</div>
+<label class="opt"><input type="radio" name="A8b" value="massiv-kalt (Ziegel / Beton)"> massiv-kalt (Ziegel / Beton)</label>
+<label class="opt"><input type="radio" name="A8b" value="leicht / hohl (Trockenbau / Holz)"> leicht / hohl (Trockenbau / Holz)</label>
+<label class="opt"><input type="radio" name="A8b" value="uneindeutig"> uneindeutig</label>
+</div>
+<div class="q">
+<div class="qt">A9 <span class="on">✎</span> Enthält die Dämmung eine metallische Dampfsperre oder kaschierte Alu-Folie?</div>
+<div class="d">Eine Dampfsperre ist eine dünne Folie in der Dämmung (oft in Dächern, Decken oder Innendämmungen), die Feuchtigkeit fernhält. Hat sie eine glänzende Aluminium-Beschichtung, wirkt sie wie eine durchgehende Metallschicht und blockiert Funk fast vollständig — ein versteckter, oft übersehener Funkkiller. Sichtbar wird sie nur an offenen Stellen: in abgehängten Decken, am Dachboden zwischen den Sparren, an Revisionsklappen — als silbrig glänzende, folienartige Schicht. Diese Prüfung ist nur vor Ort möglich.</div>
+<label class="opt"><input type="radio" name="A9" value="Ja"> Ja</label>
+<label class="opt"><input type="radio" name="A9" value="Nein"> Nein</label>
+</div>
+<h2>B — Geometrie, Geschosse &amp; Räume</h2>
+<div class="q">
+<div class="qt">B1 Wie viele oberirdische, beheizte Vollgeschosse hat das Gebäude?</div>
+<div class="d">Gemeint sind die normalen Stockwerke über dem Erdboden, in denen geheizt wird und in denen man sich aufhält (Erdgeschoss mitzählen). Ein &#x27;Vollgeschoss&#x27; ist ein normales Stockwerk in voller Höhe, kein niedriges Dach- oder Zwischengeschoss. Wir brauchen die Zahl, weil jede Geschossdecke das Funksignal dämpft: je mehr Geschosse übereinander, desto eher wird ein zweites Funk-Empfangsgerät (Gateway) nötig. Antwort: einfach die Stockwerke zählen, vom Erdgeschoss bis zum obersten normalen Stockwerk.</div>
+<input class="num" type="number" step="any" name="B1">
+</div>
+<div class="q">
+<div class="qt">B2 Gibt es ein beheiztes Kellergeschoss mit Heizkörpern?</div>
+<div class="d">Manche Keller haben Heizkörper (z. B. beheizte Werkstätten, Hausmeisterräume, Büro im Untergeschoss), die meisten nicht. Wir fragen das getrennt von den normalen Stockwerken, weil so ein Geschoss zusätzliche Heizkörper und ein weiteres Funk-Hindernis bedeutet. Antwort &#x27;Ja&#x27;, wenn im Untergeschoss mindestens ein Heizkörper hängt, der im Winter warm wird.</div>
+<label class="opt"><input type="radio" name="B2" value="Ja"> Ja</label>
+<label class="opt"><input type="radio" name="B2" value="Nein"> Nein</label>
+</div>
+<div class="q">
+<div class="qt">B3 Falls ja: Wie viele beheizte Kellergeschosse mit Heizkörpern gibt es?</div>
+<div class="d">Nur ausfüllen, wenn die vorige Frage mit &#x27;Ja&#x27; beantwortet wurde. Gemeint ist die Anzahl der Untergeschosse (z. B. 1. Untergeschoss, 2. Untergeschoss), in denen tatsächlich Heizkörper sitzen. Bei nur einem beheizten Keller hier &#x27;1&#x27; eintragen.</div>
+<input class="num" type="number" step="any" name="B3">
+</div>
+<div class="q">
+<div class="qt">B4 Gibt es ein beheiztes Dachgeschoss mit Heizkörpern?</div>
+<div class="d">Ein ausgebautes, bewohntes oder genutztes Dachgeschoss mit eigenen Heizkörpern (Wohnung, Büro, Seminarraum unter dem Dach). Ein reiner, kalter Dachboden ohne Heizung zählt nicht. Wir fragen es getrennt, weil das Dachgeschoss meist am weitesten vom Funk-Empfangsgerät (Gateway) entfernt ist und damit der kritischste Punkt für die Funkreichweite. Antwort &#x27;Ja&#x27;, wenn unter dem Dach geheizte Räume mit Heizkörpern liegen.</div>
+<label class="opt"><input type="radio" name="B4" value="Ja"> Ja</label>
+<label class="opt"><input type="radio" name="B4" value="Nein"> Nein</label>
+</div>
+<div class="q">
+<div class="qt">B5 Falls ja: Wie viele beheizte Dachgeschosse mit Heizkörpern gibt es?</div>
+<div class="d">Nur ausfüllen, wenn die vorige Frage mit &#x27;Ja&#x27; beantwortet wurde. In der Regel ist das &#x27;1&#x27;. Mehr als eines kommt nur bei sehr großen oder mehrteiligen Gebäuden vor.</div>
+<input class="num" type="number" step="any" name="B5">
+</div>
+<div class="q">
+<div class="qt">B6 Wie groß ist die gesamte beheizte Fläche des Gebäudes in Quadratmetern (m²)?</div>
+<div class="d">Die Summe aller Raumflächen, die im Winter geheizt werden, über alle Stockwerke zusammengerechnet, in Quadratmetern. Diese Zahl steht oft im Mietvertrag, im Energieausweis oder in den Bauunterlagen (&#x27;beheizte Fläche&#x27; oder &#x27;Nutzfläche&#x27;). Wir brauchen sie, weil der Heizenergie-Verbrauch und damit die mögliche Ersparnis grob mit der Fläche steigt. Wenn nur die Wohn-/Nutzfläche pro Stockwerk bekannt ist, diese addieren. Schätzung ist erlaubt, bitte möglichst realistisch.</div>
+<input class="num" type="number" step="any" name="B6">
+</div>
+<div class="q">
+<div class="qt">B7 Ist die beheizte Fläche pro Stockwerk in etwa gleich groß?</div>
+<div class="d">Wir wollen wissen, ob die Stockwerke ungefähr gleich groß sind (z. B. ein gestapelter Standardgrundriss, in jedem Stockwerk dieselbe Fläche) oder ob sie sich stark unterscheiden (z. B. großes Erdgeschoss, kleines Dachgeschoss). Antwort &#x27;Ja&#x27;, wenn alle Geschosse ungefähr gleich groß sind; &#x27;Nein&#x27;, wenn ein oder mehrere Geschosse deutlich größer oder kleiner sind. Das hilft uns, die Fläche und Heizkörper sinnvoll auf die Stockwerke zu verteilen.</div>
+<label class="opt"><input type="radio" name="B7" value="Ja"> Ja</label>
+<label class="opt"><input type="radio" name="B7" value="Nein"> Nein</label>
+</div>
+<div class="q">
+<div class="qt">B8 Falls die Stockwerke unterschiedlich groß sind: Wie groß ist die beheizte Fläche je Stockwerk in m²?</div>
+<div class="d">Nur ausfüllen, wenn die vorige Frage mit &#x27;Nein&#x27; beantwortet wurde. Bitte je Stockwerk eine Fläche angeben, z. B. &#x27;EG 600, 1. OG 500, 2. OG 400&#x27;. Frei in Worten eintragen. Diese Angabe hilft, Heizkörper und Funk-Last realistisch auf die Etagen zu verteilen, wenn sie nicht gleichmäßig sind.</div>
+<textarea class="txt" name="B8" rows="2"></textarea>
+</div>
+<div class="q">
+<div class="qt">B9 Sind die Stockwerke baulich gleich aufgebaut (gleicher Grundriss übereinander)?</div>
+<div class="d">Gemeint ist, ob die Stockwerke denselben Grundriss haben und gleich angeordnet sind (typisch für Wohn- und Bürohäuser: jede Etage gleich) oder ob sie ganz unterschiedlich aufgeteilt sind. Das ist nicht dasselbe wie die Fläche: Stockwerke können gleich groß, aber unterschiedlich aufgeteilt sein. Antwort &#x27;Ja&#x27; bei gleichem, gestapeltem Standardgrundriss. Das vereinfacht die Hochrechnung der Heizkörper- und Gerätezahlen.</div>
+<label class="opt"><input type="radio" name="B9" value="Ja"> Ja</label>
+<label class="opt"><input type="radio" name="B9" value="Nein"> Nein</label>
+</div>
+<div class="q">
+<div class="qt">B10 Wie viele beheizte Räume gibt es insgesamt (ohne Flure)?</div>
+<div class="d">Bitte alle beheizten Räume im ganzen Gebäude zählen, in denen Heizkörper hängen — also Wohn-, Schlaf-, Büro-, Seminar-, Aufenthaltsräume usw. Flure, Treppenhäuser und reine Durchgangszonen NICHT mitzählen (die werden in einer eigenen Frage erfasst). Faustregel im Modell: ein Heizkörper je beheiztem Raum. Diese Zahl hilft, die Gesamtzahl der zu regelnden Heizkörper abzuschätzen, falls noch nicht jeder Heizkörper einzeln gezählt wurde. Schätzung ist erlaubt.</div>
+<input class="num" type="number" step="any" name="B10">
+</div>
+<div class="q">
+<div class="qt">B11 Wie verteilen sich die beheizten Räume auf die Stockwerke?</div>
+<div class="d">Bitte grob angeben, wie viele beheizte Räume in welchem Stockwerk liegen, z. B. &#x27;EG 12, 1. OG 14, 2. OG 14, DG 6&#x27;. Frei in Worten eintragen. Das hilft uns zu sehen, in welchem Stockwerk die meisten Geräte sitzen und ob die Funkversorgung dort ausreicht. Wenn die Stockwerke alle gleich aufgeteilt sind, genügt z. B. &#x27;jede Etage ca. 14 Räume&#x27;.</div>
+<textarea class="txt" name="B11" rows="2"></textarea>
+</div>
+<div class="q">
+<div class="qt">B12 <span class="on">✎</span> Wie viele zu regelnde Heizkörper gibt es im ganzen Gebäude insgesamt?</div>
+<div class="d">Die Gesamtzahl aller Heizkörper, die später ein funkgesteuertes Ventil bekommen sollen — durchgezählt im ganzen Gebäude. Das ist die wichtigste Mengenzahl der ganzen Kalkulation: jeder Heizkörper kostet rund 110 Euro (Gerät + Montage). Verlässlich ist diese Zahl nur durch tatsächliches Abzählen vor Ort, weil Pläne oft veraltet sind und manche Räume mehrere oder versteckte Heizkörper haben. Wenn noch nicht abgezählt wurde, vorerst die Raumzahl (Frage B10) als Näherung nehmen und das hier offen lassen.</div>
+<input class="num" type="number" step="any" name="B12">
+</div>
+<div class="q">
+<div class="qt">B13 <span class="on">✎</span> Gibt es Räume mit zwei oder mehr Heizkörpern (z. B. große Säle oder Hörsäle)?</div>
+<div class="d">In großen Räumen (Säle, Hörsäle, große Büros, Werkstätten) hängen oft mehrere Heizkörper an verschiedenen Wänden. Jeder davon braucht ein eigenes Ventil. Wir fragen das, damit die Heizkörperzahl nicht zu niedrig geschätzt wird, wenn man nur Räume zählt. Antwort &#x27;Ja&#x27;, wenn es solche Räume gibt. Nur durch Hinschauen vor Ort sicher feststellbar.</div>
+<label class="opt"><input type="radio" name="B13" value="Ja"> Ja</label>
+<label class="opt"><input type="radio" name="B13" value="Nein"> Nein</label>
+</div>
+<div class="q">
+<div class="qt">B14 <span class="on">✎</span> Falls ja: Wie viele Heizkörper hängen in diesen Mehrfach-Räumen zusätzlich (über den ersten je Raum hinaus)?</div>
+<div class="d">Nur ausfüllen, wenn die vorige Frage mit &#x27;Ja&#x27; beantwortet wurde. Beispiel: Ein Hörsaal hat 4 Heizkörper — das sind 3 zusätzliche über den einen hinaus, den man bei &#x27;ein Heizkörper pro Raum&#x27; schon gezählt hat. Bitte diese zusätzlichen Heizkörper aus allen Mehrfach-Räumen zusammenzählen. Nur durch Zählen vor Ort verlässlich.</div>
+<input class="num" type="number" step="any" name="B14">
+</div>
+<div class="q">
+<div class="qt">B15 <span class="on">✎</span> Gibt es Heizkörper in Bereichen, die NICHT geregelt werden sollen (Flure, Treppenhaus, WC/Sanitär, Nebenräume)?</div>
+<div class="d">Manche Heizkörper sollen bewusst außen vor bleiben, etwa im Treppenhaus, in Fluren oder in selten genutzten Nebenräumen — dort lohnt sich die Einzelregelung kaum oder sie ist nicht gewünscht. Wir fragen das, um die Gerätezahl nicht zu hoch anzusetzen. Antwort &#x27;Ja&#x27;, wenn es solche ausgenommenen Heizkörper gibt. Verlässlich nur durch Begehung.</div>
+<label class="opt"><input type="radio" name="B15" value="Ja"> Ja</label>
+<label class="opt"><input type="radio" name="B15" value="Nein"> Nein</label>
+</div>
+<div class="q">
+<div class="qt">B16 <span class="on">✎</span> Falls ja: Wie viele Heizkörper liegen in solchen ausgenommenen Bereichen?</div>
+<div class="d">Nur ausfüllen, wenn die vorige Frage mit &#x27;Ja&#x27; beantwortet wurde. Bitte die Heizkörper in Fluren, Treppenhaus, WC und Nebenräumen zählen, die NICHT mit einem funkgesteuerten Ventil ausgestattet werden sollen. Diese Zahl wird von der Gesamtzahl abgezogen. Nur durch Zählen vor Ort verlässlich.</div>
+<input class="num" type="number" step="any" name="B16">
+</div>
+<div class="q">
+<div class="qt">B17 Wie viele getrennte Treppenhäuser bzw. senkrechte Versorgungszonen gibt es?</div>
+<div class="d">Ein Treppenhaus bzw. eine &#x27;Steigzone&#x27; ist der senkrechte Schacht, durch den Treppe, Leitungen und Funk zwischen den Stockwerken laufen. Große Gebäude haben oft mehrere getrennte Treppenhäuser (z. B. ein Ost- und ein West-Aufgang). Das ist wichtig, weil ein Funk-Empfangsgerät (Gateway) zentral an so einem Schacht oft mehrere Etagen auf einmal versorgt. Mehrere getrennte Treppenhäuser können bedeuten, dass mehr als ein Gateway nötig ist. Bitte die Anzahl eintragen.</div>
+<input class="num" type="number" step="any" name="B17">
+</div>
+<div class="q">
+<div class="qt">B18 Wo liegen diese Treppenhäuser im Gebäude?</div>
+<div class="d">Bitte angeben, wo die Treppenhäuser sitzen: eher zentral (in der Mitte des Gebäudes) oder am Rand bzw. an der Außenwand. Mehrere Antworten möglich, wenn es mehrere Treppenhäuser an verschiedenen Stellen gibt. Eine zentrale Lage ist günstig, weil ein dort platziertes Funk-Empfangsgerät (Gateway) in alle Richtungen ungefähr gleich weit reicht; eine Randlage funkt dagegen nur in eine Richtung gut.</div>
+<label class="opt"><input type="checkbox" name="B18_0" value="zentral (Gebäudemitte)"> zentral (Gebäudemitte)</label>
+<label class="opt"><input type="checkbox" name="B18_1" value="am Rand / an der Außenwand"> am Rand / an der Außenwand</label>
+<label class="opt"><input type="checkbox" name="B18_2" value="gemischt (mehrere an verschiedenen Stellen)"> gemischt (mehrere an verschiedenen Stellen)</label>
+<label class="opt"><input type="checkbox" name="B18_3" value="unbekannt"> unbekannt</label>
+</div>
+<h2>C — Heizung, Energie &amp; Einsparung</h2>
+<div class="q">
+<div class="qt">C1 Womit wird das Gebäude beheizt?</div>
+<div class="d">Der Energieträger der Heizung — also was verbrannt oder genutzt wird, um Wärme zu erzeugen. Das steht auf der Heizkostenabrechnung oder ist am Heizkessel/Hausanschluss ablesbar. Diese Angabe ist eine der wichtigsten überhaupt: Sie bestimmt den Preis pro Kilowattstunde Wärme — und damit, wie viel Euro jede eingesparte Kilowattstunde wert ist. Fernwärme ist z. B. meist deutlich teurer als Gas, wodurch sich die Anlage schneller lohnt. Bitte die zutreffende Heizart anklicken.</div>
+<label class="opt"><input type="radio" name="C1" value="Erdgas"> Erdgas</label>
+<label class="opt"><input type="radio" name="C1" value="Fernwärme"> Fernwärme</label>
+<label class="opt"><input type="radio" name="C1" value="Heizöl"> Heizöl</label>
+<label class="opt"><input type="radio" name="C1" value="Wärmepumpe"> Wärmepumpe</label>
+<label class="opt"><input type="radio" name="C1" value="Pellets / Biomasse"> Pellets / Biomasse</label>
+<label class="opt"><input type="radio" name="C1" value="Sonstiges"> Sonstiges</label>
+<label class="opt"><input type="radio" name="C1" value="unbekannt"> unbekannt</label>
+</div>
+<div class="q">
+<div class="qt">C2 Wie hoch ist der Arbeitspreis für die Heizenergie in Euro pro Kilowattstunde (EUR/kWh)?</div>
+<div class="d">Der &#x27;Arbeitspreis&#x27; ist der Preis für die tatsächlich verbrauchte Wärme, gerechnet je Kilowattstunde (kWh) — ohne die feste Grundgebühr und ohne den Leistungspreis. Er steht auf der Heizkosten- oder Gasabrechnung, oft als &#x27;ct/kWh&#x27; (Cent pro Kilowattstunde; 12 ct entsprechen 0,12 EUR). Bitte den Netto-Wert (ohne Mehrwertsteuer) eintragen, falls erkennbar, sonst den ausgewiesenen Wert. Zur Orientierung: Gas liegt aktuell um 0,12 EUR/kWh, Fernwärme oft um 0,16 EUR/kWh. Wenn unbekannt, leer lassen — dann rechnen wir mit einem Standardwert.</div>
+<input class="num" type="number" step="any" name="C2">
+</div>
+<div class="q">
+<div class="qt">C3 Wie hoch ist der jährliche Heizenergie-Verbrauch in Kilowattstunden (kWh)?</div>
+<div class="d">Die im Jahr verbrauchte Wärmemenge, in Kilowattstunden (kWh), möglichst nur für die Raumheizung (also ohne Warmwasser, falls getrennt ausgewiesen). Diese Zahl steht auf der Jahresabrechnung. Sie ist genauer als eine Schätzung über die Fläche, weil sie den tatsächlichen Verbrauch dieses konkreten Gebäudes abbildet. Damit lässt sich die mögliche Euro-Ersparnis belastbarer berechnen. Wenn unbekannt oder nicht trennbar, leer lassen — dann schätzen wir aus Fläche und Gebäudetyp.</div>
+<input class="num" type="number" step="any" name="C3">
+</div>
+<div class="q">
+<div class="qt">C4 Wie hoch sind die jährlichen Heizkosten in Euro laut letzter Abrechnung?</div>
+<div class="d">Der Euro-Betrag, der im Jahr für die Heizung gezahlt wird, laut der letzten Jahresabrechnung. Diese Zahl ist nützlich als Gegenprobe zur Verbrauchs- und Preisrechnung und macht greifbar, wie groß die mögliche Ersparnis in Euro überhaupt sein kann (z. B. sind 8 % von 10.000 EUR rund 800 EUR im Jahr). Wenn die Abrechnung auch Warmwasser enthält, hier trotzdem den Gesamt-Heizkostenbetrag eintragen und die nächste Frage beachten.</div>
+<input class="num" type="number" step="any" name="C4">
+</div>
+<div class="q">
+<div class="qt">C5 Enthält die Heizkostenabrechnung auch Warmwasser, und ist der Heizungsanteil getrennt ausgewiesen?</div>
+<div class="d">Oft stehen Heizung und Warmwasser zusammen auf einer Abrechnung. Für unsere Rechnung zählt nur die Raumheizung, weil unsere Ventile nur die Heizkörper regeln, nicht das Warmwasser. Wir müssen also wissen, ob der Warmwasser-Anteil schon herausgerechnet werden kann. Bitte die zutreffende Variante anklicken. &#x27;Getrennt&#x27; heißt, auf der Abrechnung stehen Heizung und Warmwasser mit eigenen Beträgen.</div>
+<label class="opt"><input type="radio" name="C5" value="nur Raumheizung (kein Warmwasser enthalten)"> nur Raumheizung (kein Warmwasser enthalten)</label>
+<label class="opt"><input type="radio" name="C5" value="Heizung + Warmwasser, getrennt ausgewiesen"> Heizung + Warmwasser, getrennt ausgewiesen</label>
+<label class="opt"><input type="radio" name="C5" value="Heizung + Warmwasser, nicht getrennt"> Heizung + Warmwasser, nicht getrennt</label>
+<label class="opt"><input type="radio" name="C5" value="unbekannt"> unbekannt</label>
+</div>
+<div class="q">
+<div class="qt">C6 Wurde an der Heizung bereits ein hydraulischer Abgleich durchgeführt?</div>
+<div class="d">Beim &#x27;hydraulischen Abgleich&#x27; wird der Wasserdurchfluss durch alle Heizkörper so eingestellt, dass jeder gleichmäßig warm wird — sonst werden nahe Heizkörper überversorgt und entfernte bleiben kühl. Das ist eine separate Maßnahme am Heizungssystem (nicht Teil unserer Funkventile), aber wichtig, weil sie die mögliche Energie-Ersparnis ungefähr verdoppelt. Wir fragen, ob er schon gemacht wurde. Wenn ja und das Verfahren bekannt ist: &#x27;Verfahren B&#x27; ist die genauere, raumweise berechnete Variante, &#x27;Verfahren A&#x27; die einfachere Näherung. Bitte die zutreffende Antwort anklicken.</div>
+<label class="opt"><input type="radio" name="C6" value="Ja, Verfahren B (genau/raumweise berechnet)"> Ja, Verfahren B (genau/raumweise berechnet)</label>
+<label class="opt"><input type="radio" name="C6" value="Ja, Verfahren A (vereinfacht)"> Ja, Verfahren A (vereinfacht)</label>
+<label class="opt"><input type="radio" name="C6" value="Ja, Verfahren unbekannt"> Ja, Verfahren unbekannt</label>
+<label class="opt"><input type="radio" name="C6" value="Nein"> Nein</label>
+<label class="opt"><input type="radio" name="C6" value="unbekannt"> unbekannt</label>
+</div>
+<div class="q">
+<div class="qt">C7 <span class="on">✎</span> Gibt es Hinweise auf eine ungleichmäßige Wärmeverteilung (manche Heizkörper kalt, andere überheizt, Ventilgeräusche)?</div>
+<div class="d">Eine &#x27;hydraulische Schieflage&#x27; zeigt sich daran, dass im Winter manche Räume nicht richtig warm werden, während andere überheizen, oder dass Heizkörper/Ventile gluckern oder rauschen. Das ist ein praktisches Zeichen, dass ein hydraulischer Abgleich (vorige Frage) noch fehlt oder nötig wäre — und damit, dass durch ihn zusätzliche Ersparnis möglich ist. Sicher beurteilbar ist das nur vor Ort durch Nachfragen und Anfassen der Heizkörper im Heizbetrieb. Antwort &#x27;Ja&#x27;, wenn solche Hinweise bekannt sind.</div>
+<label class="opt"><input type="radio" name="C7" value="Ja"> Ja</label>
+<label class="opt"><input type="radio" name="C7" value="Nein"> Nein</label>
+</div>
+<div class="q">
+<div class="qt">C8 Wie werden die Räume zeitlich genutzt?</div>
+<div class="d">Wir wollen wissen, wie die Räume über den Tag und die Woche belegt sind. Das bestimmt, wie viel eine zeitgenaue Einzelraum-Regelung überhaupt sparen kann: In Räumen, die nur zeitweise genutzt werden (Büros werktags, Seminarräume nach Plan), kann man außerhalb der Nutzung gezielt absenken und spart viel. Durchgehend bewohnte Räume bieten weniger Sparpotenzial, weil sie sowieso fast immer warm sein müssen. Bitte die zutreffende Hauptnutzung anklicken.</div>
+<label class="opt"><input type="radio" name="C8" value="durchgehend genutzt (Wohnen)"> durchgehend genutzt (Wohnen)</label>
+<label class="opt"><input type="radio" name="C8" value="werktags tagsüber (Büro)"> werktags tagsüber (Büro)</label>
+<label class="opt"><input type="radio" name="C8" value="zeitweise nach Belegungsplan (z. B. Seminarräume)"> zeitweise nach Belegungsplan (z. B. Seminarräume)</label>
+<label class="opt"><input type="radio" name="C8" value="stark unregelmäßig / oft leerstehend"> stark unregelmäßig / oft leerstehend</label>
+<label class="opt"><input type="radio" name="C8" value="gemischt"> gemischt</label>
+</div>
+<div class="q">
+<div class="qt">C9 Wie wird die Heizung heute geregelt?</div>
+<div class="d">Gemeint ist, wie die Raumtemperatur aktuell gesteuert wird, bevor die neuen Funkventile eingebaut werden. Das ist der Ausgangszustand, gegen den die Ersparnis gerechnet wird: Wo heute nur Handräder am Heizkörper sitzen, ist das Sparpotenzial am größten; wo schon teilweise smart oder per Zeitschaltuhr geregelt wird, fällt der Zusatznutzen kleiner aus. Bitte die zutreffende Variante anklicken. &#x27;Nachtabsenkung&#x27; heißt, die zentrale Heizung fährt nachts automatisch herunter.</div>
+<label class="opt"><input type="radio" name="C9" value="nur manuelle Thermostatköpfe (Handräder)"> nur manuelle Thermostatköpfe (Handräder)</label>
+<label class="opt"><input type="radio" name="C9" value="zentrale Nachtabsenkung"> zentrale Nachtabsenkung</label>
+<label class="opt"><input type="radio" name="C9" value="einzelne Zeitschaltuhren"> einzelne Zeitschaltuhren</label>
+<label class="opt"><input type="radio" name="C9" value="teilweise Smart-Steuerung vorhanden"> teilweise Smart-Steuerung vorhanden</label>
+<label class="opt"><input type="radio" name="C9" value="keine aktive Regelung"> keine aktive Regelung</label>
+</div>
+<div class="q">
+<div class="qt">C10 Welche normale Soll-Temperatur (Wohlfühltemperatur) ist für die Räume vorgesehen?</div>
+<div class="d">Die Temperatur in Grad Celsius, auf die die Räume während der Nutzung geheizt werden sollen (z. B. 20 oder 21 Grad in Büros). Diese &#x27;Komforttemperatur&#x27; ist der Ausgangspunkt; abgesenkt wird gegenüber diesem Wert. Bitte eine Zahl in Grad Celsius eintragen. Wenn unterschiedliche Räume verschiedene Werte haben, den üblichsten Wert nehmen.</div>
+<input class="num" type="number" step="any" name="C10">
+</div>
+<div class="q">
+<div class="qt">C11 Auf welche Temperatur soll bei Abwesenheit abgesenkt werden?</div>
+<div class="d">Die niedrigere Temperatur in Grad Celsius, auf die ein Raum heruntergeregelt werden soll, wenn ihn gerade niemand nutzt (z. B. nachts oder am Wochenende, oft um 16–18 Grad). Je größer der Abstand zur normalen Soll-Temperatur (vorige Frage), desto mehr Energie wird gespart. Bitte eine Zahl in Grad Celsius eintragen. Wenn dazu noch keine Vorstellung besteht, leer lassen.</div>
+<input class="num" type="number" step="any" name="C11">
+</div>
+<div class="q">
+<div class="qt">C12 Ist eine Absenkung bei Abwesenheit überhaupt gewünscht bzw. zulässig?</div>
+<div class="d">Manchmal darf oder soll nicht abgesenkt werden — etwa weil Vorschriften eine Mindesttemperatur verlangen, Frostschutz nötig ist oder die Nutzer es nicht wollen. Das ist entscheidend, denn ohne erlaubte Absenkung entfällt ein großer Teil der möglichen Ersparnis. Antwort &#x27;Ja&#x27;, wenn das Absenken bei Abwesenheit grundsätzlich gewünscht und erlaubt ist; &#x27;Nein&#x27;, wenn nicht.</div>
+<label class="opt"><input type="radio" name="C12" value="Ja"> Ja</label>
+<label class="opt"><input type="radio" name="C12" value="Nein"> Nein</label>
+</div>
+<div class="q">
+<div class="qt">C13 <span class="on">✎</span> Gibt es Räume mit dauerhaft abweichendem Heizbedarf, die ausgenommen werden sollen (z. B. Serverraum, Archiv, Lager)?</div>
+<div class="d">Manche Räume müssen aus technischen Gründen anders oder gar nicht geregelt werden: Serverräume sollen eher gekühlt als geheizt werden, Archive/Lager brauchen oft eine konstante, niedrige Temperatur. Solche Räume bringen wenig Sparnutzen und sollen meist außen vor bleiben. Antwort &#x27;Ja&#x27;, wenn es solche Sonderräume gibt. Verlässlich nur durch Begehung/Nachfrage vor Ort.</div>
+<label class="opt"><input type="radio" name="C13" value="Ja"> Ja</label>
+<label class="opt"><input type="radio" name="C13" value="Nein"> Nein</label>
+</div>
+<div class="q">
+<div class="qt">C14 <span class="on">✎</span> Falls ja: Welche Sonderräume sind das, und wie sollen sie behandelt werden?</div>
+<div class="d">Nur ausfüllen, wenn die vorige Frage mit &#x27;Ja&#x27; beantwortet wurde. Bitte kurz auflisten, welche Räume gemeint sind (z. B. &#x27;Serverraum 1. OG, Archiv im Keller&#x27;) und wie sie behandelt werden sollen (ganz ausnehmen, konstant halten, eigene Temperatur). Frei in Worten eintragen.</div>
+<textarea class="txt" name="C14" rows="2"></textarea>
+</div>
+<div class="q">
+<div class="qt">C15 Wie alt ist die Heizungsanlage (in Jahren)?</div>
+<div class="d">Das ungefähre Alter des Heizkessels bzw. der zentralen Heizungsanlage in Jahren. Das ist wichtig, weil eine sehr alte Anlage in absehbarer Zeit ausgetauscht wird — und ein Austausch (z. B. auf eine Wärmepumpe) den Energiepreis und damit die Wirtschaftlichkeit unserer Anlage stark verändern kann. Bitte das geschätzte Alter in Jahren eintragen. Wenn unbekannt, leer lassen.</div>
+<input class="num" type="number" step="any" name="C15">
+</div>
+<div class="q">
+<div class="qt">C16 Steht in den nächsten rund 10 Jahren ein Austausch der Heizung oder ein Wechsel des Energieträgers an?</div>
+<div class="d">Wir rechnen die Wirtschaftlichkeit über einen Zeitraum von etwa 10 Jahren. Wenn in dieser Zeit die Heizung getauscht wird (z. B. von Gas auf Fernwärme oder Wärmepumpe), ändert sich der Energiepreis und damit der Nutzen der Anlage. Antwort &#x27;Ja&#x27;, wenn ein Austausch oder Brennstoffwechsel geplant oder absehbar ist; &#x27;Nein&#x27;, wenn die heutige Heizung voraussichtlich bleibt; &#x27;unbekannt&#x27;, wenn unklar.</div>
+<label class="opt"><input type="radio" name="C16" value="Ja, Austausch/Wechsel geplant oder absehbar"> Ja, Austausch/Wechsel geplant oder absehbar</label>
+<label class="opt"><input type="radio" name="C16" value="Nein, heutige Heizung bleibt voraussichtlich"> Nein, heutige Heizung bleibt voraussichtlich</label>
+<label class="opt"><input type="radio" name="C16" value="unbekannt"> unbekannt</label>
+</div>
+<div class="q">
+<div class="qt">C17 Wer zahlt die Heizkosten — der Betreiber selbst oder werden sie auf Mieter/Nutzer umgelegt?</div>
+<div class="d">Das entscheidet, wer von der Ersparnis tatsächlich profitiert und damit, ob sich die Investition für den Betreiber lohnt. Zahlt der Betreiber die Heizkosten selbst, kommt ihm die Ersparnis direkt zugute. Werden sie voll auf Mieter umgelegt, spart der Mieter — während der Betreiber investieren müsste (sogenanntes &#x27;geteiltes Anreizproblem&#x27;). Bitte die zutreffende Variante anklicken.</div>
+<label class="opt"><input type="radio" name="C17" value="Betreiber zahlt selbst"> Betreiber zahlt selbst</label>
+<label class="opt"><input type="radio" name="C17" value="volle Umlage auf Mieter/Nutzer"> volle Umlage auf Mieter/Nutzer</label>
+<label class="opt"><input type="radio" name="C17" value="teilweise Umlage"> teilweise Umlage</label>
+<label class="opt"><input type="radio" name="C17" value="unbekannt"> unbekannt</label>
+</div>
+<div class="q">
+<div class="qt">C2a Wie hoch ist der jährliche Grund-/Leistungspreis (€ pro Jahr)?</div>
+<div class="d">Auf der Heizkostenrechnung steht neben dem Preis je Kilowattstunde (Arbeitspreis) meist eine feste Jahresgebühr (Grund- oder Leistungspreis, z. B. für Zähler/Anschlussleistung). Diese sinkt durch Energiesparen NICHT — sie ist ein nicht vermeidbarer Festposten. Bitte den jährlichen Festbetrag in Euro eintragen (falls bekannt).</div>
+<input class="num" type="number" step="any" name="C2a">
+</div>
+<div class="q">
+<div class="qt">C9a Gibt es heute schon eine zentrale Nachtabsenkung oder Zeitsteuerung der Heizung?</div>
+<div class="d">Eine Nachtabsenkung fährt die Heizung nachts automatisch herunter. Wenn so etwas bereits existiert, ist die zusätzliche Ersparnis durch Einzelraum-Thermostate kleiner (Richtung 3–4 %). &#x27;Ja&#x27;, wenn die Heizung heute schon zeitgesteuert wird.</div>
+<label class="opt"><input type="radio" name="C9a" value="Ja"> Ja</label>
+<label class="opt"><input type="radio" name="C9a" value="Nein"> Nein</label>
+</div>
+<div class="q">
+<div class="qt">C10a Bei welcher Raumtemperatur und welchem Heizzeitplan gilt Ihr heutiger Verbrauch?</div>
+<div class="d">Wie viel die Regelung spart, hängt vom heutigen Verhalten ab. Bitte kurz beschreiben: übliche Solltemperatur (z. B. 21 °C) und ob/wann heute abgesenkt wird (z. B. nachts / am Wochenende / gar nicht). Ohne diesen Bezug würde die Ersparnis doppelt gezählt.</div>
+<textarea class="txt" name="C10a" rows="2"></textarea>
+</div>
+<div class="q">
+<div class="qt">C12a Wie schätzen Sie die Energiepreis-Entwicklung über die nächsten ~10 Jahre ein?</div>
+<div class="d">Steigende Energiepreise erhöhen die jährliche Ersparnis (jede gesparte kWh ist mehr wert). Bei Gas steigt zusätzlich der CO2-Preis (BEHG) bis 2030 spürbar. Eine grobe Einschätzung genügt.</div>
+<label class="opt"><input type="radio" name="C12a" value="etwa stabil"> etwa stabil</label>
+<label class="opt"><input type="radio" name="C12a" value="leicht steigend"> leicht steigend</label>
+<label class="opt"><input type="radio" name="C12a" value="stark steigend (inkl. CO2-Preis)"> stark steigend (inkl. CO2-Preis)</label>
+<label class="opt"><input type="radio" name="C12a" value="unbekannt"> unbekannt</label>
+</div>
+<h2>D — Heizkörper &amp; Ventile</h2>
+<div class="q">
+<div class="qt">D1 <span class="on">✎</span> Welche Bauart haben die meisten Heizkörper im Gebäude?</div>
+<div class="d">Gemeint ist die äußere Form der Heizkörper — daran hängt, wie schnell und einfach sich am unteren Ende ein funkgesteuerter Ventilkopf anschrauben lässt. Schauen Sie sich an, was im Gebäude überwiegt. &#x27;Plattenheizkörper&#x27; sind die flachen, glatten weißen Platten an der Wand (heute Standard). &#x27;Röhren-/Gliederheizkörper&#x27; sind die alten Modelle aus aneinandergereihten Rippen oder Röhren (Altbau, oft unter dem Fenster). &#x27;Konvektor&#x27; ist ein flacher Kasten mit Lamellen, oft in einer Bodenwanne oder Nische. &#x27;Handtuchheizkörper&#x27; sind die leiterförmigen im Bad. Wenn es bunt gemischt ist, wählen Sie &#x27;gemischt&#x27;. Der Aufwand pro Ventil (install_per_actuator) hängt direkt davon ab.</div>
+<label class="opt"><input type="radio" name="D1" value="Plattenheizkörper (flache weiße Platte)"> Plattenheizkörper (flache weiße Platte)</label>
+<label class="opt"><input type="radio" name="D1" value="Röhren-/Gliederheizkörper (alte Rippen, Altbau)"> Röhren-/Gliederheizkörper (alte Rippen, Altbau)</label>
+<label class="opt"><input type="radio" name="D1" value="Konvektor (Kasten mit Lamellen)"> Konvektor (Kasten mit Lamellen)</label>
+<label class="opt"><input type="radio" name="D1" value="Handtuchheizkörper (Bad, leiterförmig)"> Handtuchheizkörper (Bad, leiterförmig)</label>
+<label class="opt"><input type="radio" name="D1" value="gemischt"> gemischt</label>
+<label class="opt"><input type="radio" name="D1" value="unbekannt"> unbekannt</label>
+</div>
+<div class="q">
+<div class="qt">D2a <span class="on">✎</span> Welches Gewindemaß haben die vorhandenen Heizkörperventile?</div>
+<div class="d">Das Gewindemaß ist die Größe des Anschlussgewindes, auf das der neue Funk-Ventilkopf geschraubt wird — wie die Größe eines Schraubdeckels. Stimmt es nicht, passt der neue Kopf nicht oder es wird ein Adapter nötig (Mehraufwand und Kosten). Sie erkennen es an einem aufgedruckten Maß am Ventil (z. B. &#x27;M30 x 1,5&#x27;) oder am Herstellernamen. Der mit Abstand häufigste Wert ist &#x27;M30 x 1,5&#x27; (heutiger Standard). Wenn nichts erkennbar ist oder es gemischt aussieht, wählen Sie &#x27;gemischt / unbekannt&#x27;. Diese und die nächste Frage gehören zusammen.</div>
+<label class="opt"><input type="radio" name="D2a" value="M30 x 1,5 (Standard)"> M30 x 1,5 (Standard)</label>
+<label class="opt"><input type="radio" name="D2a" value="M28 x 1,5 (Herz/Comap)"> M28 x 1,5 (Herz/Comap)</label>
+<label class="opt"><input type="radio" name="D2a" value="Danfoss RA"> Danfoss RA</label>
+<label class="opt"><input type="radio" name="D2a" value="Danfoss RAVL / RAV"> Danfoss RAVL / RAV</label>
+<label class="opt"><input type="radio" name="D2a" value="anderes Maß"> anderes Maß</label>
+<label class="opt"><input type="radio" name="D2a" value="gemischt / unbekannt"> gemischt / unbekannt</label>
+</div>
+<div class="q">
+<div class="qt">D2b <span class="on">✎</span> Welcher Hersteller steht auf den vorhandenen Ventilen?</div>
+<div class="d">Der Herstellername hilft, das passende Gewinde sicher zu bestimmen — manche Hersteller (z. B. Danfoss) verwenden eigene Anschlüsse, die einen Adapter brauchen. Der Name ist meist klein in den Metallkörper des Ventils geprägt oder steht auf dem alten Thermostatkopf. Lesen Sie ihn an ein paar Heizkörpern ab. Wenn kein Name erkennbar ist, tragen Sie &#x27;unbekannt&#x27; ein.</div>
+<textarea class="txt" name="D2b" rows="2"></textarea>
+</div>
+<div class="q">
+<div class="qt">D3 <span class="on">✎</span> Lassen sich die Ventile noch von Hand bewegen, oder sitzen sie fest?</div>
+<div class="d">Ein Ventilstift, der durch jahrelangen Stillstand oder Kalk fest sitzt, muss vor der Montage gangbar gemacht oder das Ventil sogar getauscht werden — das verteuert den Einbau spürbar. Prüfen lässt sich das stichprobenartig: alten Kopf abschrauben und den kleinen Metallstift in der Mitte vorsichtig hineindrücken — er sollte leicht ein- und durch eine Feder wieder herausfedern. Ist er fest oder bewegt sich nur schwer, ist das Ventil festsitzend. Prüfen Sie einige verschiedene Heizkörper und wählen Sie das Gesamtbild.</div>
+<label class="opt"><input type="radio" name="D3" value="überwiegend gängig"> überwiegend gängig</label>
+<label class="opt"><input type="radio" name="D3" value="teilweise festsitzend"> teilweise festsitzend</label>
+<label class="opt"><input type="radio" name="D3" value="überwiegend festsitzend"> überwiegend festsitzend</label>
+<label class="opt"><input type="radio" name="D3" value="nicht geprüft"> nicht geprüft</label>
+</div>
+<div class="q">
+<div class="qt">D4 <span class="on">✎</span> Sind an den Heizkörpern bereits elektronische oder funkgesteuerte Thermostatköpfe verbaut?</div>
+<div class="d">Wenn schon batteriebetriebene, elektronische Köpfe sitzen (mit Display, Knöpfen oder Funk, z. B. Homematic), ist das Gewinde meist schon passend und der Tausch geht schneller — aber die Altgeräte müssen abgebaut und entsorgt werden. Sie erkennen elektronische Köpfe an einem Batteriefach, einer Digitalanzeige oder Bedienknöpfen statt eines reinen Drehrads mit Zahlen 1–5. Wählen Sie Ja, wenn solche Köpfe an einem nennenswerten Teil der Heizkörper sitzen.</div>
+<label class="opt"><input type="radio" name="D4" value="Ja"> Ja</label>
+<label class="opt"><input type="radio" name="D4" value="Nein"> Nein</label>
+</div>
+<div class="q">
+<div class="qt">D5 <span class="on">✎</span> Wie viele Heizkörper sind durch Verkleidungen, Nischen oder Möbel schwer zugänglich?</div>
+<div class="d">Heizkörper, die hinter einer Holzverkleidung, in einer tiefen Nische oder fest hinter Möbeln/Einbauten verschwinden, kosten beim Einbau deutlich mehr Zeit (freiräumen, demontieren, in beengter Lage schrauben). Zählen Sie die Heizkörper, an deren Ventil man nicht bequem mit der Hand herankommt. Tragen Sie die Stückzahl ein (0, wenn alle frei zugänglich sind). Das ist nur vor Ort sicher feststellbar.</div>
+<input class="num" type="number" step="any" name="D5">
+</div>
+<div class="q">
+<div class="qt">D6 <span class="on">✎</span> Sind die Wände an den Heizkörpern fertig verputzt und nutzbar, oder noch im Rohbau/Sanierungszustand?</div>
+<div class="d">Wir prüfen, ob das Gebäude bezugsfertig ist oder gerade umgebaut wird — in einer laufenden Baustelle (offener Putz, fehlende Böden, Staub) lässt sich nicht sauber montieren, und Termine müssen mit dem Bauablauf abgestimmt werden. &#x27;Ja&#x27; bedeutet: Wände verputzt/gestrichen, Räume normal nutzbar. &#x27;Nein&#x27; bedeutet: Rohbau oder aktive Sanierung am Heizkörperbereich.</div>
+<label class="opt"><input type="radio" name="D6" value="Ja"> Ja</label>
+<label class="opt"><input type="radio" name="D6" value="Nein"> Nein</label>
+</div>
+<div class="q">
+<div class="qt">D2a <span class="on">✎</span> Bei wie vielen Heizkörpern ist vermutlich ein Tausch des ganzen Ventilkörpers nötig (nicht nur des Kopfes)?</div>
+<div class="d">Meist wird nur der drehbare Thermostatkopf abgeschraubt und der Funk-Aktor aufgesetzt — schnell, ohne Eingriff ins Heizungswasser. Bei sehr alten, festsitzenden oder unpassenden Ventilen muss das ganze Ventil getauscht werden: Heizung absperren, Wasser ablassen, Heizungsbauer statt Monteur — deutlich teurer. Schätzung genügt; 0, wenn keine.</div>
+<input class="num" type="number" step="any" name="D2a">
+</div>
+<h2>E — Infrastruktur, Zugang &amp; Logistik</h2>
+<div class="q">
+<div class="qt">E1a Ist im Gebäude bereits eine LoRaWAN-Funk-Basisstation (Gateway) installiert und in Betrieb?</div>
+<div class="d">Das Gateway ist die Funk-Basisstation, die die Signale aller Heizkörper-Ventile empfängt (ähnlich einem WLAN-Router, aber für die LoRaWAN-Funktechnik). Ist bereits eines vorhanden und läuft, entfällt diese Anschaffung und es liegen oft schon Funk-Messwerte vor — ein großer Kostenvorteil. Sie erkennen es als kleinen Kasten mit einer oder zwei Stabantennen, meist an Strom und Netzwerk angeschlossen. Wählen Sie Ja nur, wenn es tatsächlich in Betrieb ist.</div>
+<label class="opt"><input type="radio" name="E1a" value="Ja"> Ja</label>
+<label class="opt"><input type="radio" name="E1a" value="Nein"> Nein</label>
+</div>
+<div class="q">
+<div class="qt">E1b <span class="on">✎</span> An welchem Standort ist das Gateway montiert (Geschoss und Raum)?</div>
+<div class="d">Nur auszufüllen, wenn ein Gateway vorhanden ist. Der genaue Ort entscheidet, wie weit das Funksignal durch die Decken bis zum entferntesten Heizkörper reicht — und damit, ob womöglich ein zweites Gateway nötig wird (der teuerste versteckte Posten). Geben Sie Geschoss und Raum möglichst genau an (z. B. &#x27;3. OG, Flur Mitte&#x27; oder &#x27;EG, Technikraum&#x27;). Den exakten Montagepunkt sollte man vor Ort bestätigen.</div>
+<textarea class="txt" name="E1b" rows="2"></textarea>
+</div>
+<div class="q">
+<div class="qt">E2 <span class="on">✎</span> Gibt es am Gateway-Standort eine dauerhaft nutzbare 230-V-Steckdose?</div>
+<div class="d">Das Gateway braucht ständig Strom (Steckdose, wie für jedes Haushaltsgerät). Fehlt eine in der Nähe, muss ein Elektriker eine Leitung legen — Zusatzkosten und ein extra Termin. Prüfen Sie, ob am vorgesehenen oder vorhandenen Gateway-Platz eine normale Steckdose in Reichweite ist, die nicht über einen Schalter o. Ä. abgeschaltet wird. Wählen Sie &#x27;unklar&#x27;, wenn der Standort noch nicht feststeht.</div>
+<label class="opt"><input type="radio" name="E2" value="vorhanden"> vorhanden</label>
+<label class="opt"><input type="radio" name="E2" value="muss gelegt werden"> muss gelegt werden</label>
+<label class="opt"><input type="radio" name="E2" value="unklar"> unklar</label>
+</div>
+<div class="q">
+<div class="qt">E3 <span class="on">✎</span> Wie wird das Gateway mit dem Internet/Netzwerk verbunden?</div>
+<div class="d">Das Gateway muss seine Daten an die Software weiterreichen und braucht dafür eine Netzanbindung. Am einfachsten ist eine vorhandene Netzwerkdose (LAN, die rechteckige Buchse wie am PC) am Gateway-Standort. Sonst muss ein Netzwerkkabel verlegt werden (Aufwand), oder die Verbindung läuft über WLAN bzw. Mobilfunk (eigene SIM-Karte, laufende Kosten). Wählen Sie, was am Standort verfügbar bzw. geplant ist.</div>
+<label class="opt"><input type="radio" name="E3" value="LAN-Dose vorhanden"> LAN-Dose vorhanden</label>
+<label class="opt"><input type="radio" name="E3" value="Netzwerkkabel muss verlegt werden"> Netzwerkkabel muss verlegt werden</label>
+<label class="opt"><input type="radio" name="E3" value="WLAN"> WLAN</label>
+<label class="opt"><input type="radio" name="E3" value="Mobilfunk geplant"> Mobilfunk geplant</label>
+<label class="opt"><input type="radio" name="E3" value="keine Anbindung vorhanden"> keine Anbindung vorhanden</label>
+</div>
+<div class="q">
+<div class="qt">E4 <span class="on">✎</span> Gibt es in Treppenhaus oder Allgemeinbereichen mehrerer Geschosse jeweils Strom und Netzwerk für ein mögliches zweites Gateway?</div>
+<div class="d">Falls ein einzelnes Gateway nicht durch alle Etagen reicht, braucht ein zweites Gateway wieder Strom und Netzanbindung — bevorzugt in einem zugänglichen Allgemeinbereich (Treppenhaus, Flur) in einem anderen Geschoss. Diese Frage klärt vorab, ob solche Plätze überhaupt bereitstehen. Schauen Sie, in wie vielen Geschossen es im Treppenhaus/Flur sowohl eine Steckdose als auch eine Netzwerkdose gibt. &#x27;ja, in mehreren&#x27; = an mehreren Geschossen vorhanden; &#x27;nur einzelne&#x27; = nur an einer Stelle; &#x27;unklar&#x27; = nicht überprüft.</div>
+<label class="opt"><input type="radio" name="E4" value="ja, in mehreren Geschossen"> ja, in mehreren Geschossen</label>
+<label class="opt"><input type="radio" name="E4" value="nur an einzelnen Stellen"> nur an einzelnen Stellen</label>
+<label class="opt"><input type="radio" name="E4" value="nein"> nein</label>
+<label class="opt"><input type="radio" name="E4" value="unklar"> unklar</label>
+</div>
+<div class="q">
+<div class="qt">E5 Liegen bereits Funk-Messdaten (Empfangsqualität) aus der Gateway-Inbetriebnahme vor?</div>
+<div class="d">Beim Einrichten eines Gateways fallen Messwerte zur Empfangsqualität an — Fachbegriffe RSSI (wie stark/laut das Signal ankommt) und SNR (wie klar es sich vom Hintergrundrauschen abhebt). Liegen diese schon vor, kann man damit abschätzen, ob ein zweites Gateway nötig wird, ohne extra messen zu müssen. Wählen Sie Ja, wenn aus der Inbetriebnahme solche Messwerte dokumentiert sind. Im Zweifel fragen Sie die Person, die das Gateway aufgesetzt hat.</div>
+<label class="opt"><input type="radio" name="E5" value="Ja"> Ja</label>
+<label class="opt"><input type="radio" name="E5" value="Nein"> Nein</label>
+</div>
+<div class="q">
+<div class="qt">E6 Darf die Verkabelung des Gateways sichtbar auf der Wand (Aufputz) verlaufen, oder soll sie unter Putz verschwinden?</div>
+<div class="d">&#x27;Aufputz&#x27; heißt: Kabel und Kabelkanäle liegen sichtbar auf der Wand — schnell und günstig montiert. &#x27;Unterputz&#x27; heißt: Kabel wird in die Wand eingelassen und überputzt — sieht sauberer aus, ist aber deutlich aufwendiger (Stemmen, Verputzen, mehr Zeit und Kosten). Wählen Sie, was der Eigentümer/Betreiber akzeptiert. &#x27;egal / offen&#x27;, wenn keine Vorgabe besteht.</div>
+<label class="opt"><input type="radio" name="E6" value="Aufputz akzeptabel"> Aufputz akzeptabel</label>
+<label class="opt"><input type="radio" name="E6" value="Unterputz gewünscht"> Unterputz gewünscht</label>
+<label class="opt"><input type="radio" name="E6" value="egal / offen"> egal / offen</label>
+</div>
+<div class="q">
+<div class="qt">E7a Welche Auflagen schränken sichtbare Geräte oder bauliche Eingriffe ein?</div>
+<div class="d">Bestimmte Schutz- oder Vertragsregeln können vorschreiben, dass nichts sichtbar verändert oder gebohrt werden darf — das verteuert oder verkompliziert die Montage. Kreuzen Sie alles Zutreffende an. &#x27;Denkmalschutz&#x27; = das Gebäude steht unter Denkmalschutz. &#x27;Eigentümerauflagen&#x27; = der Eigentümer macht Vorgaben (z. B. keine sichtbaren Geräte). &#x27;Mietauflagen&#x27; = der Mietvertrag schränkt Eingriffe ein. Wählen Sie &#x27;keine&#x27;, wenn nichts davon gilt.</div>
+<label class="opt"><input type="checkbox" name="E7a_0" value="Denkmalschutz"> Denkmalschutz</label>
+<label class="opt"><input type="checkbox" name="E7a_1" value="Eigentümerauflagen"> Eigentümerauflagen</label>
+<label class="opt"><input type="checkbox" name="E7a_2" value="Mietauflagen"> Mietauflagen</label>
+<label class="opt"><input type="checkbox" name="E7a_3" value="keine"> keine</label>
+</div>
+<div class="q">
+<div class="qt">E7b Worin bestehen diese Auflagen konkret?</div>
+<div class="d">Nur ausfüllen, wenn bei der vorigen Frage eine Auflage angekreuzt wurde. Beschreiben Sie kurz, was konkret nicht erlaubt ist — etwa &#x27;keine sichtbaren Geräte an der Fassade&#x27;, &#x27;kein Bohren in tragende Wände&#x27;, &#x27;Genehmigung der Denkmalbehörde nötig&#x27;. Diese Angabe hilft einzuschätzen, ob versteckte Montage oder Sondergenehmigungen nötig werden.</div>
+<textarea class="txt" name="E7b" rows="2"></textarea>
+</div>
+<div class="q">
+<div class="qt">E8a Wer organisiert den Zutritt zu den Räumen?</div>
+<div class="d">Für die Montage muss jemand die Türen öffnen bzw. den Zugang freigeben. Wir wollen wissen, an wen man sich dafür wendet — das bestimmt, wie planbar die Installationstermine sind. Tragen Sie die zuständige Stelle/Person ein (z. B. &#x27;Hausmeister&#x27;, &#x27;Hausverwaltung&#x27;, &#x27;Mieter selbst&#x27;, &#x27;Pförtner/Empfang&#x27;).</div>
+<textarea class="txt" name="E8a" rows="2"></textarea>
+</div>
+<div class="q">
+<div class="qt">E8b In welchen Zeitfenstern ist der Zugang möglich?</div>
+<div class="d">Enge Zugangszeiten (z. B. nur werktags 8–16 Uhr, nur nach Voranmeldung) verlängern die Installation und können mehrere Anfahrten nötig machen. Beschreiben Sie, wann gearbeitet werden darf (z. B. &#x27;werktags 7–17 Uhr&#x27;, &#x27;jederzeit nach Absprache&#x27;, &#x27;nur außerhalb der Bürozeiten&#x27;).</div>
+<textarea class="txt" name="E8b" rows="2"></textarea>
+</div>
+<div class="q">
+<div class="qt">E8c Sind manche Räume nur nach Einzelterminierung mit Mietern/Nutzern zugänglich?</div>
+<div class="d">Räume, die man nur einzeln mit dem jeweiligen Mieter/Nutzer terminieren kann, sind der größte Zeitfresser bei der Montage (Absprachen, verpasste Termine, mehrere Anfahrten). Wählen Sie Ja, wenn ein nennenswerter Teil der Räume so abgestimmt werden muss. Bei der nächsten Frage geben Sie dann den Anteil genauer an.</div>
+<label class="opt"><input type="radio" name="E8c" value="Ja"> Ja</label>
+<label class="opt"><input type="radio" name="E8c" value="Nein"> Nein</label>
+</div>
+<div class="q">
+<div class="qt">E9 Welcher Anteil der Räume mit Heizkörpern ist frei zugänglich (in Prozent)?</div>
+<div class="d">&#x27;Frei zugänglich&#x27; heißt: man kommt ohne Einzelabsprache mit einem Mieter hinein (z. B. über den Hausmeister/Generalschlüssel, Allgemeinräume, Büros). Der Rest ist zutrittsgebunden (nur mit einzelnem Mietertermin). Je höher der frei zugängliche Anteil, desto schneller und billiger die Montage. Tragen Sie eine Prozentzahl von 0 bis 100 ein (z. B. 70, wenn etwa sieben von zehn Räumen ohne Mieterabsprache betretbar sind).</div>
+<input class="num" type="number" step="any" name="E9">
+</div>
+<div class="q">
+<div class="qt">E10 <span class="on">✎</span> Steht ein abschließbarer Lager-/Stellplatz für die Hardware während der Installation zur Verfügung?</div>
+<div class="d">Die Ventile werden in Wellen montiert; in der Zeit muss die gelieferte Hardware sicher und trocken gelagert werden (sonst Diebstahl-/Schadensrisiko oder tägliches Hin- und Hertransportieren). Gemeint ist ein abschließbarer Raum, Schrank oder Container im oder am Gebäude. Wählen Sie Ja, wenn so ein Platz bereitgestellt werden kann. Vor Ort zu bestätigen.</div>
+<label class="opt"><input type="radio" name="E10" value="Ja"> Ja</label>
+<label class="opt"><input type="radio" name="E10" value="Nein"> Nein</label>
+</div>
+<div class="q">
+<div class="qt">E11 Läuft auf dem WHZ-Server bereits eine ChirpStack-Netzwerksoftware, die dieses Gebäude mitverwalten kann?</div>
+<div class="d">ChirpStack ist die zentrale Software (der &#x27;Netzwerkserver&#x27;), die alle Funk-Ventile verwaltet und ihre Daten entschlüsselt — gewissermaßen das Gehirn des Netzes. Läuft sie bereits, fallen für dieses Gebäude keine Einrichtungs- und Hosting-Kosten an (sie gelten als bereits bezahlt). Muss dagegen eine eigene Instanz aufgesetzt werden, entsteht einmaliger Mehraufwand. Wählen Sie Ja, wenn die laufende Software das Gebäude einfach mit aufnehmen kann; im Zweifel fragen Sie den IT-Verantwortlichen der WHZ.</div>
+<label class="opt"><input type="radio" name="E11" value="Ja"> Ja</label>
+<label class="opt"><input type="radio" name="E11" value="Nein"> Nein</label>
+</div>
+<div class="q">
+<div class="qt">E8a Wie viele Räume mit Heizkörper müssen für die Montage betreten werden?</div>
+<div class="d">Für jeden Heizkörper muss der Raum zugänglich sein. Die Zahl der zu betretenden Räume (nicht der Geräte) bestimmt den Terminier-Aufwand — organisatorisch der teuerste Teil, besonders bei vermieteten Wohnungen. Falls unklar: Anzahl der Räume mit Heizkörper eintragen.</div>
+<input class="num" type="number" step="any" name="E8a">
+</div>
+<div class="q">
+<div class="qt">E8b Mit welcher Quote rechnen Sie, dass Räume beim ersten Termin NICHT zugänglich sind (No-Show)?</div>
+<div class="d">Erfahrungsgemäß sind nicht alle Räume beim ersten Anlauf zugänglich (niemand da, Schlüssel fehlt). Diese Nachzügler erzeugen einen zweiten Anfahrtstermin. Übliche Größenordnung 10–20 %.</div>
+<label class="opt"><input type="radio" name="E8b" value="unter 10 %"> unter 10 %</label>
+<label class="opt"><input type="radio" name="E8b" value="10–20 %"> 10–20 %</label>
+<label class="opt"><input type="radio" name="E8b" value="über 20 %"> über 20 %</label>
+<label class="opt"><input type="radio" name="E8b" value="unbekannt"> unbekannt</label>
+</div>
+<h2>F — Funk &amp; Abdeckung</h2>
+<div class="q">
+<div class="qt">F1 <span class="on">✎</span> Aus welchem Material bestehen die Geschossdecken?</div>
+<div class="d">Die Geschossdecke ist die waagerechte Trennfläche zwischen zwei Etagen (der Boden des oberen / die Decke des unteren Raums). Sie ist für die Funkabdeckung der WICHTIGSTE Faktor, weil das Funksignal von einem zentralen Gateway durch alle Decken nach oben/unten durchdringen muss. Entscheidend ist die Stahlbewehrung: bewehrter Stahlbeton hat ein engmaschiges Stahlgitter, das wie ein Drahtkäfig (Faradaykäfig) wirkt und Funk pro Etage stark dämpft — viel stärker als Beton ohne Stahl, Holzbalken oder Ziegelgewölbe. So erkennen Sie es: moderne/DDR-Bauten = meist bewehrter Stahlbeton; Altbau = oft Holzbalken oder Ziegelgewölbe (im Keller sichtbar). Nur vor Ort sicher feststellbar.</div>
+<label class="opt"><input type="radio" name="F1" value="Stahlbeton bewehrt"> Stahlbeton bewehrt</label>
+<label class="opt"><input type="radio" name="F1" value="Beton unbewehrt"> Beton unbewehrt</label>
+<label class="opt"><input type="radio" name="F1" value="Holzbalken"> Holzbalken</label>
+<label class="opt"><input type="radio" name="F1" value="Ziegel-Gewölbe"> Ziegel-Gewölbe</label>
+<label class="opt"><input type="radio" name="F1" value="gemischt"> gemischt</label>
+<label class="opt"><input type="radio" name="F1" value="unbekannt"> unbekannt</label>
+</div>
+<div class="q">
+<div class="qt">F2 <span class="on">✎</span> Sind die Geschossdecken durchgehend, oder gibt es vertikale Öffnungen, durch die Funk zwischen den Etagen &#x27;durchschlüpfen&#x27; kann?</div>
+<div class="d">Wenn die Decken durchgehend massiv sind, muss das Funksignal sie überall durchdringen. Gibt es dagegen senkrechte Öffnungen über mehrere Etagen — ein offenes Treppenauge (der Luftraum in der Mitte einer offenen Treppe), Installationsschächte (senkrechte Kanäle für Rohre/Kabel), offene Galerien oder Wanddurchbrüche — kann das Signal hier ungehindert nach oben/unten gelangen und umgeht die dämpfenden Decken. Solche &#x27;Funk-Bypässe&#x27; können ein zweites Gateway überflüssig machen. So erkennen Sie es: Stehen Sie im Treppenhaus und schauen Sie, ob Sie mehrere Etagen weit nach oben/unten sehen. Nur vor Ort beurteilbar.</div>
+<label class="opt"><input type="checkbox" name="F2_0" value="durchgehend (keine Öffnungen)"> durchgehend (keine Öffnungen)</label>
+<label class="opt"><input type="checkbox" name="F2_1" value="offenes Treppenauge"> offenes Treppenauge</label>
+<label class="opt"><input type="checkbox" name="F2_2" value="Installationsschächte"> Installationsschächte</label>
+<label class="opt"><input type="checkbox" name="F2_3" value="offene Galerien"> offene Galerien</label>
+<label class="opt"><input type="checkbox" name="F2_4" value="mehrere Wanddurchbrüche"> mehrere Wanddurchbrüche</label>
+</div>
+<div class="q">
+<div class="qt">F3 <span class="on">✎</span> Sind die Innenwände überwiegend massiv oder leicht?</div>
+<div class="d">Innenwände sind die Trennwände zwischen Räumen auf derselben Etage. Massive Innenwände (Beton, Ziegel, Kalksandstein) dämpfen Funk deutlich; leichte Trennwände (Gipskarton/Trockenbau auf Metall- oder Holzständern, mit Hohlraum) lassen Funk fast ungehindert durch. Das bestimmt, wie weit ein Gateway innerhalb einer Etage reicht. So erkennen Sie es: Klopfen Sie an die Wand — massiv klingt dumpf und fest, leicht klingt hohl. Ein Nagel/Dübel geht in Leichtbau leicht hinein, in Massivwand nicht. Nur vor Ort beurteilbar.</div>
+<label class="opt"><input type="radio" name="F3" value="überwiegend massiv (Beton / Ziegel)"> überwiegend massiv (Beton / Ziegel)</label>
+<label class="opt"><input type="radio" name="F3" value="überwiegend leicht (Trockenbau)"> überwiegend leicht (Trockenbau)</label>
+<label class="opt"><input type="radio" name="F3" value="gemischt"> gemischt</label>
+<label class="opt"><input type="radio" name="F3" value="unbekannt"> unbekannt</label>
+</div>
+<div class="q">
+<div class="qt">F4 <span class="on">✎</span> Welche größeren metallischen Bauteile oder Funk-Störquellen befinden sich auf der Funkstrecke?</div>
+<div class="d">Große Metallflächen reflektieren oder blockieren Funk und können einzelne Bereiche abschatten; bestimmte Geräte stören zusätzlich das genutzte 868-MHz-Band. Kreuzen Sie alles an, was im Gebäude vorkommt — Mehrfachnennung möglich. Erläuterungen: Aufzugsschacht = meist ein Metallkasten, der Funk komplett blockiert; Metallständerwände = Trockenbauwände mit Metallprofilen; Blechverkleidung/-fassade = Metallpaneele an Wand/Fassade; metallbedampfte Dämmung = Dämmung mit Alu-Folie (siehe Frage A9); Klimakanäle = große Metall-Luftkanäle unter der Decke; &#x27;868-MHz-Störer&#x27; = Geräte, die im selben Funkband senden (manche Funk-Steckdosen, Babyfone, Wetterstationen). Wählen Sie &#x27;keine&#x27;, wenn nichts davon zutrifft. Nur vor Ort vollständig erfassbar.</div>
+<label class="opt"><input type="checkbox" name="F4_0" value="keine"> keine</label>
+<label class="opt"><input type="checkbox" name="F4_1" value="Aufzugsschacht"> Aufzugsschacht</label>
+<label class="opt"><input type="checkbox" name="F4_2" value="Metallständerwände"> Metallständerwände</label>
+<label class="opt"><input type="checkbox" name="F4_3" value="Blechverkleidung / Blechfassade"> Blechverkleidung / Blechfassade</label>
+<label class="opt"><input type="checkbox" name="F4_4" value="metallbedampfte Dämmung"> metallbedampfte Dämmung</label>
+<label class="opt"><input type="checkbox" name="F4_5" value="Klimakanäle"> Klimakanäle</label>
+<label class="opt"><input type="checkbox" name="F4_6" value="868-MHz-Störquellen"> 868-MHz-Störquellen</label>
+<label class="opt"><input type="checkbox" name="F4_7" value="andere große Metallbauteile"> andere große Metallbauteile</label>
+</div>
+<div class="q">
+<div class="qt">F5 <span class="on">✎</span> Wie viele Stahl-Brandschutztüren (z. B. T30 / T90) liegen auf der Funkstrecke zwischen Gateway und den entferntesten Heizkörpern?</div>
+<div class="d">Brandschutztüren sind schwere, oft selbstschließende Türen aus Stahl, die im Brandfall Abschnitte abriegeln (Kennzeichnung meist T30 oder T90 auf einem Schild am Türblatt oder Rahmen). Jede solche Stahltür dämpft das Funksignal zusätzlich, ähnlich einer Metallwand. Zählen Sie, wie viele davon zwischen dem Gateway-Standort und den am weitesten entfernten Heizkörpern im Weg stehen (typisch in Fluren, Treppenhäusern, zwischen Brandabschnitten). Tragen Sie die Anzahl ein (0, wenn keine). Nur durch Begehung zählbar.</div>
+<input class="num" type="number" step="any" name="F5">
+</div>
+<div class="q">
+<div class="qt">F6a <span class="on">✎</span> Wie viele Geschosse liegen zwischen dem Gateway und dem entferntesten zu regelnden Heizkörper?</div>
+<div class="d">Das Gateway ist die Funk-Basisstation; der entfernteste Heizkörper ist der ungünstigste Fall für die Funkverbindung. Zählen Sie, durch wie viele Geschossdecken das Signal zwischen Gateway und diesem Heizkörper hindurch muss (z. B. Gateway im 1. OG, entferntester Heizkörper im 5. OG = 4 Decken/Geschosse Abstand). Jede Etage kostet Funkreserve. Tragen Sie die Anzahl der dazwischenliegenden Geschosse ein. Nur durch Begehung ermittelbar.</div>
+<input class="num" type="number" step="any" name="F6a">
+</div>
+<div class="q">
+<div class="qt">F6b <span class="on">✎</span> Wie groß ist die horizontale Distanz (in Metern) zwischen dem Gateway und dem entferntesten zu regelnden Heizkörper?</div>
+<div class="d">Gemeint ist die waagerechte Entfernung &#x27;Luftlinie&#x27; innerhalb der Etage(n) zwischen der Funk-Basisstation (Gateway) und dem am weitesten entfernten Heizkörper, in Metern. Größere Distanz schwächt das Signal zusätzlich. So bestimmen Sie es: grob aus dem Grundriss abmessen oder vor Ort abschätzen/abschreiten (ein Schritt ≈ 0,7 m). Tragen Sie die Distanz in Metern ein. Nur durch Begehung verlässlich.</div>
+<input class="num" type="number" step="any" name="F6b">
+</div>
+<div class="q">
+<div class="qt">F6c <span class="on">✎</span> Wie viele Innenwände liegen auf dieser Funkstrecke zwischen Gateway und entferntestem Heizkörper?</div>
+<div class="d">Zählen Sie, durch wie viele Innenwände (Trennwände zwischen Räumen, siehe Frage F3) das Funksignal auf dem Weg vom Gateway zum entferntesten Heizkörper hindurch muss. Jede Wand — besonders massive — dämpft das Signal. So ermitteln Sie es: den ungünstigsten Weg im Grundriss nachzeichnen und die durchquerten Wände zählen. Tragen Sie die Anzahl ein. Nur durch Begehung/Grundriss-Begang ermittelbar.</div>
+<input class="num" type="number" step="any" name="F6c">
+</div>
+<div class="q">
+<div class="qt">F7 <span class="on">✎</span> Reicht die gemessene Funkreserve am entferntesten Heizkörper auch im langsamsten, robustesten Sendemodus (SF12) noch aus?</div>
+<div class="d">Dies ist die entscheidende Messung für die Frage &#x27;reicht ein Gateway oder braucht es ein zweites&#x27;. Mit einem Test-Funkgerät (Test-Node) wird am entferntesten Heizkörper die Empfangsqualität gemessen: RSSI (Empfangsstärke) und SNR (Abstand zum Rauschen). &#x27;SF12&#x27; ist der robusteste, langsamste Sendemodus — wenn selbst er noch durchkommt, ist Reserve da. Faustregel: Das Signal muss über etwa −137 dBm liegen, plus eine Sicherheitsmarge (Fade-Margin) für zuverlässigen Betrieb. &#x27;Ja&#x27; = genug Reserve (ein Gateway reicht), &#x27;Nein&#x27; = Reserve aufgebraucht (zweites Gateway wahrscheinlich nötig). Nur mit einer echten Vor-Ort-Messung mit Test-Node feststellbar.</div>
+<label class="opt"><input type="radio" name="F7" value="Ja"> Ja</label>
+<label class="opt"><input type="radio" name="F7" value="Nein"> Nein</label>
+</div>
+<div class="q">
+<div class="qt">F8 <span class="on">✎</span> Falls die Funkreserve nicht ausreicht: Gibt es einen geeigneten Standort für ein zweites Gateway?</div>
+<div class="d">Nur relevant, wenn die vorige Messung (F7) zeigt, dass ein Gateway nicht reicht. Ein zweites Gateway braucht drei Dinge am Standort: eine dauerhafte Stromversorgung (Steckdose), eine Netzanbindung (LAN-Kabel, WLAN oder Mobilfunk) und eine möglichst zentrale Lage, von der aus es die unterversorgten Bereiche erreicht (z. B. in einem mittleren Geschoss). &#x27;Ja&#x27; = ein solcher Standort existiert; &#x27;Nein&#x27; = kein passender Standort gefunden (das wäre ein ernstes Problem). Nur durch Begehung beurteilbar.</div>
+<label class="opt"><input type="radio" name="F8" value="Ja"> Ja</label>
+<label class="opt"><input type="radio" name="F8" value="Nein"> Nein</label>
+</div>
+<div class="q">
+<div class="qt">F9 Ist das Gebäude in funktechnisch getrennte Bauteile oder Flügel gegliedert (z. B. durch durchgehende Brandwände)?</div>
+<div class="d">Manche Gebäude bestehen aus mehreren Bauteilen/Flügeln, die durch durchgehende Brandwände (massive, vom Keller bis zum Dach reichende Trennwände) voneinander getrennt sind. Solche Wände dämpfen Funk so stark, dass jeder Flügel praktisch ein eigenes Funknetz braucht — was die Zahl der nötigen Gateways direkt erhöht. So erkennen Sie es: ein langgestreckter oder L-/U-förmiger Bau mit erkennbaren Gebäudefugen oder einem klaren &#x27;Knick&#x27; deutet auf mehrere Bauteile hin; durchgehende Brandwände findet man im Grundriss als durchlaufende dicke Linien. Wählen Sie, in wie viele getrennte Baukörper das Gebäude gegliedert ist.</div>
+<label class="opt"><input type="radio" name="F9" value="ein zusammenhängender Baukörper"> ein zusammenhängender Baukörper</label>
+<label class="opt"><input type="radio" name="F9" value="zwei Flügel"> zwei Flügel</label>
+<label class="opt"><input type="radio" name="F9" value="drei oder mehr Flügel"> drei oder mehr Flügel</label>
+<label class="opt"><input type="radio" name="F9" value="unbekannt"> unbekannt</label>
+</div>
+<h2>G — Kaufmännisches &amp; Rahmenbedingungen</h2>
+<div class="q">
+<div class="qt">G1 Kann der Betreiber die Mehrwertsteuer als Vorsteuer zurückholen (vorsteuerabzugsberechtigt)?</div>
+<div class="d">Unternehmen/Betriebe mit umsatzsteuerpflichtigen Einnahmen holen die in Rechnungen enthaltene Mehrwertsteuer beim Finanzamt zurück — für sie zählt der Netto-Preis. Nicht vorsteuerabzugsberechtigte Stellen zahlen brutto (≈ 19 % mehr). Im Zweifel die Buchhaltung fragen.</div>
+<label class="opt"><input type="radio" name="G1" value="ja (Netto rechnen)"> ja (Netto rechnen)</label>
+<label class="opt"><input type="radio" name="G1" value="nein (Brutto)"> nein (Brutto)</label>
+<label class="opt"><input type="radio" name="G1" value="unbekannt"> unbekannt</label>
+</div>
+<div class="q">
+<div class="qt">G2 Soll eine Förderung (z. B. BEG/BAFA für den hydraulischen Abgleich) eingerechnet werden?</div>
+<div class="d">Für den hydraulischen Abgleich und manche Maßnahmen gibt es staatliche Zuschüsse (oft ~15–20 %). Ob förderfähig, klärt ein Fördermittel-Check. Hier nur, ob wir eine Förderung im Szenario berücksichtigen.</div>
+<label class="opt"><input type="radio" name="G2" value="ja, einrechnen"> ja, einrechnen</label>
+<label class="opt"><input type="radio" name="G2" value="nein"> nein</label>
+<label class="opt"><input type="radio" name="G2" value="noch zu prüfen"> noch zu prüfen</label>
+</div>
+<div class="q">
+<div class="qt">G3 Falls hydraulischer Abgleich geplant: Verfahren A (rechnerisch) oder B (raumweise gemessen) — und sind voreinstellbare Ventile / eine neue Pumpe nötig?</div>
+<div class="d">Verfahren A schätzt rechnerisch, B misst raumweise (genauer, oft gefordert). Fehlen voreinstellbare Ventile oder eine Hocheffizienzpumpe, kommen einmalige Zusatzkosten je Gebäude hinzu. Falls kein Abgleich geplant: &#x27;kein Abgleich&#x27;.</div>
+<label class="opt"><input type="radio" name="G3" value="Verfahren A"> Verfahren A</label>
+<label class="opt"><input type="radio" name="G3" value="Verfahren B"> Verfahren B</label>
+<label class="opt"><input type="radio" name="G3" value="noch offen"> noch offen</label>
+<label class="opt"><input type="radio" name="G3" value="kein Abgleich"> kein Abgleich</label>
+</div>
+<div class="q">
+<div class="qt">G4 Welche Batterie-/Gerätelebensdauer gibt der Hersteller des gewählten Thermostats an (Jahre)?</div>
+<div class="d">Die Investition muss sich amortisieren, BEVOR Geräte/Batterien ersetzt werden müssen. Herstellerangaben (oft 5–10 Jahre) sind idealisiert; diese Zahl ist die Obergrenze für einen sinnvollen Amortisationshorizont.</div>
+<input class="num" type="number" step="any" name="G4">
+</div>
+<div class="q">
+<div class="qt">G5 Aus wessen Sicht wird gerechnet — investiert der Betreiber und spart selbst, oder investiert er, während ein Mieter spart (geteilter Nutzen)?</div>
+<div class="d">Sind Investor und Nutznießer dieselbe Stelle (Eigennutzung), ist die Rechnung eindeutig. Bei Vermietung zahlt oft der Eigentümer die Technik, während der Mieter die Heizkosten spart — dann braucht es z. B. eine Umlage, sonst rechnet es sich für den Investor nicht.</div>
+<label class="opt"><input type="radio" name="G5" value="Betreiber investiert und spart selbst"> Betreiber investiert und spart selbst</label>
+<label class="opt"><input type="radio" name="G5" value="Betreiber investiert, Mieter spart (Split)"> Betreiber investiert, Mieter spart (Split)</label>
+<label class="opt"><input type="radio" name="G5" value="unklar"> unklar</label>
+</div>
+<div class="actions"><button type="button" onclick="window.print()">Drucken / als PDF speichern</button></div>
+</form></body></html>
