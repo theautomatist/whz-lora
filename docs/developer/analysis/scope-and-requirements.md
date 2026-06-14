@@ -184,3 +184,21 @@ Blaue").
 - **RQ7 → F (buy side):** turnkey commercial smart-heating systems (Homematic IP
   and alternatives) — what is included, protocol, per-building cost, recurring /
   cloud cost, administration model — as the make-vs-buy benchmark.
+
+## 8. Geplante Folgephasen (nach der Report-Überarbeitung)
+
+PO-Direktive 2026-06-14. Nach der Verständlichkeits-Überarbeitung von Report A/B
+(`report-a-prozesskette`, `report-b-kostenanalyse`) sind zwei Schritte vorgesehen:
+
+1. **Fragenkatalog** — ein Workflow leitet aus Report A + B ab, *welche
+   Informationen nötig sind, um für ein konkretes Gebäude eine verbindliche
+   Kostenkalkulation zu erstellen*. Beispiel-Fragen: Räume gesamt; Größe je Raum;
+   Heizkörper je Raum; Heizkörper gesamt; Baumaterial; Strom im Treppenhaus
+   vorhanden; Wände verputzt; Auf-/Unterputz; Entfernung Raum ↔ Treppenhaus; …
+2. **Entscheidungs- & Messplan-System** — ein Workflow entwickelt aus dem
+   *beantworteten* Katalog ein System, das **Entscheidungen ableitet** (z. B.
+   „Raum X liegt weit vom Treppenhaus → Begehung nötig; der Techniker bringt
+   1 Gateway + 3–5 Aktoren zum Funktest mit, um die Abdeckung zu prüfen und zu
+   klären, ob ein Zweit-Gateway oder eine andere Antenne nötig ist"). Es markiert,
+   **welche Punkte der Katalog nicht abdecken kann** und vor Ort gemessen werden
+   müssen → ein **Messplan / Validierungsplan** für die physische Welt.
