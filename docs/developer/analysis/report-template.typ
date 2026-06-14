@@ -14,6 +14,11 @@
   spacing: 10pt,
 )[#if title != none [#text(weight: "bold")[#title] \ ]#body]
 
+// "In plain words" helper — a light teal box restating a concept for non-experts
+#let plain(body) = block(fill: rgb("#edf5f0"), inset: (x: 9pt, y: 7pt), radius: 3pt, width: 100%, spacing: 9pt)[
+  #text(style: "italic", size: 9pt)[#text(weight: "bold", fill: teal)[In einfachen Worten: ]#body]
+]
+
 // Table header cell helper
 #let th(b) = table.cell(fill: soft)[#text(size: 8pt, weight: "bold", fill: muted)[#upper(b)]]
 
