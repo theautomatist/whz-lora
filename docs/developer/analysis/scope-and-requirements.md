@@ -195,6 +195,9 @@ PO-Direktive 2026-06-14. Nach der Verständlichkeits-Überarbeitung von Report A
    Kostenkalkulation zu erstellen*. Beispiel-Fragen: Räume gesamt; Größe je Raum;
    Heizkörper je Raum; Heizkörper gesamt; Baumaterial; Strom im Treppenhaus
    vorhanden; Wände verputzt; Auf-/Unterputz; Entfernung Raum ↔ Treppenhaus; …
+   **✅ Erledigt:** [`fragenkatalog.md`](fragenkatalog.md) / `fragenkatalog.pdf`
+   (Abschnitte A–F, ~50 Fragen, je an einen Modellparameter gekoppelt, vor-Ort-Punkte
+   markiert).
 2. **Entscheidungs- & Messplan-System** — ein Workflow entwickelt aus dem
    *beantworteten* Katalog ein System, das **Entscheidungen ableitet** (z. B.
    „Raum X liegt weit vom Treppenhaus → Begehung nötig; der Techniker bringt
