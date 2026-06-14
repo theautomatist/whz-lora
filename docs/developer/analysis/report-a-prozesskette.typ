@@ -49,6 +49,13 @@ Gasheizung und bereits installiertem Gateway. Daraus ergeben sich *Jahresnutzen 
 
 #figure(image("assets/process-flow.svg", width: 100%), caption: [Acht Schritte von der Anfrage bis zum Betrieb; Balkenbreite ∝ Kosten je Schritt.])
 
+#callout(color: accent)[
+  *Hinweis:* Die acht Schritte hier sind die *kostenrelevante Sicht*. Das vollständige
+  Geschäftsprozessmodell des Betriebs — *45 Schritte, 7 Rollen/Swimlanes*, inkl. Beschaffung,
+  Hersteller-Schlüsselliste, Wareneingang, Ein-/Auslagern, Kommissionierung, DOA/RMA und
+  Abrechnung — steht als Swimlane in `process-model.md` / `process-swimlane.pdf`.
+]
+
 Die Lieferung läuft in acht Schritten ab. *T = Personentag* (ein Arbeitstag einer Person).
 
 #table(
