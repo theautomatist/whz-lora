@@ -156,3 +156,27 @@ Fernwärme building (€0.16) has ~30 % more annual benefit than a gas one (€0
 and can flip a borderline Altbau from ✗ to ✓. Still soft: bulk TRV pricing is
 login-gated (estimated −10–15 %), install is a batch figure, Fernwärme is a local
 monopoly price (factor-2 spread) — a real WHZ quote hardens all three.
+
+## 11. Open refinements (WF3 audit)
+
+For a **binding** (not preliminary) verdict, several single numbers must be decomposed
+into their drivers — recorded here so the model stays honest:
+
+- **Savings net, not gross:** gross band − rebound (20–30 %) = net ~6–9 % (Altbau); run the
+  *net* band through the payback, relative to the declared baseline control state (not the
+  vendor's inflated baseline).
+- **Energy price:** working-price band (gas 0.09–0.13 / district heating 0.08–0.20) **plus**
+  a separate base fee (not reducible by savings) + price trajectory (CO₂/BEHG) + generation
+  efficiency (1 saved kWh of heat avoids >1 kWh of fuel at an ~85 % boiler).
+- **Install (§10):** model as a *sum* (mobilisation + swap labour + provisioning +
+  p(proprietary) × adapter/valve-body surcharge), not a flat figure.
+- **OPEX:** a driver model instead of flat lines (battery 4–10 yr; monitoring bottom-up
+  ~200–400 €/yr; software maintenance and incident handling as own lines; hosting case-dependent).
+- **m² per radiator:** a residential/office pair, band 15–25; for office/university a
+  "radiator-heated?" gate + radiator count instead of area/20.
+- **RF figures:** flag every value as 868-MHz **extrapolated**; replace the categorical
+  RF-class token with a range-based sizing until measured. Calibration: the
+  [test concept](test-concept.pdf) measures dB/floor, Low-E attenuation and the SF12 reserve
+  at the real new building.
+- **Payback:** also report *discounted* (3 %); use device lifetime (4–10 yr) as a cut-off
+  ("payback below the shortest plausible lifetime").

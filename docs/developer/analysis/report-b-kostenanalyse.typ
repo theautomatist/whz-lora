@@ -101,6 +101,31 @@ Hier entscheiden nicht die Geräte, sondern wie viel Energie gespart wird und wo
 WHZ-Stundenkosten und zählt nichts doppelt, was schon bezahlt ist, fällt der Payback ehrlicher —
 und gehört immer als Spanne genannt, nie als eine Zahl.]
 
+= Verfeinerungen für ein verbindliches Angebot
+
+Die Zahlen oben sind eine *Vorkalkulation mit Punktwerten*. Für ein belastbares Angebot
+müssen mehrere Annahmen in ihre Treiber zerlegt werden — die wichtigsten aus dem Audit:
+
+#table(
+  columns: (1.1fr, 1.8fr, 1.1fr),
+  stroke: 0.5pt + rulec, inset: 6pt, align: left,
+  table.header(th("Annahme (bisher)"), th("Zerlegung / Korrektur"), th("Wirkung")),
+  [Einsparquote 10 % (brutto)], [Brutto 8–12 % *minus Rebound 20–30 %* = *netto ~6–9 %*; das Netto-Band durch den Payback schicken, nicht den Bruttopunkt], [netto nahe DE-Break-even 5,7–7,7 % → Urteil enger],
+  [Energiepreis (Punkt)], [*Arbeitspreis*-Band (Gas 0,09–0,13 / Fernwärme 0,08–0,20); *Grundpreis* separat (nicht vom Nutzen abziehbar); Preispfad CO₂/BEHG], [Fernwärme-Payback als Spanne ~5–13 J.],
+  [Montage 40 €/HK (pauschal)], [*Summe*: fixe Mobilisierung + Tauscharbeit + Provisioning + p(proprietär) × Adapter-/Ventilkörper-Aufschlag (Heizungsbauer)], [Eventualposition statt Pauschale],
+  [OPEX (drei Pauschalen)], [*Treibermodell*: Batterie (Material+Arbeit+Zutritt, 4–10 a), Monitoring bottom-up (~200–400 €/a), Software-Pflege/Störung eigene Posten, Hosting fallabhängig], [OPEX-Sensitivität ausweisen],
+  [Aktorpreis 70 € (Punkt)], [geschlossenes *Band 50–82 €* durch den Kern-Payback (→ ~4,1–5,5 J.); Gerät × (1−Rabatt) + Adapter + Schwund + Versand], [„~110 € konstant" prüfbedürftig],
+  [— (fehlt bisher)], [*Kaufmännisches:* USt-Flag (alle Quellen netto), Marge/Risikozuschlag als Angebotsposition, Gewährleistungs-Rückstellung, *Förderung BEG/BAFA* (pre/post-subsidy)], [Brutto vs. Netto; Verdict-Szenarien],
+  [Payback einfach], [zusätzlich *diskontiert (3 %)*; *Gerätelebensdauer 4–10 a* als Abbruchkriterium („Payback unter kürzester Lebensdauer")], [Re-Investitionswelle ~1.600 € im Horizont],
+  [Referenz „Mittel-/Altbau"], [eindeutig einem *Archetyp (A–D)* zuordnen; Heizintensität als eigene Tornado-Zeile; ggf. auf *D (institutionell, 140 kWh/m²·a)* — das wahrscheinliche WHZ-Gebäude], [Konsistenz Intensität ↔ Quotenband],
+)
+#callout(title: "Die wichtigste Korrektur", color: warn)[
+  Die Einsparquote *netto statt brutto* durch den Payback schicken (den Rebound rechnerisch
+  einsetzen, nicht nur erwähnen). Das ist der größte Ehrlichkeits-Hebel — er rückt das Urteil
+  dicht an die Break-even-Grenze und ersetzt jeden Einzel-Payback durch ein *Band*.
+]
+#plain[Die Punktwerte oben sind als Vorkalkulation richtig; für ein *bindendes* Angebot gilt: erst diese Treiber am konkreten Gebäude erheben (Fragenkatalog), dann als Bandbreite rechnen.]
+
 = Top-Chancen (nach Einfluss)
 
 + *Keinen einzelnen Payback mehr berichten.* Die Einsparquote ist die dominante Schraube. Die angesetzten 10 % liegen für einen echten Altbau (Band 8–12 %) in der *Band-Mitte* und passen damit eher zu einem bereits teilsanierten Gebäude. Vor jedem „wirtschaftlich"-Urteil: am Archetyp ankern, Rebound-Abschlag, *am Testbed kalibrieren*.

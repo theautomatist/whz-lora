@@ -187,3 +187,13 @@ Drei Befunde verdienen eine Übersetzung:
 #plain[Man kann denselben Service deutlich günstiger liefern, ohne etwas wegzulassen — vor
 allem, indem man Routinearbeit automatisiert und nichts doppelt berechnet. Damit fällt der
 Payback von ~10,3 auf ~7–8 Jahre.]
+
+= Verfeinerungen für ein verbindliches Angebot
+
+Aus dem Vollständigkeits-Audit — was Report A für ein *bindendes* Angebot noch braucht:
+
+- *Montage als Summe* statt 40-€-Pauschale: fixe Mobilisierung + marginale Tauscharbeit + Provisioning + Eventualposition für Ventilkörper-Tausch/Adapter (Heizungsbauer statt Monteur, Heizung absperren).
+- *Beschaffung trennen* in „Bestellung" und „Wareneingang/Logistik": Lieferzeit als Terminrisiko, Kapitalbindung der Hardware (~8.400 €) als Finanzierungsposten, DevEUI-Erfassung beim Wareneingang speist die Provisioning-CSV (Schritt 4 → 5 → 6). Das vollständige Modell liegt als Swimlane in `process-model.md`.
+- *Zutritts- & Terminkoordination* als eigene Position (Termine = Räume-mit-Heizkörper + No-Show-Reserve); „kein Split-Incentive" explizit als Annahme markieren, Vermietungs-Modus mit Zutrittsaufschlag als Variante; denselben Aufwand an den Batteriewechsel (OPEX) koppeln.
+- *Kaufmännischer Block:* Marge/Risikozuschlag als benannte Angebotsposition, Gewährleistungs-Rückstellung in der OPEX, USt-Behandlung als Flag; Kostensatz vs. Verkaufssatz sauber trennen.
+- *Survey nicht ersatzlos streichen:* das 6-Geschoss-Link-Budget gegen das Stahlbeton-Dämpfungsband (10–25 dB/Decke) rechnen und das Zweit-Gateway als *Erwartungswert p × Kosten* führen, nicht als 0 €. Die Messung dazu liefert das `test-concept.pdf`.
