@@ -22,11 +22,11 @@ mit *sehr unterschiedlicher Konfidenz*. Genau die unsicheren Werte sind das Ziel
   columns: (1.5fr, auto, auto, 1.4fr),
   stroke: 0.5pt + rulec, inset: 6pt, align: (x, y) => if x == 1 { center } else { left },
   table.header(th("Modellgröße"), th("Studienwert"), th("Konfidenz"), th("Herkunft")),
-  [Dämpfung pro Geschossdecke], [~10 dB], [#text(fill: warn)[mittel]], [sekundär belegt, kein 868-MHz-Direktwert],
+  [Dämpfung pro Geschossdecke], [ca. 10 dB], [#text(fill: warn)[mittel]], [sekundär belegt, kein 868-MHz-Direktwert],
   [Low-E-Glas-Dämpfung], [35–60 dB], [#text(fill: bad)[niedrig]], [Patent/5G-Literatur, *nicht* LoRa-gemessen],
   [Funk-Reserve für 99 % PDR], [25,7 dB], [#text(fill: warn)[Hypothese]], [arXiv 2510.04346, *anderes* Gebäude],
   [Gateway-Empfindlichkeit @ SF12], [−140 dBm], [#text(fill: good)[hoch]], [Kerlink-Datenblatt (Referenz)],
-  [Gateway-Dichte (Archetyp A)], [~1 GW / 2–3 Etagen], [#text(fill: bad)[niedrig]], [Faustregel],
+  [Gateway-Dichte (Archetyp A)], [ca. 1 GW / 2–3 Etagen], [#text(fill: bad)[niedrig]], [Faustregel],
 )
 #plain[Wir vertrauen den drei rot/gelb markierten Zahlen nicht blind — wir messen sie nach.]
 
@@ -59,11 +59,11 @@ Welche Werte erfassen wir, und welche Bereiche sind interessant?
   columns: (auto, 1.2fr, 1fr, 1.4fr),
   stroke: 0.5pt + rulec, inset: 6pt, align: left,
   table.header(th("Größe"), th("Bedeutung"), th("Erfasst über"), th("Interessanter Bereich")),
-  [RSSI], [Empfangspegel (dBm)], [`rxInfo.rssi` je Uplink], [sehr gut über −80; brauchbar bis ~−110; kritisch unter −120 (nahe −140 Empfindlichkeit)],
+  [RSSI], [Empfangspegel (dBm)], [`rxInfo.rssi` je Uplink], [sehr gut über −80; brauchbar bis ca. −110; kritisch unter −120 (nahe −140 Empfindlichkeit)],
   [SNR], [Abstand zum Rauschen (dB)], [`rxInfo.snr` je Uplink], [LoRa funkt *unter* dem Rauschen → negativ ist normal; über 0 komfortabel; −20 dB = Demod-Limit (gesättigt)],
   [PDR], [Paket-Zustellrate (%)], [empfangen ÷ gesendet (fCnt)], [ab 99 % exzellent; ab 80 % für Heizung ausreichend; unter 50 % = Abdeckungslücke],
-  [SF], [genutzter Spreizfaktor], [im Test fest gesetzt], [SF7 reicht ⇒ ~14 dB Reserve bis SF12 ⇒ Punkt sicher],
-  [Airtime/ToA], [Sendedauer je Paket], [aus SF/BW berechnet], [Duty-Cycle-Budget (SF12 ~1,15 s)],
+  [SF], [genutzter Spreizfaktor], [im Test fest gesetzt], [SF7 reicht ⇒ ca. 14 dB Reserve bis SF12 ⇒ Punkt sicher],
+  [Airtime/ToA], [Sendedauer je Paket], [aus SF/BW berechnet], [Duty-Cycle-Budget (SF12 ca. 1,15 s)],
   [σ(RSSI), σ(SNR)], [*Stabilität* über die Zeit], [Streuung der N Werte], [kleine Streuung = stabil; große = wackelig (Stabilitäts-Indikator)],
 )
 #plain[„Abdeckung" = *kommt das Signal an?* (RSSI/SNR über der Schwelle). „Stabilität" = *kommt es zuverlässig und gleichmäßig an?* (hohe PDR, kleine Streuung).]
@@ -109,8 +109,8 @@ Drei Methodik-Regeln machen die Messung wissenschaftlich verwertbar:
   stroke: 0.5pt + rulec, inset: 6pt, align: left,
   table.header(th("Variante"), th("Gewinn"), th("Erwartung / Nebenwirkung")),
   [Standard-Stab (Referenz)], [3 dBi], [breite Vertikalkeule — versorgt Etagen ober/unter dem GW],
-  [High-Gain-Kollinear], [~8 dBi], [mehr horizontale Reichweite, aber flache Keule → Etagen ober/unter schwächer],
-  [Standard, nur *höher/freier* platziert], [3 dBi], [Höhe schlägt Gewinn (~14 dB von 1,5→10 m) — die *kostenlose* Alternative],
+  [High-Gain-Kollinear], [ca. 8 dBi], [mehr horizontale Reichweite, aber flache Keule → Etagen ober/unter schwächer],
+  [Standard, nur *höher/freier* platziert], [3 dBi], [Höhe schlägt Gewinn (ca. 14 dB von 1,5→10 m) — die *kostenlose* Alternative],
 )
 #callout(color: warn)[
   *Zwei Physik-Fallen, die der Test sichtbar macht:* (1) Die EU868-Grenze von 16 dBm EIRP
@@ -124,8 +124,8 @@ Drei Methodik-Regeln machen die Messung wissenschaftlich verwertbar:
 *Hardware* — die Strom- und Compose-Grundlage steht bereit; der Stack lässt sich am
 Gateway-Standort betreiben und frei im Gebäude positionieren:
 - *Gateway:* Kerlink Wirnet iFemtoCell Evolution, EUI vom Geräte-Label; Standardantenne 3 dBi + eine High-Gain-Antenne für H4.
-- *Messknoten (tragend):* ein dedizierter, konfigurierbarer Testknoten (z. B. Dragino LHT52 ~21 €) — ADR aus, feste TX-Leistung 14 dBm, festes SF, Intervall 20–120 s.
-- *TRV-Aktoren:* nur als unbeaufsichtigter Langzeit-/Soak-Monitor an 2–3 festen Punkten — *nicht* als Walk-Survey-Instrument (zu träge: ~1 Uplink/10 min).
+- *Messknoten (tragend):* ein dedizierter, konfigurierbarer Testknoten (z. B. Dragino LHT52 ca. 21 €) — ADR aus, feste TX-Leistung 14 dBm, festes SF, Intervall 20–120 s.
+- *TRV-Aktoren:* nur als unbeaufsichtigter Langzeit-/Soak-Monitor an 2–3 festen Punkten — *nicht* als Walk-Survey-Instrument (zu träge: ca. 1 Uplink/10 min).
 - *Strom/Backhaul:* Netz am Standort (jetzt verfügbar) + LAN, oder der bewährte USB-C-RNDIS-Pfad aus ADR-0018 (Strom + Backhaul über ein Kabel).
 
 *Software* — der vorhandene whz-lora-Stack:
@@ -149,14 +149,14 @@ Gateway-Standort betreiben und frei im Gebäude positionieren:
   stroke: 0.5pt + rulec, inset: 6pt, align: left,
   table.header(th("Parameter"), th("Wert"), th("Begründung")),
   [ADR], [*Disabled*], [nicht verhandelbar — sonst keine vergleichbaren Messwerte],
-  [SF Phase 1 (Coverage)], [SF9 (DR3)], [Screen über viele Punkte, Airtime ~144 ms],
+  [SF Phase 1 (Coverage)], [SF9 (DR3)], [Screen über viele Punkte, Airtime ca. 144 ms],
   [SF Phase 2 (Reserve)], [SF12 (DR0)], [robustester Modus — misst die Reserve],
   [TX-Leistung], [14 dBm ERP], [EU868-Obergrenze],
   [Intervall SF9], [20 s], [Duty-Cycle 1 % + Puffer],
-  [Intervall SF12], [≥ 120 s/Kanal o. Kanalrotation], [Duty-Cycle 1 % (SF12 ~1,15 s Airtime)],
+  [Intervall SF12], [≥ 120 s/Kanal o. Kanalrotation], [Duty-Cycle 1 % (SF12 ca. 1,15 s Airtime)],
   [N je Punkt], [20 Pakete], [trägt eine PDR-Aussage + Streuung],
   [Gateway `stats_interval`], [30 s], [verhindert die Falsch-„offline"-Anzeige],
-  [Messpunkte], [~6–8], [De-Confounding-Leiter, ein Tag],
+  [Messpunkte], [ca. 6–8], [De-Confounding-Leiter, ein Tag],
 )
 
 = Erfolgskriterien
@@ -170,7 +170,7 @@ Gateway-Standort betreiben und frei im Gebäude positionieren:
 
 = Stolperfallen
 
-- *TRVs als Survey-Instrument* (Test-Killer): ~1 Uplink/10 min, ADR-gelockt ⇒ 20 Pakete dauern Stunden. Lösung: dedizierter Testknoten; TRVs nur als Soak.
+- *TRVs als Survey-Instrument* (Test-Killer): ca. 1 Uplink/10 min, ADR-gelockt ⇒ 20 Pakete dauern Stunden. Lösung: dedizierter Testknoten; TRVs nur als Soak.
 - *ADR vergessen zu deaktivieren* — häufigster Methodenfehler; macht jede RSSI/PDR-Messung wertlos.
 - *Duty-Cycle-Falle bei SF12:* zu schnelles Senden wird gedrosselt, die Lücken sehen wie Funkverlust aus. Intervall aus der Airtime rechnen, im Bridge-Log Akzeptanz prüfen.
 - *Empfindlichkeits-Referenz mischen:* −137 (generisch) vs. −140 (Kerlink). Eine Zahl pinnen (−140 dBm) und alle Schwellen konsistent daraus ableiten.

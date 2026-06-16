@@ -29,9 +29,9 @@ amortisiert.
 #plain[Statt zu fragen „Was kostet die Anlage?" fragt das Modell „Welche Kosten darf die
 Anlage haben, damit sie sich rechnet?" — und vergleicht das mit den tatsächlichen Kosten.]
 
-Der vollkostenbelastete Referenz-Payback liegt bei *~10,3 Jahren* — aber das ist ein
+Der vollkostenbelastete Referenz-Payback liegt bei *ca. 10,3 Jahren* — aber das ist ein
 irreführender *Punktwert* (eine einzelne, scheinbar genaue Zahl). Die kritische Prüfung zeigt:
-Die Amortisation ist in Wahrheit eine *Bandbreite von ~5,5 Jahren bis weit über 20 Jahre*,
+Die Amortisation ist in Wahrheit eine *Bandbreite von ca. 5,5 Jahren bis weit über 20 Jahre*,
 getrieben vor allem von der Einsparquote, dann von Energieträger und Betriebskosten.
 
 = Die Stellschrauben im Bild
@@ -40,7 +40,7 @@ getrieben vor allem von der Einsparquote, dann von Energieträger und Betriebsko
 
 #callout(title: "Lesart", color: accent)[
   Je länger der Balken, desto größer der Hebel. *Energieträger* (±13,5 J.) und *Ersparnisquote*
-  (±8,2 J.) dominieren alles; *Hardware und Arbeit* bewegen den Payback nur um ~2 Jahre; das
+  (±8,2 J.) dominieren alles; *Hardware und Arbeit* bewegen den Payback nur um ca. 2 Jahre; das
   *Gateway* ist nahezu irrelevant — solange ein zweites nicht nötig wird (Stellschraube Nr. 5).
 ]
 #plain[Ein „Tornado-Diagramm" reiht die Einflussgrößen nach Wucht — die längsten Balken oben.
@@ -52,22 +52,22 @@ Hier entscheiden nicht die Geräte, sondern wie viel Energie gespart wird und wo
   columns: (auto, 1.2fr, 1.5fr, 1.5fr),
   stroke: 0.5pt + rulec, inset: 6pt, align: left,
   table.header(th("#"), th("Stellschraube"), th("Einfluss auf Payback"), th("Maßnahme / Hebel")),
-  [1], [*Einsparquote*\ #text(8pt, fill: muted)[10 %, Altbau-Band 8–12 %]], [#text(fill: bad)[Dominant.] 10→5 % ⇒ ~83 J.\* (unwirtschaftlich); 10→15 % ⇒ ~5,5 J.], [Am Archetyp ankern, Rebound-Abschlag −20–30 %, *am Testbed kalibrieren*; als Band berichten],
-  [2], [*Monitoring (OPEX)*\ #text(8pt, fill: muted)[960 €/a, Einzelgebäude]], [Größte *kontrollierbare* Größe. →280 €/a senkt ~10,3 → ~7,1 J.; im Portfolio ~6,5 J.], [Ereignisgesteuertes Alerting statt 12 Routine-Stunden; als Portfolio-Fixkosten verteilen],
-  [3], [*Stundensatz*\ #text(8pt, fill: muted)[80 €/h Verkaufssatz]], [Struktureller Multiplikator über alle Stunden. 80→50 €/h ⇒ ~7–8 J.], [Urteil mit WHZ-*Kostensatz* (45–65 €/h) rechnen; 80 €/h nur als Angebots-Szenario],
-  [4], [*Energieträger*\ #text(8pt, fill: muted)[Gas 0,12 €/kWh]], [Linearer Nutzen. Fernwärme 0,16 = +33 % ⇒ ~6,5 J.; mit Abgleich ~4,0 J.], [Realen Gebäude-Tarif nutzen — eine Heizkostenrechnung härtet das sofort],
+  [1], [*Einsparquote*\ #text(8pt, fill: muted)[10 %, Altbau-Band 8–12 %]], [#text(fill: bad)[Dominant.] 10→5 % ⇒ ca. 83 J.\* (unwirtschaftlich); 10→15 % ⇒ ca. 5,5 J.], [Am Archetyp ankern, Rebound-Abschlag −20–30 %, *am Testbed kalibrieren*; als Band berichten],
+  [2], [*Monitoring (OPEX)*\ #text(8pt, fill: muted)[960 €/a, Einzelgebäude]], [Größte *kontrollierbare* Größe. →280 €/a senkt ca. 10,3 → ca. 7,1 J.; im Portfolio ca. 6,5 J.], [Ereignisgesteuertes Alerting statt 12 Routine-Stunden; als Portfolio-Fixkosten verteilen],
+  [3], [*Stundensatz*\ #text(8pt, fill: muted)[80 €/h Verkaufssatz]], [Struktureller Multiplikator über alle Stunden. 80→50 €/h ⇒ ca. 7–8 J.], [Urteil mit WHZ-*Kostensatz* (45–65 €/h) rechnen; 80 €/h nur als Angebots-Szenario],
+  [4], [*Energieträger*\ #text(8pt, fill: muted)[Gas 0,12 €/kWh]], [Linearer Nutzen. Fernwärme 0,16 = +33 % ⇒ ca. 6,5 J.; mit Abgleich ca. 4,0 J.], [Realen Gebäude-Tarif nutzen — eine Heizkostenrechnung härtet das sofort],
   [5], [*Survey & Zweit-Gateway*\ #text(8pt, fill: muted)[1.080 € / 0 € GW]], [Fetteste Overhead-Zeile (−520 €) + *verstecktes Risiko*: 6 Geschosse über dem belegten Einzel-Gateway-Fall (4)], [Installateur-Tag streichen; Zweit-Gateway als explizite, survey-gesteuerte Kontingenz (+300–1.200 €)],
-  [6], [*Hydraul. Abgleich*\ #text(8pt, fill: muted)[optional 9.000 €]], [Verdoppelt Ersparnis (10→~20 %) ⇒ ~5,7 J.; mit Fernwärme ~4,0 J.], [Als eigene Co-Maßnahme mit eigenem Payback; vorher Schieflage prüfen],
-  [7], [*Aktor-Mengenpreis*\ #text(8pt, fill: muted)[70 €, 64 % des Kern-CAPEX]], [Weichste CAPEX-Zahl. −15 % ⇒ Kern-Payback 4,6 → ~4,1 J.; Vicki-Listenpreis hebt auf ~5,5 J.], [Echtes 120-Stück-Angebot (dnt *und* Vicki/MClimate); Artikelnummer festlegen],
-  [8], [*Batterie-OPEX*\ #text(8pt, fill: muted)[228 €/a glatt]], [Moderat (→110 ⇒ ~9,5 J.), verbirgt aber eine lumpige ~1.600-€-Welle im Wechseljahr], [Als geplante 120-Ventil-Welle modellieren, in Wartungsbesuch bündeln],
+  [6], [*Hydraul. Abgleich*\ #text(8pt, fill: muted)[optional 9.000 €]], [Verdoppelt Ersparnis (10→ca. 20 %) ⇒ ca. 5,7 J.; mit Fernwärme ca. 4,0 J.], [Als eigene Co-Maßnahme mit eigenem Payback; vorher Schieflage prüfen],
+  [7], [*Aktor-Mengenpreis*\ #text(8pt, fill: muted)[70 €, 64 % des Kern-CAPEX]], [Weichste CAPEX-Zahl. −15 % ⇒ Kern-Payback 4,6 → ca. 4,1 J.; Vicki-Listenpreis hebt auf ca. 5,5 J.], [Echtes 120-Stück-Angebot (dnt *und* Vicki/MClimate); Artikelnummer festlegen],
+  [8], [*Batterie-OPEX*\ #text(8pt, fill: muted)[228 €/a glatt]], [Moderat (→110 ⇒ ca. 9,5 J.), verbirgt aber eine lumpige ca. 1.600-€-Welle im Wechseljahr], [Als geplante 120-Ventil-Welle modellieren, in Wartungsbesuch bündeln],
 )
-#text(8pt, fill: muted)[\* ~83 J. = praktisch nie wirtschaftlich: Bei halbem Nutzen zehren die laufenden Kosten (≈ 1.238 €/a) fast den gesamten Restnutzen auf, der Netto-Nutzen geht gegen null. Kein Rechenfehler, sondern die Folge des fast aufgebrauchten Nenners. — Kleinste Schraube (nicht abgebildet): *Hosting 50 €/a* → 0 € (Phantom-Zeile; das Modell nennt den selbst gehosteten Server „~0 € marginal"). *dnt* und *Vicki* (MClimate) sind konkrete Thermostat-Produkte.]
+#text(8pt, fill: muted)[\* ca. 83 J. = praktisch nie wirtschaftlich: Bei halbem Nutzen zehren die laufenden Kosten (≈ 1.238 €/a) fast den gesamten Restnutzen auf, der Netto-Nutzen geht gegen null. Kein Rechenfehler, sondern die Folge des fast aufgebrauchten Nenners. — Kleinste Schraube (nicht abgebildet): *Hosting 50 €/a* → 0 € (Phantom-Zeile; das Modell nennt den selbst gehosteten Server „ca. 0 € marginal"). *dnt* und *Vicki* (MClimate) sind konkrete Thermostat-Produkte.]
 
 == Warum die obersten Hebel so stark wirken
 
 - *Einsparquote (Rang 1):* Sie bestimmt direkt den Jahresnutzen — und der steht im *Nenner*
   der Payback-Rechnung. Halbiert sich die Quote (10→5 %), halbiert sich der Nutzen, und der
-  Payback springt nicht aufs Doppelte, sondern *explodiert auf ~83 Jahre*, weil die laufenden
+  Payback springt nicht aufs Doppelte, sondern *explodiert auf ca. 83 Jahre*, weil die laufenden
   Kosten dann fast den ganzen Restnutzen auffressen. Deshalb muss diese Zahl *am eigenen
   Testbed gemessen* werden, nicht aus Herstellerprospekten. Der *Rebound-Abschlag* trägt dem
   Effekt Rechnung, dass Nutzer bei günstigerer Heizung dazu neigen, etwas wärmer zu heizen.
@@ -90,7 +90,7 @@ Hier entscheiden nicht die Geräte, sondern wie viel Energie gespart wird und wo
 
 #callout(title: "Drei Korrekturen, die das Urteil verschieben", color: warn)[
   *1. Kein Punktwert — eine Bandbreite.* „10,3 Jahre" suggeriert eine Präzision, die es nicht
-  gibt. Ehrlich ist *~5,5 J.* (Fernwärme, abgeglichen, amortisierter Overhead) *bis weit über
+  gibt. Ehrlich ist *ca. 5,5 J.* (Fernwärme, abgeglichen, amortisierter Overhead) *bis weit über
   20 J.* (Gas, 5 % Ersparnis, Einzelgebäude-OPEX). \
   *2. Kostensatz statt Verkaufssatz.* Das Make-/Buy-Urteil muss mit dem WHZ-Grenzkostensatz
   (45–65 €/h) gerechnet werden, nicht mit dem kommerziellen 80-€/h-Verkaufssatz. \
@@ -110,13 +110,13 @@ müssen mehrere Annahmen in ihre Treiber zerlegt werden — die wichtigsten aus 
   columns: (1.1fr, 1.8fr, 1.1fr),
   stroke: 0.5pt + rulec, inset: 6pt, align: left,
   table.header(th("Annahme (bisher)"), th("Zerlegung / Korrektur"), th("Wirkung")),
-  [Einsparquote 10 % (brutto)], [Brutto 8–12 % *minus Rebound 20–30 %* = *netto ~6–9 %*; das Netto-Band durch den Payback schicken, nicht den Bruttopunkt], [netto nahe DE-Break-even 5,7–7,7 % → Urteil enger],
-  [Energiepreis (Punkt)], [*Arbeitspreis*-Band (Gas 0,09–0,13 / Fernwärme 0,08–0,20); *Grundpreis* separat (nicht vom Nutzen abziehbar); Preispfad CO₂/BEHG], [Fernwärme-Payback als Spanne ~5–13 J.],
+  [Einsparquote 10 % (brutto)], [Brutto 8–12 % *minus Rebound 20–30 %* = *netto ca. 6–9 %*; das Netto-Band durch den Payback schicken, nicht den Bruttopunkt], [netto nahe DE-Break-even 5,7–7,7 % → Urteil enger],
+  [Energiepreis (Punkt)], [*Arbeitspreis*-Band (Gas 0,09–0,13 / Fernwärme 0,08–0,20); *Grundpreis* separat (nicht vom Nutzen abziehbar); Preispfad CO₂/BEHG], [Fernwärme-Payback als Spanne ca. 5–13 J.],
   [Montage 40 €/HK (pauschal)], [*Summe*: fixe Mobilisierung + Tauscharbeit + Provisioning + p(proprietär) × Adapter-/Ventilkörper-Aufschlag (Heizungsbauer)], [Eventualposition statt Pauschale],
-  [OPEX (drei Pauschalen)], [*Treibermodell*: Batterie (Material+Arbeit+Zutritt, 4–10 a), Monitoring bottom-up (~200–400 €/a), Software-Pflege/Störung eigene Posten, Hosting fallabhängig], [OPEX-Sensitivität ausweisen],
-  [Aktorpreis 70 € (Punkt)], [geschlossenes *Band 50–82 €* durch den Kern-Payback (→ ~4,1–5,5 J.); Gerät × (1−Rabatt) + Adapter + Schwund + Versand], [„~110 € konstant" prüfbedürftig],
+  [OPEX (drei Pauschalen)], [*Treibermodell*: Batterie (Material+Arbeit+Zutritt, 4–10 a), Monitoring bottom-up (ca. 200–400 €/a), Software-Pflege/Störung eigene Posten, Hosting fallabhängig], [OPEX-Sensitivität ausweisen],
+  [Aktorpreis 70 € (Punkt)], [geschlossenes *Band 50–82 €* durch den Kern-Payback (→ ca. 4,1–5,5 J.); Gerät × (1−Rabatt) + Adapter + Schwund + Versand], [„ca. 110 € konstant" prüfbedürftig],
   [— (fehlt bisher)], [*Kaufmännisches:* USt-Flag (alle Quellen netto), Marge/Risikozuschlag als Angebotsposition, Gewährleistungs-Rückstellung, *Förderung BEG/BAFA* (pre/post-subsidy)], [Brutto vs. Netto; Verdict-Szenarien],
-  [Payback einfach], [zusätzlich *diskontiert (3 %)*; *Gerätelebensdauer 4–10 a* als Abbruchkriterium („Payback unter kürzester Lebensdauer")], [Re-Investitionswelle ~1.600 € im Horizont],
+  [Payback einfach], [zusätzlich *diskontiert (3 %)*; *Gerätelebensdauer 4–10 a* als Abbruchkriterium („Payback unter kürzester Lebensdauer")], [Re-Investitionswelle ca. 1.600 € im Horizont],
   [Referenz „Mittel-/Altbau"], [eindeutig einem *Archetyp (A–D)* zuordnen; Heizintensität als eigene Tornado-Zeile; ggf. auf *D (institutionell, 140 kWh/m²·a)* — das wahrscheinliche WHZ-Gebäude], [Konsistenz Intensität ↔ Quotenband],
 )
 #callout(title: "Die wichtigste Korrektur", color: warn)[
@@ -130,9 +130,9 @@ müssen mehrere Annahmen in ihre Treiber zerlegt werden — die wichtigsten aus 
 
 + *Keinen einzelnen Payback mehr berichten.* Die Einsparquote ist die dominante Schraube. Die angesetzten 10 % liegen für einen echten Altbau (Band 8–12 %) in der *Band-Mitte* und passen damit eher zu einem bereits teilsanierten Gebäude. Vor jedem „wirtschaftlich"-Urteil: am Archetyp ankern, Rebound-Abschlag, *am Testbed kalibrieren*.
 + *Den Overhead reparieren* — er schiebt den Payback über die 10-Jahres-Grenze. Ingenieurarbeit zum WHZ-Kostensatz; Erstinstallation (amortisiert) von der Wiederholung (Vorlage + F-0005) trennen.
-+ *Die Monitoring-Zeile kürzen:* 960 €/a (1 Gebäude) → ereignisgesteuert ~280 €/a, als Portfolio-Fixkosten (~96–200 €/Gebäude bei 10). Senkt ~10,3 → ~7,1 J.; Phantom-Hosting (50 €) zugleich streichen.
-+ *Das 6-Geschoss-Einzel-Gateway zur expliziten Kontingenz machen* — nicht als stille 0-€-Annahme. Ein Zweit-Gateway (~102–330 €) als auslösbare Angebots-Position; Unterabdeckung als Abnahme-Kriterium. Finanziell trivial (unter 2,5 % CAPEX), beseitigt das dominante Terminrisiko.
-+ *Versunkene Kosten entdoppeln:* Schritt 1 in 2 mergen (−240 €), Schritt 5 als F-0005-Batch-Import (~100 €, −220 €), Hand-Provisionierung in Schritt 6 durch Skript ersetzen (−520 €). Zusammen mit dem reduzierten Survey ~1.500 € Overhead weg.
++ *Die Monitoring-Zeile kürzen:* 960 €/a (1 Gebäude) → ereignisgesteuert ca. 280 €/a, als Portfolio-Fixkosten (ca. 96–200 €/Gebäude bei 10). Senkt ca. 10,3 → ca. 7,1 J.; Phantom-Hosting (50 €) zugleich streichen.
++ *Das 6-Geschoss-Einzel-Gateway zur expliziten Kontingenz machen* — nicht als stille 0-€-Annahme. Ein Zweit-Gateway (ca. 102–330 €) als auslösbare Angebots-Position; Unterabdeckung als Abnahme-Kriterium. Finanziell trivial (unter 2,5 % CAPEX), beseitigt das dominante Terminrisiko.
++ *Versunkene Kosten entdoppeln:* Schritt 1 in 2 mergen (−240 €), Schritt 5 als F-0005-Batch-Import (ca. 100 €, −220 €), Hand-Provisionierung in Schritt 6 durch Skript ersetzen (−520 €). Zusammen mit dem reduzierten Survey ca. 1.500 € Overhead weg.
 
 = Netto-Effekt: der Payback als Band
 
@@ -140,10 +140,10 @@ müssen mehrere Annahmen in ihre Treiber zerlegt werden — die wichtigsten aus 
   columns: (1.8fr, auto),
   stroke: 0.5pt + rulec, inset: 6pt, align: (x, y) => if x == 1 { right } else { left },
   table.header(th("Szenario"), th("Amortisation")),
-  [Gebucht (loaded+ops · Gas · 10 % · Einzelgebäude)], [~10,3 J.],
-  [Bereinigt (Kostensatz + Monitoring ereignisgesteuert)], [~7–8 J.],
-  [… mit Fernwärme (0,16 €/kWh)], [~6,5 J.],
-  [… mit hydraulischem Abgleich (Fernwärme)], [*~4,0 J.*],
+  [Gebucht (loaded+ops · Gas · 10 % · Einzelgebäude)], [ca. 10,3 J.],
+  [Bereinigt (Kostensatz + Monitoring ereignisgesteuert)], [ca. 7–8 J.],
+  [… mit Fernwärme (0,16 €/kWh)], [ca. 6,5 J.],
+  [… mit hydraulischem Abgleich (Fernwärme)], [*ca. 4,0 J.*],
   [Pessimistisch (Gas · 5 % Ersparnis · Einzelgebäude)], [#text(fill: bad)[weit über 20 J.]],
 )
 

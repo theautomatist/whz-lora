@@ -111,7 +111,7 @@ Kurz erklärt, was hinter den dichten Schritten steckt:
 #callout(title: "Befund", color: warn)[
   Der nackte Hardware-Blick (Kern-CAPEX, Payback 4,6 Jahre) ist optimistisch.
   Vollkostenbelastet *mit Prozesskette und laufendem Betrieb* liegt das Referenzgebäude bei
-  *~10,3 Jahren* — genau auf der 10-Jahres-Grenze und damit fragil.
+  *ca. 10,3 Jahren* — genau auf der 10-Jahres-Grenze und damit fragil.
 ]
 #plain[Schaut man nur auf die Ventile, ist das Geld nach 4,6 Jahren wieder drin. Rechnet man
 ehrlich alles mit — Planung, Einbau, Wartung — dauert es etwa 10,3 Jahre. Das ist die Grenze,
@@ -133,21 +133,21 @@ Kunden) statt des reinen Kostensatzes (was die WHZ die Stunde wirklich kostet).
 vorhandene Server, das vorhandene Gateway, die fertige Software. Wer sie erneut in die
 Rechnung schreibt, macht das Projekt künstlich teuer.]
 
-In der Effekt-Spalte steht „vorher → nachher"; „(WHZ ~0)" heißt: für die WHZ entstehen dabei
+In der Effekt-Spalte steht „vorher → nachher"; „(WHZ ca. 0)" heißt: für die WHZ entstehen dabei
 nahezu keine Kosten, weil es Eigenleistung ist.
 
 #table(
   columns: (auto, 1.5fr, 1.6fr, auto),
   stroke: 0.5pt + rulec, inset: 6pt, align: (x, y) => if x == 3 { right } else { left },
   table.header(th("Schritt"), th("Kritischer Befund"), th("Empfehlung"), th("Effekt")),
-  [1], [Ingenieur-Satz (80 €/h) für Checkliste; Daten bis 3× erfasst; kein Abbruch-Gate], [Auf PM-Satz, in Schritt 2 mergen, Qualify-out-Gate + Gateway-Flag], [320 → ~80 € (WHZ ~0)],
-  [2], [Installateur-Tag leer (nichts zu montieren); Gateway platziert → nur 1-vs-2-Gateway-Frage], [Installateur-Tag streichen, Bring-up-Telemetrie nutzen, 0,5 T Ing.], [1.080 → ~560 €],
-  [3], [#text(fill: bad)[Unter]bewertet: trägt alle 4 Kalkulationspunkte + bindendes Angebot, am Boden bepreist], [Auf ~480 € anheben; RF-Kalibrierung hierher; Zweit-Gateway-Kontingenz benennen], [−160 oder +160 €],
-  [4], [70 €/Ventil ungehärtet; Gateway-0 verbirgt mögliches Zweit-Gateway; PM doppelt], [Bulk-Angebot (~−15 %), 2–3 % Ersatz-Ventile, PM kürzen], [9.040 → ~8.100 €],
-  [5], [Widerspricht „F-0005 sunk"; wiederholbarer Software-Aufruf ~1–1,5 h, nicht 4 h], [In Schritt 6 mergen (~100 €); ABP-vs-OTAA-Lücke einmal fixen], [320 → ~100 €],
-  [6], [Montage 4.800 € echt; Commissioning 640 € falsch (Class-A-Latenz, doppelt provisioniert)], [Skript-Commissioning ~120 €, Zwei-Wellen-Install, First-time-right-Reserve], [Commissioning −520 €],
-  [7], [Bündelt 3 Jobs; „RF-Kalibrierung" ist interne Projektarbeit; kein Pass/Fail], [Entbündeln, RF-Kal. = 0 € Kundenscope, Pass/Fail gegen ChirpStack automatisieren], [320 → ~200 €],
-  [8], [1.238/a = 43 % des Nutzens; Monitoring 960 € portfolio-fix auf 1 Gebäude; Hosting 50 € Phantom], [Hosting → 0; Monitoring ereignisgesteuert ~280 €; Batterie als geplante Welle], [1.238 → ~500 €/a],
+  [1], [Ingenieur-Satz (80 €/h) für Checkliste; Daten bis 3× erfasst; kein Abbruch-Gate], [Auf PM-Satz, in Schritt 2 mergen, Qualify-out-Gate + Gateway-Flag], [320 → ca. 80 € (WHZ ca. 0)],
+  [2], [Installateur-Tag leer (nichts zu montieren); Gateway platziert → nur 1-vs-2-Gateway-Frage], [Installateur-Tag streichen, Bring-up-Telemetrie nutzen, 0,5 T Ing.], [1.080 → ca. 560 €],
+  [3], [#text(fill: bad)[Unter]bewertet: trägt alle 4 Kalkulationspunkte + bindendes Angebot, am Boden bepreist], [Auf ca. 480 € anheben; RF-Kalibrierung hierher; Zweit-Gateway-Kontingenz benennen], [−160 oder +160 €],
+  [4], [70 €/Ventil ungehärtet; Gateway-0 verbirgt mögliches Zweit-Gateway; PM doppelt], [Bulk-Angebot (ca. −15 %), 2–3 % Ersatz-Ventile, PM kürzen], [9.040 → ca. 8.100 €],
+  [5], [Widerspricht „F-0005 sunk"; wiederholbarer Software-Aufruf ca. 1–1,5 h, nicht 4 h], [In Schritt 6 mergen (ca. 100 €); ABP-vs-OTAA-Lücke einmal fixen], [320 → ca. 100 €],
+  [6], [Montage 4.800 € echt; Commissioning 640 € falsch (Class-A-Latenz, doppelt provisioniert)], [Skript-Commissioning ca. 120 €, Zwei-Wellen-Install, First-time-right-Reserve], [Commissioning −520 €],
+  [7], [Bündelt 3 Jobs; „RF-Kalibrierung" ist interne Projektarbeit; kein Pass/Fail], [Entbündeln, RF-Kal. = 0 € Kundenscope, Pass/Fail gegen ChirpStack automatisieren], [320 → ca. 200 €],
+  [8], [1.238/a = 43 % des Nutzens; Monitoring 960 € portfolio-fix auf 1 Gebäude; Hosting 50 € Phantom], [Hosting → 0; Monitoring ereignisgesteuert ca. 280 €; Batterie als geplante Welle], [1.238 → ca. 500 €/a],
 )
 
 Drei Befunde verdienen eine Übersetzung:
@@ -170,13 +170,13 @@ Drei Befunde verdienen eine Übersetzung:
   columns: (1.4fr, auto, auto),
   stroke: 0.5pt + rulec, inset: 6pt, align: (x, y) => if x >= 1 { right } else { left },
   table.header(th("Block"), th("gebucht"), th("bereinigt")),
-  [Prozess-Overhead], [3.640 €], [~1.500–2.400 €],
-  [OPEX / Jahr], [1.238 €], [~500 € (Einzel) · ~300–380 € (Portfolio)],
-  [loaded+ops Amortisation], [~10,3 J.], [*~7–8 J.* (Kostensatz + Monitoring)],
+  [Prozess-Overhead], [3.640 €], [ca. 1.500–2.400 €],
+  [OPEX / Jahr], [1.238 €], [ca. 500 € (Einzel) · ca. 300–380 € (Portfolio)],
+  [loaded+ops Amortisation], [ca. 10,3 J.], [*ca. 7–8 J.* (Kostensatz + Monitoring)],
 )
 
 #callout(title: "Fazit", color: good)[
-  Ohne einen einzigen Liefergegenstand zu verlieren, lassen sich *~1.500 € Prozess-Overhead*
+  Ohne einen einzigen Liefergegenstand zu verlieren, lassen sich *ca. 1.500 € Prozess-Overhead*
   abbauen — durch Zusammenlegen von Schritt 1 in 2, Skript-Commissioning statt
   Hand-Provisionierung, Wiederverwendung der Gateway-Bring-up-Telemetrie und ereignisgesteuertes
   Monitoring. Die eigentliche Skalierungs-Aufgabe ist *einmalig*: die ABP-vs-OTAA-Lücke in
@@ -186,14 +186,14 @@ Drei Befunde verdienen eine Übersetzung:
 ]
 #plain[Man kann denselben Service deutlich günstiger liefern, ohne etwas wegzulassen — vor
 allem, indem man Routinearbeit automatisiert und nichts doppelt berechnet. Damit fällt der
-Payback von ~10,3 auf ~7–8 Jahre.]
+Payback von ca. 10,3 auf ca. 7–8 Jahre.]
 
 = Verfeinerungen für ein verbindliches Angebot
 
 Aus dem Vollständigkeits-Audit — was Report A für ein *bindendes* Angebot noch braucht:
 
 - *Montage als Summe* statt 40-€-Pauschale: fixe Mobilisierung + marginale Tauscharbeit + Provisioning + Eventualposition für Ventilkörper-Tausch/Adapter (Heizungsbauer statt Monteur, Heizung absperren).
-- *Beschaffung trennen* in „Bestellung" und „Wareneingang/Logistik": Lieferzeit als Terminrisiko, Kapitalbindung der Hardware (~8.400 €) als Finanzierungsposten, DevEUI-Erfassung beim Wareneingang speist die Provisioning-CSV (Schritt 4 → 5 → 6). Das vollständige Modell liegt als Swimlane in `process-model.md`.
+- *Beschaffung trennen* in „Bestellung" und „Wareneingang/Logistik": Lieferzeit als Terminrisiko, Kapitalbindung der Hardware (ca. 8.400 €) als Finanzierungsposten, DevEUI-Erfassung beim Wareneingang speist die Provisioning-CSV (Schritt 4 → 5 → 6). Das vollständige Modell liegt als Swimlane in `process-model.md`.
 - *Zutritts- & Terminkoordination* als eigene Position (Termine = Räume-mit-Heizkörper + No-Show-Reserve); „kein Split-Incentive" explizit als Annahme markieren, Vermietungs-Modus mit Zutrittsaufschlag als Variante; denselben Aufwand an den Batteriewechsel (OPEX) koppeln.
 - *Kaufmännischer Block:* Marge/Risikozuschlag als benannte Angebotsposition, Gewährleistungs-Rückstellung in der OPEX, USt-Behandlung als Flag; Kostensatz vs. Verkaufssatz sauber trennen.
 - *Survey nicht ersatzlos streichen:* das 6-Geschoss-Link-Budget gegen das Stahlbeton-Dämpfungsband (10–25 dB/Decke) rechnen und das Zweit-Gateway als *Erwartungswert p × Kosten* führen, nicht als 0 €. Die Messung dazu liefert das `test-concept.pdf`.
