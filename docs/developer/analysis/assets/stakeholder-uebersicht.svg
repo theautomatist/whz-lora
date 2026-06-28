@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="340" viewBox="0 0 900 340" font-family="Segoe UI, Arial, sans-serif">
+  <rect width="900" height="340" fill="#ffffff"/>
+
+  <!-- ============ LEFT: Empfangs-Ampel im Gebäude ============ -->
+  <text x="220" y="24" font-size="12" font-weight="700" fill="#1a2230" text-anchor="middle">Frage 1: Kommt unser Signal überall an?</text>
+
+  <!-- Gebäude-Schnitt, 4 Etagen -->
+  <rect x="70" y="44" width="300" height="240" fill="#fbfcfe" stroke="#1a2230" stroke-width="1.4"/>
+  <g stroke="#c4ccd6" stroke-width="0.9">
+    <line x1="70" y1="104" x2="370" y2="104"/>
+    <line x1="70" y1="164" x2="370" y2="164"/>
+    <line x1="70" y1="224" x2="370" y2="224"/>
+  </g>
+  <g font-size="8.5" fill="#9aa7b4"><text x="78" y="60">3. OG</text><text x="78" y="120">2. OG</text><text x="78" y="180">1. OG</text><text x="78" y="240">EG</text></g>
+
+  <!-- Funk-Knoten (Gateway) auf dem 1. OG, mittig -->
+  <g>
+    <path d="M196 194 a40 40 0 0 1 48 0" fill="none" stroke="#1f6feb" stroke-opacity="0.35" stroke-width="1.4"/>
+    <path d="M186 194 a55 55 0 0 1 68 0" fill="none" stroke="#1f6feb" stroke-opacity="0.22" stroke-width="1.4"/>
+    <rect x="206" y="190" width="28" height="20" rx="3" fill="#1f6feb"/>
+    <line x1="220" y1="190" x2="220" y2="180" stroke="#1f6feb" stroke-width="1.4"/>
+    <text x="220" y="226" font-size="8.5" font-weight="700" fill="#1f6feb" text-anchor="middle">Funk-Knoten</text>
+  </g>
+
+  <!-- Sensor-Punkte mit Empfangsampel -->
+  <g stroke="#ffffff" stroke-width="1">
+    <circle cx="110" cy="74"  r="7" fill="#1a7f37"/>
+    <circle cx="338" cy="74"  r="7" fill="#b42318"/>
+    <circle cx="140" cy="134" r="7" fill="#1a7f37"/>
+    <circle cx="320" cy="134" r="7" fill="#e6b13e"/>
+    <circle cx="320" cy="200" r="7" fill="#1a7f37"/>
+    <circle cx="120" cy="258" r="7" fill="#e6b13e"/>
+    <circle cx="330" cy="258" r="7" fill="#b42318"/>
+  </g>
+
+  <!-- Legende -->
+  <g font-size="9" fill="#5b6876">
+    <circle cx="80"  cy="306" r="6" fill="#1a7f37"/><text x="92"  y="309">guter Empfang</text>
+    <circle cx="188" cy="306" r="6" fill="#e6b13e"/><text x="200" y="309">grenzwertig</text>
+    <circle cx="288" cy="306" r="6" fill="#b42318"/><text x="300" y="309">Funkloch</text>
+  </g>
+  <text x="220" y="330" font-size="8.5" fill="#5b6876" text-anchor="middle" font-style="italic">Je dicker die Decken und je weiter weg, desto schwächer das Signal.</text>
+
+  <!-- ============ Trennlinie ============ -->
+  <line x1="450" y1="20" x2="450" y2="320" stroke="#d9e0e8" stroke-width="1"/>
+
+  <!-- ============ RIGHT: Funk-Betrieb-Anzeige ============ -->
+  <text x="680" y="24" font-size="12" font-weight="700" fill="#1a2230" text-anchor="middle">Frage 2: Funkt uns jemand dazwischen?</text>
+
+  <!-- Tacho-Bögen (über dem Mittelpunkt 680,250, r=130) -->
+  <g fill="none" stroke-width="24">
+    <path d="M550,250 A130,130 0 0 0 615,137.4" stroke="#3aa564"/>
+    <path d="M615,137.4 A130,130 0 0 0 745,137.4" stroke="#e6b13e"/>
+    <path d="M745,137.4 A130,130 0 0 0 810,250" stroke="#cf4a3a"/>
+  </g>
+  <!-- Skalen-Beschriftung -->
+  <text x="556" y="272" font-size="9" fill="#1a7f37" font-weight="700" text-anchor="middle">frei / leise</text>
+  <text x="804" y="272" font-size="9" fill="#b42318" font-weight="700" text-anchor="middle">voll / laut</text>
+  <text x="680" y="104" font-size="9.5" font-weight="700" fill="#1a2230" text-anchor="middle">Fremd-Funkverkehr auf dem Kanal</text>
+
+  <!-- Nadel (zeigt niedrig = unsere Erwartung) -->
+  <line x1="680" y1="250" x2="596" y2="179" stroke="#1a2230" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="680" cy="250" r="8" fill="#1a2230"/>
+  <text x="612" y="208" font-size="8.5" fill="#1a7f37" font-weight="700">erwartet: gering</text>
+
+  <text x="680" y="300" font-size="8.5" fill="#5b6876" text-anchor="middle" font-style="italic">Wir hören nur mit und zählen Funkverkehr —</text>
+  <text x="680" y="314" font-size="8.5" fill="#5b6876" text-anchor="middle" font-style="italic">die Inhalte fremder Geräte bleiben verschlüsselt.</text>
+</svg>

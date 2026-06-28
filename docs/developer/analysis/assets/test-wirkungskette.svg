@@ -1,10 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="900" height="312" viewBox="0 0 900 312" font-family="Segoe UI, Arial, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="352" viewBox="0 0 900 352" font-family="Segoe UI, Arial, sans-serif">
   <defs>
     <marker id="ar" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
       <path d="M0,0 L6,3 L0,6 Z" fill="#9aa7b4"/>
     </marker>
   </defs>
-  <rect width="900" height="312" fill="#ffffff"/>
+  <rect width="900" height="352" fill="#ffffff"/>
   <g font-size="10.5" font-weight="700" fill="#5b6876">
     <text x="110" y="18" text-anchor="middle">1 · Messung vor Ort</text>
     <text x="332" y="18" text-anchor="middle">2 · Messgröße</text>
@@ -75,6 +75,22 @@
         <text x="332" y="21" font-weight="700">Antennengewinn-</text><text x="332" y="34">Nutzen indoor</text>
         <text x="554" y="21" font-weight="700">Antennen- &amp;</text><text x="554" y="34">Platzierungswahl</text>
         <text x="783" y="21" font-weight="700">Antenne</text><text x="783" y="34">aufrüsten?</text>
+      </g>
+    </g>
+    <!-- ROW 5 (Koexistenz / H5) -->
+    <g transform="translate(0,290)">
+      <rect x="10" y="0" width="200" height="50" rx="5" fill="#eef2f6" stroke="#9fb6d6"/>
+      <rect x="232" y="0" width="200" height="50" rx="5" fill="#eaf1fb" stroke="#9fb6d6"/>
+      <rect x="454" y="0" width="200" height="50" rx="5" fill="#fff3d6" stroke="#d6b25a"/>
+      <rect x="676" y="0" width="214" height="50" rx="5" fill="#e8f6ee" stroke="#74b48a"/>
+      <line x1="210" y1="25" x2="231" y2="25" stroke="#9aa7b4" marker-end="url(#ar)"/>
+      <line x1="432" y1="25" x2="453" y2="25" stroke="#9aa7b4" marker-end="url(#ar)"/>
+      <line x1="654" y1="25" x2="675" y2="25" stroke="#9aa7b4" marker-end="url(#ar)"/>
+      <g font-size="9" fill="#1a2230" text-anchor="middle">
+        <text x="110" y="21" font-weight="700">Fremd-Frames passiv</text><text x="110" y="34">(Gateway-MQTT-Topic)</text>
+        <text x="332" y="21" font-weight="700">Kanal-Airtime CAF</text><text x="332" y="34">→ Kollisions-Risiko</text>
+        <text x="554" y="21" font-weight="700">Koexistenz-Ampel</text><text x="554" y="34">(grün/gelb/rot)</text>
+        <text x="783" y="21" font-weight="700">Kanalplan / 2. GW?</text><text x="783" y="34">+ PDR-Erwartung</text>
       </g>
     </g>
   </g>
