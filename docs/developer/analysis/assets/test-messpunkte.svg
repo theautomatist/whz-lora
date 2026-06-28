@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="392" viewBox="0 0 760 392" font-family="Segoe UI, Arial, sans-serif">
+  <rect width="760" height="392" fill="#ffffff"/>
+  <!-- building -->
+  <rect x="60" y="36" width="440" height="340" fill="#fbfcfe" stroke="#1a2230" stroke-width="1.4"/>
+  <g stroke="#c4ccd6" stroke-width="0.8">
+    <line x1="60" y1="104" x2="500" y2="104"/><line x1="60" y1="172" x2="500" y2="172"/>
+    <line x1="60" y1="240" x2="500" y2="240"/><line x1="60" y1="308" x2="500" y2="308"/>
+  </g>
+  <rect x="176" y="36" width="34" height="340" fill="#eef2f6"/>
+  <text x="193" y="30" font-size="8" fill="#5b6876" text-anchor="middle">Treppenhaus</text>
+  <g stroke="#e3e8ee" stroke-width="0.8">
+    <line x1="300" y1="36" x2="300" y2="376"/><line x1="410" y1="36" x2="410" y2="376"/>
+  </g>
+  <g font-size="9" fill="#5b6876" text-anchor="end">
+    <text x="54" y="78">4.OG</text><text x="54" y="146">3.OG</text><text x="54" y="214">2.OG</text>
+    <text x="54" y="282">1.OG</text><text x="54" y="350">EG</text>
+  </g>
+  <!-- gateway -->
+  <line x1="194" y1="190" x2="194" y2="176" stroke="#1a2230" stroke-width="1.4"/>
+  <rect x="185" y="200" width="20" height="13" rx="2" fill="#1a2230"/>
+  <text x="216" y="210" font-size="9" font-weight="700" fill="#1a2230">Gateway (zentral, ≥2 m)</text>
+  <!-- points -->
+  <g>
+    <circle cx="280" cy="210" r="5" fill="#5b6876"/>
+    <circle cx="193" cy="74" r="5" fill="#1f6feb"/><circle cx="193" cy="142" r="5" fill="#1f6feb"/>
+    <circle cx="193" cy="278" r="5" fill="#1f6feb"/><circle cx="193" cy="346" r="5" fill="#1f6feb"/>
+    <circle cx="345" cy="210" r="5" fill="#0e7c66"/><circle cx="455" cy="210" r="5" fill="#0e7c66"/>
+    <circle cx="470" cy="142" r="5" fill="#9a6700"/><circle cx="492" cy="142" r="5" fill="#9a6700"/>
+    <circle cx="486" cy="74" r="5" fill="#b42318"/>
+  </g>
+  <!-- legend -->
+  <g font-size="9.5" fill="#1a2230">
+    <text x="524" y="44" font-size="10.5" font-weight="700" fill="#5b6876">Messpunkt-Typ → was er isoliert</text>
+    <circle cx="532" cy="66" r="5" fill="#5b6876"/><text x="546" y="69" font-weight="700">P0 Baseline</text><text x="546" y="81" font-size="8.5" fill="#5b6876">Setup-Check (LOS, ~5–10 m)</text>
+    <circle cx="532" cy="102" r="5" fill="#1f6feb"/><text x="546" y="105" font-weight="700">Vertikale Säule</text><text x="546" y="117" font-size="8.5" fill="#5b6876">→ Dämpfung dB / Etage</text>
+    <circle cx="532" cy="138" r="5" fill="#0e7c66"/><text x="546" y="141" font-weight="700">Horizontaler Lauf</text><text x="546" y="153" font-size="8.5" fill="#5b6876">→ dB / Wand + Distanz</text>
+    <circle cx="532" cy="174" r="5" fill="#9a6700"/><text x="546" y="177" font-weight="700">Low-E-Paar</text><text x="546" y="189" font-size="8.5" fill="#5b6876">→ Glas-Dämpfung (innen vs. Raum)</text>
+    <circle cx="532" cy="210" r="5" fill="#b42318"/><text x="546" y="213" font-weight="700">Worst-Case @ SF12</text><text x="546" y="225" font-size="8.5" fill="#5b6876">→ Funk-Reserve / F7</text>
+    <text x="524" y="258" font-size="8.5" fill="#5b6876">Prinzip: erst jeden Effekt einzeln</text>
+    <text x="524" y="270" font-size="8.5" fill="#5b6876">isolieren (De-Confounding), dann</text>
+    <text x="524" y="282" font-size="8.5" fill="#5b6876">den kombinierten Worst-Case.</text>
+  </g>
+</svg>

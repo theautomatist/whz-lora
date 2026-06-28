@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="350" viewBox="0 0 900 350" font-family="Segoe UI, Arial, sans-serif">
+  <defs>
+    <marker id="rm" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#5b6876"/></marker>
+  </defs>
+  <rect width="900" height="350" fill="#ffffff"/>
+  <text x="450" y="22" font-size="12" font-weight="700" fill="#1a2230" text-anchor="middle">Methoden-Stack — jede Stufe stützt sich auf die vorige, Planungssicherheit steigt</text>
+
+  <!-- Stufen (Treppe), Baseline y=285 -->
+  <!-- Stufe 1 -->
+  <rect x="40"  y="210" width="180" height="75"  rx="5" fill="#eef2f6" stroke="#9fb6d6"/>
+  <text x="130" y="232" font-size="10" font-weight="700" fill="#1a2230" text-anchor="middle">1 · Schreibtisch</text>
+  <text x="130" y="248" font-size="8.5" fill="#5b6876" text-anchor="middle">TTN-Mapper / Helium,</text>
+  <text x="130" y="259" font-size="8.5" fill="#5b6876" text-anchor="middle">NIST- &amp; Literaturwerte</text>
+  <text x="130" y="276" font-size="8" font-weight="700" fill="#0e7c66" text-anchor="middle">schließt: G3</text>
+
+  <!-- Stufe 2 (Haupthebel, hervorgehoben) -->
+  <rect x="240" y="160" width="180" height="125" rx="5" fill="#eaf1fb" stroke="#1f6feb" stroke-width="2"/>
+  <text x="330" y="180" font-size="10" font-weight="700" fill="#1f6feb" text-anchor="middle">★ 2 · Kalibrierte Simulation</text>
+  <text x="330" y="196" font-size="8.5" fill="#5b6876" text-anchor="middle">ns-3 / FLoRa — Haupthebel</text>
+  <text x="330" y="207" font-size="8.5" font-weight="700" fill="#9a6700" text-anchor="middle">nur Netzwerkschicht!</text>
+  <rect x="252" y="214" width="156" height="26" rx="3" fill="#fff3d6" stroke="#9a6700"/>
+  <text x="330" y="225" font-size="7.5" fill="#9a6700" text-anchor="middle">HF-Indoor: RMSE 7–8 dB →</text>
+  <text x="330" y="235" font-size="7.5" font-weight="700" fill="#9a6700" text-anchor="middle">Fade-Margin ≥ 15 dB</text>
+  <text x="330" y="262" font-size="8" font-weight="700" fill="#0e7c66" text-anchor="middle">schließt (Netz): A2·A3·A4·B2·D1</text>
+
+  <!-- Stufe 3 -->
+  <rect x="440" y="120" width="180" height="165" rx="5" fill="#e8f1fc" stroke="#9fb6d6"/>
+  <text x="530" y="140" font-size="10" font-weight="700" fill="#1a2230" text-anchor="middle">3 · Feldtest +</text>
+  <text x="530" y="156" font-size="8.5" fill="#5b6876" text-anchor="middle">Downlink-Loopback,</text>
+  <text x="530" y="167" font-size="8.5" fill="#5b6876" text-anchor="middle">Walk-Knoten, 2. Gateway,</text>
+  <text x="530" y="178" font-size="8.5" fill="#5b6876" text-anchor="middle">A/B-Gerätetest</text>
+  <text x="530" y="196" font-size="8.5" font-style="italic" fill="#1f6feb" text-anchor="middle">= der Kalibrier-Anker</text>
+  <text x="530" y="262" font-size="8" font-weight="700" fill="#0e7c66" text-anchor="middle">schließt: A1·B1·C1·H1</text>
+
+  <!-- Stufe 4 -->
+  <rect x="640" y="80" width="200" height="205" rx="5" fill="#e8f6ee" stroke="#74b48a"/>
+  <text x="740" y="100" font-size="10" font-weight="700" fill="#1a2230" text-anchor="middle">4 · Pilot / Langzeit</text>
+  <text x="740" y="116" font-size="8.5" fill="#5b6876" text-anchor="middle">Mehrwochen-Soak,</text>
+  <text x="740" y="127" font-size="8.5" fill="#5b6876" text-anchor="middle">CAF 4 × 1 Woche,</text>
+  <text x="740" y="138" font-size="8.5" fill="#5b6876" text-anchor="middle">Simulator-Lasttest,</text>
+  <text x="740" y="149" font-size="8.5" fill="#5b6876" text-anchor="middle">Prozess-FMEA</text>
+  <text x="740" y="262" font-size="8" font-weight="700" fill="#0e7c66" text-anchor="middle">schließt: C2·F1·F2·G1·G2·I1–I4</text>
+
+  <!-- Aufstiegspfeil über den Stufen -->
+  <polyline points="130,205 330,155 530,115 740,75" fill="none" stroke="#1f6feb" stroke-width="1.5" stroke-dasharray="5 3" marker-end="url(#rm)"/>
+
+  <!-- Achsen -->
+  <line x1="40" y1="300" x2="840" y2="300" stroke="#5b6876" stroke-width="1" marker-end="url(#rm)"/>
+  <text x="48" y="314" font-size="8.5" fill="#5b6876" text-anchor="start">Aufwand niedrig</text>
+  <text x="832" y="314" font-size="8.5" fill="#5b6876" text-anchor="end">Aufwand hoch</text>
+  <text x="450" y="332" font-size="9" font-weight="700" fill="#1f6feb" text-anchor="middle">Planungssicherheit &amp; Repräsentativität steigend  ▸</text>
+</svg>

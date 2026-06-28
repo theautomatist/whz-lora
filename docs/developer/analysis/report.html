@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wirtschaftlichkeits- & Auslegungsstudie — LoRaWAN-Heizungssteuerung (whz-lora)</title>
+<style>
+  :root{--ink:#1a2230;--muted:#5b6876;--line:#d9e0e8;--accent:#1f6feb;--accent2:#0e7c66;
+    --good:#1a7f37;--bad:#b42318;--warn:#9a6700;--hw:#1f6feb;--lab:#0e7c66;--bg:#fff;--soft:#f5f8fb;}
+  *{box-sizing:border-box}
+  html{font-size:15px}
+  body{margin:0;color:var(--ink);background:#eef2f6;
+    font:1rem/1.55 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+  .page{max-width:900px;margin:0 auto;background:var(--bg);padding:48px 56px;
+    box-shadow:0 1px 6px rgba(0,0,0,.08)}
+  h1{font-size:1.7rem;margin:0 0 4px;line-height:1.2}
+  .subtitle{color:var(--muted);font-size:1.05rem;margin:0 0 4px}
+  .meta{color:var(--muted);font-size:.82rem;border-bottom:2px solid var(--ink);padding-bottom:14px;margin-bottom:24px}
+  h2{font-size:1.2rem;margin:34px 0 10px;padding-top:8px;border-top:1px solid var(--line)}
+  h3{font-size:1rem;margin:20px 0 6px;color:var(--accent2)}
+  p{margin:8px 0}
+  a{color:var(--accent);text-decoration:none}
+  small,.src{color:var(--muted);font-size:.8rem}
+  .lead{font-size:1.05rem}
+  .box{background:var(--soft);border:1px solid var(--line);border-left:4px solid var(--accent);
+    border-radius:6px;padding:14px 18px;margin:16px 0}
+  .box.key{border-left-color:var(--warn)}
+  .box.good{border-left-color:var(--good)}
+  table{width:100%;border-collapse:collapse;font-size:.88rem;margin:12px 0}
+  th,td{text-align:left;padding:7px 9px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{background:var(--soft);font-size:.78rem;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .ok{color:var(--good);font-weight:700}.no{color:var(--bad);font-weight:700}
+  .tag{display:inline-block;font-size:.72rem;font-weight:700;padding:1px 7px;border-radius:999px}
+  .tag.hw{background:#e7f0ff;color:var(--hw)}.tag.lab{background:#e2f5ef;color:var(--lab)}
+  .tag.calc{background:#fff3d6;color:var(--warn)}
+  /* process-cost flow */
+  .flow{margin:14px 0;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .frow{display:grid;grid-template-columns:26px 1.5fr 3fr 86px;align-items:center;
+    gap:10px;padding:9px 12px;border-bottom:1px solid var(--line)}
+  .frow:last-child{border-bottom:0}
+  .frow .n{width:26px;height:26px;border-radius:50%;background:var(--ink);color:#fff;
+    display:flex;align-items:center;justify-content:center;font-size:.8rem;font-weight:700}
+  .frow.calc .n{background:var(--warn)}
+  .fname{font-weight:600;font-size:.9rem}
+  .fname small{display:block;font-weight:400}
+  .bar{height:18px;border-radius:4px;min-width:3px;background:var(--lab)}
+  .bar.hw{background:var(--hw)}
+  .fcost{text-align:right;font-variant-numeric:tabular-nums;font-weight:700;font-size:.88rem}
+  .legend{font-size:.78rem;color:var(--muted);margin:6px 2px}
+  .legend b{padding:1px 6px;border-radius:3px}
+  ul{margin:8px 0;padding-left:20px}li{margin:3px 0}
+  .twocol{display:grid;grid-template-columns:1fr 1fr;gap:8px 22px}
+  footer{margin-top:34px;border-top:2px solid var(--ink);padding-top:14px;color:var(--muted);font-size:.82rem}
+  @media print{
+    body{background:#fff}.page{box-shadow:none;max-width:none;padding:0 8mm}
+    h2{break-after:avoid}table,.flow,.box{break-inside:avoid}
+    a{color:var(--ink)}@page{margin:16mm 0}
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+<h1>Wirtschaftlichkeits- &amp; Auslegungsstudie</h1>
+<p class="subtitle">LoRaWAN-basierte Heizungssteuerung für ganze Gebäude — Make-vs-Buy, Prozesskette &amp; dynamisches Kalkulationsmodell</p>
+<div class="meta">Projekt <b>whz-lora</b> · Westsächsische Hochschule Zwickau · Stand 2026-06-12 · Vorkalkulation, Modell mit belegten Default-Annahmen — <b>keine Garantie, kein Festpreis</b>. Interaktiv: <a href="model-calculator.html">model-calculator.html</a></div>
+
+<!-- ============ MANAGEMENT SUMMARY ============ -->
+<div class="box key">
+<h3 style="margin-top:0">Management Summary</h3>
+<p><b>Frage:</b> Lohnt sich LoRaWAN-Heizungssteuerung für ein gegebenes Gebäude — und was darf sie kosten?</p>
+<p><b>Antwort:</b> Es kommt auf <b>Bauart, Energieträger und Skalierung</b> an. Im <b>schlecht gedämmten Bestand</b> (Altbau, Plattenbau) amortisiert sich die Maßnahme; im <b>Neubau nicht</b>. Entscheidend ist jedoch die <b>Kostentiefe</b>: Die nackte Hardware-Rechnung (Referenzgebäude ~4,6 Jahre) wird <b>vollkostenbelastet — inklusive Prozesskette und laufendem Betrieb — zu ~10 Jahren</b>. Der Energieträger (Fernwärme statt Gas) und der Betrieb über mehrere Gebäude holen sie auf ~6–7 Jahre zurück.</p>
+<p><b>Make vs. Buy:</b> Fertigsysteme (z. B. Homematic IP) sind beim reinen Hardware-CAPEX günstiger; der Eigenbau (Make) auf offenem LoRaWAN gewinnt über <b>Offenheit, API/BMS-Anbindung, Skalierung jenseits der Hub-Limits, Forschungsdaten und kein Lock-in</b> — und nutzt das an der WHZ bereits vorhandene Gateway (Grenzkosten 0).</p>
+</div>
+
+<!-- ============ 1. FRAGESTELLUNG & METHODE ============ -->
+<h2>1. Fragestellung &amp; Methode</h2>
+<p class="lead">Das whz-lora-Gateway ist nicht Selbstzweck, sondern das <b>Messinstrument</b> dieser Studie: Für ein gegebenes Gebäude soll bestimmt werden, ob LoRaWAN-Heizungssteuerung wirtschaftlich ist (ja/nein) und innerhalb welcher Kostenhülle sie es bleibt.</p>
+<p>Die Antwort ist ein <b>dynamisches Modell</b>, das <b>rückwärts rechnet</b>: Aus dem erreichbaren Nutzen (Energieersparnis) folgt die maximal zulässige Systemkosten für Amortisation innerhalb des Horizonts — passt die reale Hardware + Installation darunter, ist es wirtschaftlich. Das Modell ist <b>pro Heizkörper</b> formuliert (Nutzen und Kosten skalieren beide ~linear mit der Gebäudegröße, die sich im Ja/Nein herauskürzt) und wird über <b>3–4 Bau-Archetypen</b> parametrisiert. Reale RSSI/SNR-Messungen aus dem whz-lora-Testbed kalibrieren die Funk-Seite.</p>
+
+<!-- ============ 2. MODELL ============ -->
+<h2>2. Das dynamische Modell</h2>
+<p>Zwei Ausgaben hängen an unterschiedlichen Parametern: die <b>Gateway-Auslegung</b> (Funk/Abdeckung) und das <b>Wirtschaftlichkeits-Urteil</b> (Kosten vs. Nutzen).</p>
+<table>
+<tr><th>Eingabe (Operator)</th><th>Rolle</th></tr>
+<tr><td>Archetyp (Bauart/Alter)</td><td>setzt Heizintensität, Ersparnis-Band, Funk-Klasse</td></tr>
+<tr><td>Aktuator-Anzahl, Geschosse, Fläche</td><td>absolute € und Gateway-Zahl</td></tr>
+<tr><td>Energiepreis, Horizont, Abgleich-Flag</td><td>treiben das Pro-Heizkörper-Urteil</td></tr>
+</table>
+<p class="src">Gleichungen: Nutzen = Intensität × Fläche × Ersparnis × Energiepreis; Make-CAPEX = Heizkörper × (Gerät + Montage) + Gateway; Amortisation = CAPEX ÷ Nutzen/Jahr; wirtschaftlich ⇔ Amortisation ≤ Horizont. Details: ADR-0021, model.md.</p>
+
+<!-- ============ 3. DATENBASIS ============ -->
+<h2>3. Datenbasis (belegt)</h2>
+<h3>Gebäude-Archetypen</h3>
+<table>
+<tr><th>Preset</th><th>Heizintensität</th><th>Ersparnis (HK / +Abgleich)</th><th>Funk-Klasse</th></tr>
+<tr><td>Neubau (GEG/EH-55)</td><td class="num">70 kWh/m²·a</td><td>4 % / 8 %</td><td>schwierig (Low-E)</td></tr>
+<tr><td>Saniert</td><td class="num">90</td><td>6 % / 12 %</td><td>moderat</td></tr>
+<tr><td>Altbau (Ziegel, &lt;1949)</td><td class="num">160</td><td>10 % / 18 %</td><td>mild</td></tr>
+<tr><td>Plattenbau / Stahlbeton</td><td class="num">140</td><td>12 % / 21 %</td><td>stark</td></tr>
+</table>
+<p class="src">Quellen: IWU TABULA, Destatis/Zensus 2022, ista/TU Dortmund (n=74k), Heizspiegel. Ersparnis-Bänder aus Energiespar-Literatur (s. §7). Größen-Defaults: Klein/Mehrfamilienhaus 35 HK, Mittel/Wohnkomplex 120 HK, Groß/Bürokomplex 92 HK.</p>
+
+<h3>Kostengrößen (recherchiert, mit Konfidenz)</h3>
+<table>
+<tr><th>Eingabe</th><th class="num">Default</th><th class="num">Spanne</th><th>Konfidenz · Quelle</th></tr>
+<tr><td>LoRaWAN-Aktuator (Mengenpreis)</td><td class="num">70 €</td><td class="num">50–82</td><td>mittel · m2mgermany/Concept13</td></tr>
+<tr><td>Montage / Aktuator</td><td class="num">40 €</td><td class="num">30–60</td><td>mittel · enpal/SHK</td></tr>
+<tr><td>Hydraulischer Abgleich / HK</td><td class="num">75 €</td><td class="num">50–120</td><td>hoch · co2online/Finanztip</td></tr>
+<tr><td>Energiepreis Gas</td><td class="num">0,12 €/kWh</td><td class="num">0,09–0,13</td><td>hoch · Destatis/BDEW</td></tr>
+<tr><td>Energiepreis Fernwärme</td><td class="num">0,16 €/kWh</td><td class="num">0,08–0,20</td><td>hoch · vzbv/DIW</td></tr>
+<tr><td>Gateway (0 € bei Wiederverwendung)</td><td class="num">200 €</td><td class="num">140–230</td><td>hoch · Retail Kerlink/RAK</td></tr>
+</table>
+<p class="src"><b>Kosten/Heizkörper bleiben ~110 €</b> — der günstigere Mengenpreis hebt die höhere Montage auf. <b>Annahme bleibt:</b> Mengenpreis (login-gated, −10–15 % geschätzt), Montage als Batch-Wert, Fernwärme = lokaler Monopolpreis (Faktor 2). Ein echtes WHZ-Angebot härtet diese drei.</p>
+
+<!-- ============ 4. VIRTUELLES UNTERNEHMEN ============ -->
+<h2>4. Das virtuelle Unternehmen — Prozesskette &amp; Kostenfluss</h2>
+<p>Damit die Kalkulation realistisch wird, bilden wir die Lieferung als Prozesskette eines kleinen technischen Betriebs ab — von der Anfrage bis zum laufenden Betrieb — und verteilen die Kosten auf die Schritte (Activity-Based Costing). <b>Referenzgebäude:</b> Mittel/Altbau, 120 Heizkörper, 6 Geschosse, 1.500 m², Gas, vorhandenes Gateway.</p>
+
+<div class="legend">Kostenbalken (CAPEX) je Schritt &nbsp; <b class="tag hw">Hardware</b> &nbsp; <b class="tag lab">Arbeit/Planung</b> &nbsp; <b class="tag calc">⚙ Kalkulationspunkt</b></div>
+<div class="flow">
+  <div class="frow"><div class="n">1</div><div class="fname">Erstkontakt &amp; Bedarfsklärung<small>0,5 Tag · Projektleitung</small></div><div><div class="bar" style="width:4%"></div></div><div class="fcost">320 €</div></div>
+  <div class="frow"><div class="n">2</div><div class="fname">Begehung &amp; Funk-Voruntersuchung<small>1 Tag · Ingenieur + Installateur · RSSI/SNR</small></div><div><div class="bar" style="width:12%"></div></div><div class="fcost">1.080 €</div></div>
+  <div class="frow calc"><div class="n">3</div><div class="fname">Auslegung &amp; wirtschaftliches Angebot <span class="tag calc">⚙</span><small>0,5 Tag · Sizing + Rückrechnung + Angebot</small></div><div><div class="bar" style="width:4%"></div></div><div class="fcost">320 €</div></div>
+  <div class="frow"><div class="n">4</div><div class="fname">Auftrag &amp; Beschaffung<small>Aktoren 120×70 € + PM · Gateway 0 € (vorhanden)</small></div><div><div class="bar hw" style="width:100%"></div></div><div class="fcost">9.040 €</div></div>
+  <div class="frow"><div class="n">5</div><div class="fname">LNS- &amp; Provisioning-Vorbereitung<small>0,5 Tag · ChirpStack + F-0005-App</small></div><div><div class="bar" style="width:4%"></div></div><div class="fcost">320 €</div></div>
+  <div class="frow"><div class="n">6</div><div class="fname">Installation &amp; Inbetriebnahme<small>1–2 Tage · 120×40 € Montage/Join + Remote</small></div><div><div class="bar hw" style="width:60%"></div></div><div class="fcost">5.440 €</div></div>
+  <div class="frow calc"><div class="n">7</div><div class="fname">Abnahme &amp; Soll-Ist-Abgleich <span class="tag calc">⚙</span><small>0,5 Tag · Ist-Payback + RF-Kalibrierung</small></div><div><div class="bar" style="width:4%"></div></div><div class="fcost">320 €</div></div>
+  <div class="frow"><div class="n">8</div><div class="fname">Betrieb, Monitoring &amp; Wartung<small>laufend · Batterie + Monitoring + Hosting</small></div><div><div class="bar lab" style="width:14%"></div></div><div class="fcost">1.238 €/a</div></div>
+</div>
+<table>
+<tr><th>Summen (Referenzgebäude)</th><th class="num">€</th><th>Anmerkung</th></tr>
+<tr><td>Kernkosten (Gerät + Montage)</td><td class="num">13.200</td><td>120 × 110 € — das, was der Rechner zeigt</td></tr>
+<tr><td>Prozess-Overhead (Planung, Begehung, PM, Abnahme)</td><td class="num">3.640</td><td>im nackten Hardware-Blick unsichtbar</td></tr>
+<tr><td><b>Vollkosten-CAPEX</b></td><td class="num"><b>16.840</b></td><td>realistische „virtuelles Unternehmen"-Sicht</td></tr>
+<tr><td>OPEX laufend</td><td class="num">1.238/a</td><td>Batterie 228 + Monitoring 960 + Hosting 50</td></tr>
+<tr><td><i>optional</i>: Hydraulischer Abgleich</td><td class="num">9.000</td><td>120 × 75 € — separater Fachbetrieb, Co-Maßnahme</td></tr>
+</table>
+
+<h3>Kalkulationspunkte im Prozess</h3>
+<table>
+<tr><th>Punkt</th><th>Schritt</th><th>Rechnung</th></tr>
+<tr><td>Gateway-Auslegung</td><td>3</td><td>gwCount = ⌈Geschosse / (4–5)⌉, RF-abhängig</td></tr>
+<tr><td>Geräte-/Aktorzahl</td><td>3</td><td>≈ Einheiten × 5 bzw. Fläche / 20 m²; vor Ort gezählt</td></tr>
+<tr><td>Wirtschaftliche Rückrechnung</td><td>3</td><td>Nutzen = I × A × s × Preis; Payback = CAPEX / Nutzen</td></tr>
+<tr><td>Make-vs-Buy</td><td>3</td><td>Buy = HK × 50 € + ⌈HK/250⌉ × 180 €; günstigere Variante</td></tr>
+<tr><td>Ist-Payback &amp; Kalibrierung</td><td>7</td><td>Ist-CAPEX / Nutzen; RSSI/SNR → Sizing-Parameter</td></tr>
+<tr><td>Wartungs-/Batteriezyklus</td><td>8</td><td>OPEX/Jahr; nächste Wechselwelle = Einbau + Intervall</td></tr>
+</table>
+
+<!-- ============ 5. VOLLKOSTEN vs KERNKOSTEN ============ -->
+<h2>5. Vollkosten vs. Kernkosten — die entscheidende Tiefe</h2>
+<p>Der nackte Hardware-Blick schmeichelt. Erst die Vollkosten (Prozesskette) und der laufende Betrieb (OPEX) zeigen das ehrliche Bild für das Referenzgebäude (Mittel/Altbau, Gas, ohne Abgleich):</p>
+<table>
+<tr><th>Sicht</th><th class="num">CAPEX</th><th class="num">OPEX/a</th><th class="num">Netto-Nutzen/a</th><th class="num">Amortisation</th></tr>
+<tr><td>Kern (Gerät + Montage)</td><td class="num">13.200</td><td class="num">—</td><td class="num">2.880</td><td class="num ok">4,6 J.</td></tr>
+<tr><td>Vollkosten-CAPEX (mit Prozess)</td><td class="num">16.840</td><td class="num">—</td><td class="num">2.880</td><td class="num">5,8 J.</td></tr>
+<tr><td><b>Vollkosten + Betrieb</b></td><td class="num">16.840</td><td class="num">1.238</td><td class="num">1.642</td><td class="num no">10,3 J.</td></tr>
+<tr><td>… mit Fernwärme (0,16 €/kWh)</td><td class="num">16.840</td><td class="num">1.238</td><td class="num">2.602</td><td class="num ok">6,5 J.</td></tr>
+<tr><td>… bei Skalierung (Monitoring/10 Gebäude)</td><td class="num">16.840</td><td class="num">~378</td><td class="num">2.502</td><td class="num ok">6,7 J.</td></tr>
+</table>
+<div class="box key"><b>Kernbefund:</b> Der dominante versteckte Hebel ist das <b>laufende Monitoring/Admin</b> (≈ 960 €/a für ein Einzelgebäude) — es frisst ein Drittel des Nutzens. Es ist aber stark <b>skalierbar</b>: über mehrere Gebäude verteilt sinkt es pro Gebäude drastisch. Zusammen mit dem <b>Energieträger</b> (Fernwärme) entscheidet die <b>Portfolio-Größe</b> über die Wirtschaftlichkeit — nicht die Gerätehardware.</div>
+
+<h3>Sensitivität — Einfluss je Stellschraube</h3>
+<p>Der ~10,3-Jahre-Wert ist ein irreführender Punktwert. Die Amortisation ist eine <b>Bandbreite</b>; diese Stellschrauben bewegen sie (Balken = Spanne, grün = besser/kürzer, rot = schlechter):</p>
+<img src="assets/tornado.svg" alt="Sensitivität je Stellschraube" style="width:100%;max-width:760px;display:block;margin:10px auto;border:1px solid var(--line);border-radius:6px">
+<table>
+<tr><th>#</th><th>Stellschraube</th><th>Einfluss auf Payback</th><th>Maßnahme / Hebel</th></tr>
+<tr><td>1</td><td><b>Einsparquote</b> (10 %, 5–12 %)</td><td>dominant: 10→5 % ≈ 83 J.; 10→15 % ≈ 5,5 J.</td><td>Band-Mitte ~9 %, Rebound-Abschlag, am Testbed kalibrieren</td></tr>
+<tr><td>2</td><td><b>Monitoring (OPEX)</b> (960 €/a)</td><td>größte kontrollierbare: →~7,1 J. (Portfolio ~6,5)</td><td>event-getrieben statt Routine; Portfolio-Fixkosten</td></tr>
+<tr><td>3</td><td><b>Stundensatz</b> (80 €/h Verkauf)</td><td>Multiplikator: 80→50 €/h ≈ 7–8 J.</td><td>Urteil zum WHZ-Kostensatz (45–65 €/h)</td></tr>
+<tr><td>4</td><td><b>Energieträger</b> (Gas 0,12)</td><td>Fernwärme 0,16 = +33 % ≈ 6,5 J.</td><td>realen Gebäude-Tarif nutzen</td></tr>
+<tr><td>5</td><td><b>Survey / Zweit-Gateway</b></td><td>−520 € + verstecktes 6-Geschoss-Risiko</td><td>Installateur-Tag weg; GW-Kontingenz im Angebot</td></tr>
+<tr><td>6</td><td><b>Hydraul. Abgleich</b> (9.000 €)</td><td>verdoppelt Ersparnis → ~5,7 J. (FW ~4,0)</td><td>eigene Co-Maßnahme mit eigenem Payback</td></tr>
+<tr><td>7</td><td><b>Aktor-Mengenpreis</b> (70 €)</td><td>weichste CAPEX-Zahl: −15 % → ~4,1 J.</td><td>echtes 120-Stück-Angebot (dnt & MClimate)</td></tr>
+</table>
+
+<h3>Kritischer Review — drei Korrekturen, die das Urteil verschieben</h3>
+<div class="box key">
+<b>1. Kein Punktwert — eine Bandbreite:</b> ehrlich ~5,5 J. (Fernwärme, abgeglichen, amortisiert) bis &gt;&gt;20 J. (Gas, 5 %, Einzelgebäude).<br>
+<b>2. Kostensatz statt Verkaufssatz:</b> das Make/Buy-Urteil mit dem WHZ-Grenzkostensatz rechnen, nicht mit 80 €/h.<br>
+<b>3. Versunkene Kosten nicht doppelt zählen:</b> F-0005, selbst gehosteter LNS und das vorhandene Gateway sind „sunk" — in der Prozesskette aber teils erneut berechnet (Schritte 5, 6, 8). Abbaubarer Overhead: ~1.500 €.
+</div>
+<table>
+<tr><th>Szenario</th><th class="num">Amortisation</th></tr>
+<tr><td>Gebucht (loaded+ops · Gas · 10 % · Einzelgebäude)</td><td class="num">~10,3 J.</td></tr>
+<tr><td>Bereinigt (Kostensatz + Monitoring event-getrieben)</td><td class="num">~7–8 J.</td></tr>
+<tr><td>… mit Fernwärme (0,16 €/kWh)</td><td class="num">~6,5 J.</td></tr>
+<tr><td>… mit hydraulischem Abgleich (Fernwärme)</td><td class="num ok">~4,0 J.</td></tr>
+<tr><td>Pessimistisch (Gas · 5 % Ersparnis · Einzelgebäude)</td><td class="num no">&gt;&gt;20 J.</td></tr>
+</table>
+<p class="src">Vollständig: <a href="report-a-prozesskette.pdf">Report A — Prozesskette (PDF)</a> · <a href="report-b-kostenanalyse.pdf">Report B — Kostenanalyse (PDF)</a>.</p>
+
+<!-- ============ 6. FUNKABDECKUNG ============ -->
+<h2>6. Funkabdeckung &amp; Auslegung (Sizing)</h2>
+<p>868-MHz-Indoor-Ausbreitung ist gut vermessen: Pfadverlust-Exponent n ≈ 2–4, ~10 dB pro Stahlbetondecke, 15–20 dB pro Stahlbetonwand, Ziegel 10–15 dB. Empirisch deckt <b>ein Gateway grob ~5 Etagen / ~30 m</b> in schwerem Mehrgeschossbau ab; ein einzelnes zentrales Gateway versorgte ein 4-Geschosser durchgängig. EU868-Grenze: 14 dBm ERP, Duty-Cycle 1 %. Es gibt <b>keine Indoor-16-Kanal-Gateways</b> in dieser Preisklasse — Verdichtung heißt mehr 8-Kanal-Gateways.</p>
+<p class="src">Quellen: arXiv 2510.04346 (Indoor-Pfadverlust), ScienceDirect DISN 2022 (390 Knoten, 4 Gateways, 8 Etagen → ~1 Gateway/5 Etagen), NIST IR 6055, ITU-R P.1238. <b>Lücke:</b> per-Etage-Dämpfung bei 868 MHz für Stahlbeton ist aus 900 MHz extrapoliert — <b>genau das misst whz-lora real</b> (Phase-4-Kalibrierung).</p>
+
+<!-- ============ 7. NUTZEN ============ -->
+<h2>7. Nutzen — Energieersparnis (ehrlich)</h2>
+<p>Gemessene Ersparnisse streuen <b>3,5–21 %</b>: ehrlicher kontrollierter Benchmark 3,5 % (Zonung auf bereits programmierten Systemen), ~10 % Thermostate allein, <b>~20 % erst mit hydraulischem Abgleich</b> (verdoppelt). Deutsche Break-even-Schwelle: nur <b>5,7–7,7 %</b> — der Fall ist plausibel, nicht garantiert. Herstellerangaben (22–31 %) beruhen auf überhöhten Baselines.</p>
+<p class="src">Quellen: Schäuble et al. 2020 (Break-even, peer-reviewed), Szczotka (Abgleich verdoppelt), Sunikka-Blank 2021 (RCT 3,5 %), KIT 2023 (15,5 %). <b>Lücke:</b> Institutionelle Gebäude sind in der Literatur quasi unvermessen (BBSR warnt) — zugleich der Forschungsbeitrag, den whz-lora leisten kann.</p>
+
+<!-- ============ 8. MAKE VS BUY ============ -->
+<h2>8. Make vs. Buy</h2>
+<table>
+<tr><th>Kriterium</th><th>Make (offenes LoRaWAN)</th><th>Buy (Homematic IP CCU3)</th></tr>
+<tr><td>Hardware-CAPEX (120 HK)</td><td class="num">13.200 €</td><td class="num">6.180 €</td></tr>
+<tr><td>Protokoll</td><td>offen, LoRaWAN EU868</td><td>proprietär (BidCos), <b>kein</b> LoRaWAN</td></tr>
+<tr><td>Skalierung</td><td>gebäudeweit, kein Geräte-Limit</td><td>≤ 250 Geräte/Zentrale; Inseln</td></tr>
+<tr><td>API / BMS / Forschungsdaten</td><td>REST/gRPC, MQTT, Datenpipeline</td><td>keine / app-zentriert</td></tr>
+<tr><td>Lock-in / Cloud</td><td>keiner; selbst gehostet</td><td>Vendor; Abo-/Cloud-Risiko</td></tr>
+<tr><td>WHZ-Vorteil</td><td>Gateway + LNS vorhanden (0 €)</td><td>separates System nötig</td></tr>
+</table>
+<p>Buy ist beim reinen CAPEX billiger; Make gewinnt über Offenheit, Skalierung, Daten und kein Lock-in. Für ein Forschungsgebäude mit vorhandener LoRaWAN-Infrastruktur ist „LoRaWAN-TRVs + selbst gehosteter LNS" architektonisch überlegen — die Mehrkosten pro Ventil sind die offene, skalierbare Plattform wert. <span class="src">Quellen: RQ7-Benchmark; MClimate Vicki ChirpStack-Codec.</span></p>
+
+<!-- ============ 9. BEISPIELSZENARIEN ============ -->
+<h2>9. Beispielszenarien (Kern-Payback, Gas)</h2>
+<table>
+<tr><th>Gebäude</th><th class="num">HK</th><th class="num">CAPEX</th><th class="num">Nutzen/a</th><th class="num">Amortisation</th><th>Urteil</th></tr>
+<tr><td>Klein / Neubau</td><td class="num">35</td><td class="num">3.850 €</td><td class="num">168 €</td><td class="num">22,9 J.</td><td class="no">✗</td></tr>
+<tr><td>Klein / Altbau</td><td class="num">35</td><td class="num">3.850 €</td><td class="num">960 €</td><td class="num">4,0 J.</td><td class="ok">✓</td></tr>
+<tr><td>Mittel / Altbau</td><td class="num">120</td><td class="num">13.200 €</td><td class="num">2.880 €</td><td class="num">4,6 J.</td><td class="ok">✓</td></tr>
+<tr><td>Mittel / Altbau · Fernwärme</td><td class="num">120</td><td class="num">13.200 €</td><td class="num">3.840 €</td><td class="num">3,4 J.</td><td class="ok">✓</td></tr>
+<tr><td>Groß / Plattenbau</td><td class="num">92</td><td class="num">10.120 €</td><td class="num">3.629 €</td><td class="num">2,8 J.</td><td class="ok">✓</td></tr>
+</table>
+<p class="src">Kern-Payback (Gerät+Montage). Vollkosten + Betrieb verschieben die ✓-Fälle um mehrere Jahre nach hinten (s. §5). Neubau bleibt in jeder Sicht unwirtschaftlich.</p>
+
+<!-- ============ 10. GRENZEN ============ -->
+<h2>10. Grenzen &amp; „noch zu messen"</h2>
+<ul>
+<li><b>Mengenpreis, Montage, Abgleich</b> sind belegt-grob — ein reales WHZ-/SHK-Angebot härtet sie endgültig.</li>
+<li><b>OPEX/Monitoring pro Gebäude</b> hängt stark von der Portfolio-Größe ab; das Einzelgebäude ist der ungünstigste Fall.</li>
+<li><b>868-MHz-Dämpfung Stahlbeton</b> ist aus 900 MHz extrapoliert — whz-lora misst sie real und kalibriert das Sizing.</li>
+<li><b>Institutionelle Ersparnis</b> ist in der Literatur unvermessen — der eigentliche Forschungsbeitrag der Basis.</li>
+<li>Förderung (BAFA/BEG) für LoRaWAN-TRVs und VAT-Behandlung der Hochschule sind nicht eingerechnet (konservativ).</li>
+</ul>
+
+<!-- ============ 11. FAZIT ============ -->
+<h2>11. Fazit &amp; Empfehlung</h2>
+<div class="box good">
+<p><b>LoRaWAN-Heizungssteuerung lohnt sich selektiv</b> — im schlecht gedämmten Bestand und bei Fernwärme, nicht im Neubau, und nur, wenn die <b>Vollkosten inklusive Betrieb</b> ehrlich angesetzt und über ein <b>Portfolio skaliert</b> werden. Die Hardware ist nicht der Engpass; <b>Prozess-Overhead, laufendes Monitoring und der Energieträger</b> entscheiden.</p>
+<p><b>Empfehlung:</b> (1) ein reales Angebot für ein konkretes WHZ-Altbau-Gebäude einholen, um die drei weichen Kostengrößen zu härten; (2) das vorhandene Gateway als Grenzkosten-0-Vorteil nutzen; (3) die Funk-Dämpfung am Testbed messen und das Sizing kalibrieren; (4) Wirtschaftlichkeit stets als Portfolio, nicht als Einzelgebäude denken.</p>
+</div>
+
+<!-- ============ QUELLEN ============ -->
+<h2>Quellen (Auswahl)</h2>
+<div class="twocol src">
+<div>Schäuble et al. 2020 — DE Break-even (Applied Energy / RIFS)</div>
+<div>Szczotka — TRV + hydraulischer Abgleich (Langzeitfeld)</div>
+<div>Sunikka-Blank et al. 2021 — RCT Zonung 3,5 %</div>
+<div>IWU TABULA / EPISCOPE — Gebäudetypologie</div>
+<div>Destatis / Zensus 2022 · ista/TU Dortmund — Gebäudegrößen</div>
+<div>Heizspiegel · Brunata — Heizintensität nach Ära</div>
+<div>arXiv 2510.04346 — Indoor-868-MHz-Pfadverlust</div>
+<div>ScienceDirect DISN 2022 — Gateway-Dichte (gemessen)</div>
+<div>co2online / Finanztip — hydraulischer Abgleich Kosten</div>
+<div>Destatis / BDEW — Gaspreis; vzbv / DIW — Fernwärmepreis</div>
+<div>m2mgermany / Concept13 — LoRaWAN-TRV-Mengenpreis</div>
+<div>RQ7-Benchmark — Homematic IP, MClimate Vicki</div>
+</div>
+
+<footer>
+whz-lora · Wirtschaftlichkeits- &amp; Auslegungsstudie · Vorkalkulation mit belegten Default-Annahmen, kein verbindliches Angebot.
+Interaktives Modell: <a href="model-calculator.html">model-calculator.html</a> · PDF-Reports: <a href="report-a-prozesskette.pdf">A — Prozesskette</a>, <a href="report-b-kostenanalyse.pdf">B — Kostenanalyse</a> · Methodik &amp; Quellen: <code>model.md</code>, <code>preliminary-research.md</code>, <code>building-typology.md</code>, ADR-0020/0021.
+Drucken → „Als PDF speichern" erzeugt diesen Report als PDF.
+</footer>
+
+</div>
+</body>
+</html>

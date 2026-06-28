@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="320" viewBox="0 0 760 320" font-family="Segoe UI, Arial, sans-serif">
+  <rect width="760" height="320" fill="#ffffff"/>
+  <!-- LEFT: standard 3 dBi, broad vertical lobe -->
+  <text x="180" y="22" font-size="11" font-weight="700" fill="#1a2230" text-anchor="middle">Standard 3 dBi (Stab/Dipol)</text>
+  <rect x="70" y="36" width="220" height="220" fill="#fbfcfe" stroke="#1a2230" stroke-width="1.2"/>
+  <g stroke="#c4ccd6" stroke-width="0.8"><line x1="70" y1="91" x2="290" y2="91"/><line x1="70" y1="146" x2="290" y2="146"/><line x1="70" y1="201" x2="290" y2="201"/></g>
+  <ellipse cx="150" cy="146" rx="78" ry="95" fill="#1f6feb" fill-opacity="0.16" stroke="#1f6feb" stroke-opacity="0.5"/>
+  <rect x="142" y="139" width="16" height="11" rx="2" fill="#1a2230"/>
+  <line x1="150" y1="139" x2="150" y2="126" stroke="#1a2230"/>
+  <g font-size="8.5" fill="#1a7f37" text-anchor="middle">
+    <text x="150" y="60">Etage darüber erreicht ✓</text>
+    <text x="150" y="238">Etage darunter erreicht ✓</text>
+  </g>
+  <text x="180" y="288" font-size="9" fill="#5b6876" text-anchor="middle">Breite Vertikalkeule → versorgt</text>
+  <text x="180" y="300" font-size="9" fill="#5b6876" text-anchor="middle">Etagen ober- und unterhalb.</text>
+
+  <!-- RIGHT: high-gain collinear, flat disk -->
+  <text x="560" y="22" font-size="11" font-weight="700" fill="#1a2230" text-anchor="middle">High-Gain ~8 dBi (Kollinear)</text>
+  <rect x="450" y="36" width="220" height="220" fill="#fbfcfe" stroke="#1a2230" stroke-width="1.2"/>
+  <g stroke="#c4ccd6" stroke-width="0.8"><line x1="450" y1="91" x2="670" y2="91"/><line x1="450" y1="146" x2="670" y2="146"/><line x1="450" y1="201" x2="670" y2="201"/></g>
+  <ellipse cx="530" cy="146" rx="135" ry="22" fill="#9a6700" fill-opacity="0.18" stroke="#9a6700" stroke-opacity="0.55"/>
+  <rect x="522" y="140" width="16" height="11" rx="2" fill="#1a2230"/>
+  <line x1="530" y1="140" x2="530" y2="127" stroke="#1a2230"/>
+  <g font-size="8.5" fill="#b42318" text-anchor="middle">
+    <text x="560" y="64">Etage darüber im Schatten ✗</text>
+    <text x="560" y="236">Etage darunter im Schatten ✗</text>
+  </g>
+  <text x="560" y="288" font-size="9" fill="#5b6876" text-anchor="middle">Flache Keule → mehr horizontale</text>
+  <text x="560" y="300" font-size="9" fill="#5b6876" text-anchor="middle">Reichweite, Etagen ober/unter schwächer.</text>
+
+  <!-- center note -->
+  <text x="380" y="150" font-size="9" font-weight="700" fill="#9a6700" text-anchor="middle">EU868:</text>
+  <text x="380" y="163" font-size="8" fill="#5b6876" text-anchor="middle">Sende-</text>
+  <text x="380" y="173" font-size="8" fill="#5b6876" text-anchor="middle">leistung</text>
+  <text x="380" y="183" font-size="8" fill="#5b6876" text-anchor="middle">≤16 dBm</text>
+  <text x="380" y="193" font-size="8" fill="#5b6876" text-anchor="middle">EIRP →</text>
+  <text x="380" y="203" font-size="8" fill="#5b6876" text-anchor="middle">TX muss</text>
+  <text x="380" y="213" font-size="8" fill="#5b6876" text-anchor="middle">runter.</text>
+</svg>

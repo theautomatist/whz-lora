@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="300" viewBox="0 0 900 300" font-family="Segoe UI, Arial, sans-serif">
+  <rect width="900" height="300" fill="#ffffff"/>
+
+  <!-- ===================== PANEL 1: Realität am Heizkörper ===================== -->
+  <text x="150" y="22" font-size="11" font-weight="700" fill="#1a2230" text-anchor="middle">1 · Realität: TRV am Heizkörper</text>
+  <rect x="20" y="36" width="260" height="218" fill="#fbfcfe" stroke="#1a2230" stroke-width="1.2"/>
+  <!-- Wand rechts -->
+  <rect x="258" y="36" width="22" height="218" fill="#eef2f6"/>
+  <text x="269" y="150" font-size="8" fill="#9aa7b4" text-anchor="middle" transform="rotate(90 269 150)">Wand</text>
+  <!-- Heizkörper (Metall) -->
+  <rect x="214" y="92" width="40" height="120" fill="#9aa7b4" stroke="#5b6876"/>
+  <g stroke="#ffffff" stroke-width="1" stroke-opacity="0.5"><line x1="222" y1="92" x2="222" y2="212"/><line x1="230" y1="92" x2="230" y2="212"/><line x1="238" y1="92" x2="238" y2="212"/><line x1="246" y1="92" x2="246" y2="212"/></g>
+  <text x="234" y="228" font-size="8" font-weight="700" fill="#5b6876" text-anchor="middle">Heizkörper (Metall)</text>
+  <!-- TRV am Ventil (Raumseite) -->
+  <rect x="192" y="142" width="20" height="22" rx="2" fill="#1f6feb"/>
+  <line x1="202" y1="142" x2="202" y2="130" stroke="#1f6feb" stroke-width="1.4"/>
+  <text x="186" y="178" font-size="8" fill="#1f6feb" text-anchor="end">TRV</text>
+  <!-- Signal in den Raum (links) -->
+  <g fill="none" stroke="#1a7f37" stroke-width="1.3" stroke-opacity="0.7">
+    <path d="M188 152 a26 26 0 0 0 0 0"/>
+    <path d="M186 135 a34 34 0 0 0 0 42"/>
+    <path d="M174 128 a48 48 0 0 0 0 56"/>
+  </g>
+  <text x="120" y="120" font-size="8.5" fill="#1a7f37" text-anchor="middle">Signal in den Raum ✓</text>
+  <!-- Abschattung rechts -->
+  <path d="M214 100 L254 100 L254 204 L214 204 Z" fill="#b42318" fill-opacity="0.10"/>
+  <text x="234" y="250" font-size="8" fill="#b42318" text-anchor="middle">Rückseite abgeschattet</text>
+
+  <!-- ===================== PANEL 2: Fensterbank — zu optimistisch ===================== -->
+  <text x="450" y="22" font-size="11" font-weight="700" fill="#1a2230" text-anchor="middle">2 · Lose auf der Fensterbank</text>
+  <rect x="320" y="36" width="260" height="218" fill="#fbfcfe" stroke="#1a2230" stroke-width="1.2"/>
+  <!-- Fenster rechts -->
+  <rect x="558" y="36" width="22" height="218" fill="#eaf1fb" stroke="#9fb6d6"/>
+  <text x="569" y="150" font-size="8" fill="#5b6876" text-anchor="middle" transform="rotate(90 569 150)">Fenster (ggf. Low-E)</text>
+  <!-- Fensterbank -->
+  <rect x="470" y="170" width="110" height="8" fill="#d9e0e8"/>
+  <!-- TRV frei liegend -->
+  <rect x="486" y="156" width="22" height="14" rx="2" fill="#1f6feb"/>
+  <text x="497" y="150" font-size="8" fill="#1f6feb" text-anchor="middle">TRV frei</text>
+  <!-- Omni-Signal rundum -->
+  <g fill="none" stroke="#9a6700" stroke-width="1.2" stroke-opacity="0.7">
+    <circle cx="497" cy="163" r="26"/>
+    <circle cx="497" cy="163" r="40"/>
+  </g>
+  <text x="430" y="210" font-size="8.5" font-weight="700" fill="#b42318" text-anchor="middle">Metall fehlt →</text>
+  <text x="430" y="222" font-size="8.5" font-weight="700" fill="#b42318" text-anchor="middle">ca. 3–10 dB zu gut</text>
+  <text x="450" y="244" font-size="8" fill="#9a6700" text-anchor="middle">Abstand &gt; 30 cm zu Low-E-Glas halten (sonst zu pessimistisch)</text>
+
+  <!-- ===================== PANEL 3: 3D-Halter + A/B-Check ===================== -->
+  <text x="750" y="22" font-size="11" font-weight="700" fill="#1a2230" text-anchor="middle">3 · 3D-Halter + A/B-Metallcheck</text>
+  <rect x="620" y="36" width="260" height="218" fill="#fbfcfe" stroke="#1a2230" stroke-width="1.2"/>
+  <!-- 3D-Halter (Ventilstutzen) -->
+  <rect x="690" y="150" width="14" height="60" rx="2" fill="#e8f6ee" stroke="#1a7f37"/>
+  <text x="697" y="224" font-size="7.5" fill="#1a7f37" text-anchor="middle">3D-Halter</text>
+  <!-- TRV in echter Orientierung -->
+  <rect x="676" y="140" width="20" height="22" rx="2" fill="#1f6feb"/>
+  <line x1="686" y1="140" x2="686" y2="128" stroke="#1f6feb" stroke-width="1.4"/>
+  <text x="668" y="135" font-size="8" fill="#1f6feb" text-anchor="end">TRV</text>
+  <!-- Metallplatte A/B im realen Abstand -->
+  <rect x="724" y="108" width="10" height="96" fill="#9aa7b4" stroke="#5b6876" stroke-dasharray="4 3"/>
+  <text x="740" y="156" font-size="8" fill="#5b6876" text-anchor="start" transform="rotate(90 748 156)">Stahlblech 30×50 cm</text>
+  <!-- Abstandsmaß -->
+  <line x1="696" y1="200" x2="724" y2="200" stroke="#1a2230" stroke-width="0.8" marker-start="url(#t)" marker-end="url(#t)"/>
+  <text x="710" y="214" font-size="7.5" fill="#1a2230" text-anchor="middle">5–8 cm</text>
+  <!-- Labels -->
+  <text x="700" y="58" font-size="8.5" fill="#1a7f37" text-anchor="middle">Orientierung &amp; Höhe = echt</text>
+  <text x="750" y="244" font-size="8" font-weight="700" fill="#1a2230" text-anchor="middle">A/B (frei ↔ mit Platte) → ΔRSSI beziffert den Effekt</text>
+  <defs><marker id="t" markerWidth="6" markerHeight="6" refX="3" refY="3"><circle cx="3" cy="3" r="1.6" fill="#1a2230"/></marker></defs>
+</svg>
