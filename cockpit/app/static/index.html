@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WHZ Feldtest Cockpit</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header>
+  <h1>WHZ LoRa Feldtest Cockpit</h1>
+  <div id="status-bar">
+    <span class="badge" id="badge-point">Point: —</span>
+    <span class="badge" id="badge-antenna">Antenna: —</span>
+    <span class="badge stopped" id="badge-rec">&#9679; Stopped</span>
+    <span class="badge" id="badge-sse">SSE: connecting</span>
+  </div>
+</header>
+
+<main>
+
+  <!-- Panel 1: Device registration -->
+  <section class="panel" id="panel-devices">
+    <h2>1 · Devices</h2>
+    <div class="form-row">
+      <label>Name</label>
+      <input id="dev-name" type="text" placeholder="sensor-01">
+    </div>
+    <div class="form-row">
+      <label>DevEUI (hex)</label>
+      <input id="dev-eui" type="text" placeholder="0102030405060708" maxlength="16">
+    </div>
+    <div class="form-row">
+      <label>AppKey (hex)</label>
+      <input id="dev-appkey" type="text" placeholder="0102030405060708090a0b0c0d0e0f10">
+    </div>
+    <div class="form-row">
+      <label>JoinEUI (optional)</label>
+      <input id="dev-joineui" type="text" placeholder="0000000000000000" maxlength="16">
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="registerDevice()">Register</button>
+      <button class="btn btn-outline" onclick="loadDevices()">Refresh list</button>
+    </div>
+    <div class="msg" id="dev-msg"></div>
+    <div class="table-wrap" style="margin-top:10px">
+      <table id="dev-list-table">
+        <thead>
+          <tr><th>DevEUI</th><th>Name</th><th>Profile</th><th>Last seen</th></tr>
+        </thead>
+        <tbody id="dev-list-body">
+          <tr><td colspan="4" style="color:var(--muted)">— not loaded —</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Panel 2: Measurement point + CSV -->
+  <section class="panel" id="panel-point">
+    <h2>2 · Measurement Point</h2>
+    <div class="form-grid">
+      <div class="form-row">
+        <label>Pos-ID</label>
+        <input id="pt-posid" type="text" placeholder="P1">
+      </div>
+      <div class="form-row">
+        <label>Expected N</label>
+        <input id="pt-n" type="number" placeholder="50" min="1">
+      </div>
+      <div class="form-row">
+        <label>Floor</label>
+        <input id="pt-floor" type="text" placeholder="3OG">
+      </div>
+      <div class="form-row">
+        <label>Room</label>
+        <input id="pt-room" type="text" placeholder="R301">
+      </div>
+      <div class="form-row">
+        <label>Type</label>
+        <select id="pt-type">
+          <option value="indoor">indoor</option>
+          <option value="outdoor">outdoor</option>
+          <option value="stairwell">stairwell</option>
+          <option value="corridor">corridor</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label>LOS</label>
+        <select id="pt-los">
+          <option value="LOS">LOS</option>
+          <option value="NLOS">NLOS</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label>Path</label>
+        <input id="pt-path" type="text" placeholder="direct">
+      </div>
+      <div class="form-row">
+        <label>Mounting</label>
+        <input id="pt-mounting" type="text" placeholder="desk">
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="setPoint()">Set point</button>
+    </div>
+    <div class="msg" id="pt-msg"></div>
+    <hr style="margin:10px 0; border-color:var(--border)">
+    <div class="big-indicator" id="cur-point">Point: —</div>
+    <div class="btn-row" style="margin-top:8px">
+      <button class="btn btn-success" id="btn-rec-start" onclick="startRecording()">&#9679; Start recording</button>
+      <button class="btn btn-danger"  id="btn-rec-stop"  onclick="stopRecording()" disabled>&#9632; Stop</button>
+      <a class="btn btn-outline" id="btn-csv-dl" href="/api/csv" target="_blank">&#8595; CSV</a>
+    </div>
+    <div class="msg" id="rec-msg"></div>
+  </section>
+
+  <!-- Panel 3: Live dashboard -->
+  <section class="panel" id="panel-live" style="grid-column: 1 / -1">
+    <h2>3 · Live Dashboard</h2>
+    <div class="table-wrap">
+      <table id="live-table">
+        <thead>
+          <tr>
+            <th>DevEUI</th>
+            <th>RSSI (dBm)</th>
+            <th>SNR (dB)</th>
+            <th>SF</th>
+            <th>fCnt</th>
+            <th>RX (this point)</th>
+            <th>PDR</th>
+            <th>DL sent</th>
+            <th>ACKed</th>
+            <th>DL-PDR</th>
+          </tr>
+        </thead>
+        <tbody id="live-body">
+          <tr><td colspan="10" style="color:var(--muted)">Waiting for uplinks…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Panel 4: Downlink loopback -->
+  <section class="panel" id="panel-dl">
+    <h2>4 · Downlink Loopback</h2>
+    <div class="form-row">
+      <label>DevEUI</label>
+      <input id="dl-eui" type="text" placeholder="0102030405060708">
+    </div>
+    <div class="form-row">
+      <label>FPort</label>
+      <input id="dl-fport" type="number" value="1" min="1" max="223">
+    </div>
+    <div class="form-row">
+      <label>Data (hex, optional)</label>
+      <input id="dl-data" type="text" placeholder="00" value="00">
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="enqueueDownlink()">Enqueue confirmed DL</button>
+    </div>
+    <div class="msg" id="dl-msg"></div>
+  </section>
+
+  <!-- Panel 5: Coexistence scan -->
+  <section class="panel" id="panel-coex">
+    <h2>5 · Coexistence Scan</h2>
+    <div class="btn-row">
+      <button class="btn btn-success" id="btn-coex-start" onclick="toggleCoex(true)">Start scan</button>
+      <button class="btn btn-danger"  id="btn-coex-stop"  onclick="toggleCoex(false)" disabled>Stop scan</button>
+    </div>
+    <div class="msg" id="coex-status">Scan inactive.</div>
+    <div class="table-wrap" style="margin-top:8px">
+      <table class="coex-table" id="coex-table">
+        <thead>
+          <tr><th>Channel</th><th>SF</th><th>Frames</th><th>CAF</th><th>Status</th></tr>
+        </thead>
+        <tbody id="coex-body">
+          <tr><td colspan="5" style="color:var(--muted)">No data yet.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Panel 6: Antenna -->
+  <section class="panel" id="panel-antenna">
+    <h2>6 · Antenna</h2>
+    <div class="big-indicator" id="ant-indicator">—</div>
+    <div class="antenna-group">
+      <button class="ant-btn" id="ant-3dbi" onclick="setAntenna('3dbi')">3 dBi</button>
+      <button class="ant-btn" id="ant-12dbi" onclick="setAntenna('12dbi')">12 dBi</button>
+    </div>
+    <div class="msg" id="ant-msg"></div>
+  </section>
+
+</main>
+
+<div id="toast"></div>
+
+<script src="app.js"></script>
+</body>
+</html>

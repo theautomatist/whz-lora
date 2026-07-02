@@ -137,3 +137,52 @@ records what was removed and why. The entry format is defined in
 - Realised by: n/a
 - Linked directives / ADRs: ADR-0014, ADR-0015, ADR-0017, PR #2
 - History: 2026-05-26 added; 2026-05-26 status → active (PR #2)
+
+### F-0005 — Feldtest-Cockpit
+
+- Status: active
+- Summary: Schlankes Web-UI (FastAPI) auf dem Mess-Host (Raspberry Pi), das
+  die LoRaWAN-Messkampagne (Testkonzept, Studien-Phase 4) komfortabel — auch
+  vom Handy — bedienbar macht: Geräte registrieren, Messpunkte + Messblatt-
+  Metadaten setzen und mitschneiden, Live-Metriken sehen, Downlink-Loopback
+  (Phase 5) und Koexistenz-Scan (Phase 4) starten. Kapselt ChirpStack-gRPC +
+  MQTT und schreibt dieselbe CSV wie `scripts/field_logger.py`.
+- Problem solved: Die Kampagne wird heute per SSH + Skript (`field_logger.py`
+  via stdin, `register_device.py`) bedient — vor Ort im Gebäude unpraktisch.
+  Ein Browser-Cockpit macht Punktwechsel, Registrierung, Live-Kontrolle und die
+  Phasen 4/5 bequem bedienbar.
+- User-facing behavior: Operator öffnet `http://<host>:8000`, registriert
+  Geräte per Formular, setzt den aktuellen Messpunkt inkl. Metadaten
+  (Etage/Raum/Punkt-Typ/Pfad→GW/Montage), startet/stoppt die CSV-Aufzeichnung,
+  sieht live RSSI/SNR/SF je Gerät + PDR je Punkt, taggt die aktive Antenne
+  (3 dBi/12 dBi), löst bestätigte Downlinks aus (Downlink-PDR) und startet den
+  passiven Koexistenz-Scan (CAF/Ampel).
+- Acceptance criteria:
+  - Nach `docker compose up` unter `http://<host>:8000` erreichbar (HTTP 200 auf
+    `/`), eigener Container `cockpit` (arm64, gepinnte Basis-Version, kein
+    `:latest`).
+  - Registrierung: ein per Formular (Name/DevEUI/AppKey) angelegtes OTAA-Gerät
+    erscheint per gRPC in App `whz-feldtest` mit gesetztem Key; ein
+    anschließender OTAA-Join wird akzeptiert.
+  - Messpunkt/CSV: bei gesetztem `pos_id` + Metadaten und aktiver Aufzeichnung
+    wird je Uplink eine CSV-Zeile im `field_logger`-Schema (+ Metadaten-Spalten)
+    geschrieben.
+  - Live-Dashboard: eingehende Uplinks erscheinen binnen ~2 s mit
+    RSSI/SNR/SF/fCnt; PDR je `pos_id` = empfangen/erwartet(N).
+  - Downlink-Loopback: ausgelöster bestätigter Downlink wird eingereiht, ACK
+    gezählt, Downlink-PDR je Punkt ausgewiesen.
+  - Koexistenz-Scan: passiv, abonniert `eu868/gateway/+/event/up`, zählt
+    Fremd-Frames je Kanal/SF, zeigt CAF-Ampel; keine aktiven Sendungen.
+  - Antennen-Toggle: aktiver Typ (3 dBi/12 dBi) wird als Tag in jede CSV-Zeile
+    geschrieben; keine Hardware-Schaltung.
+  - Zugriffsschutz: einfacher Token/Basic-Auth aus `.env` schützt UI/API;
+    Credentials nicht im Repo.
+- Dependencies: F-0001 (Gateway-Anbindung), F-0002 (Geräte-Verwaltung —
+  komplementär), F-0003 (Daten-Weiterleitung), F-0004 (Reproduzierbares Setup)
+- Interfaces & data: HTTP/8000 (UI + SSE); ChirpStack-gRPC (8080,
+  Geräte/Queue); MQTT (1883, `application/#` + `eu868/gateway/#`, read via
+  `testsubscriber`); CSV wie `field_logger` + Metadaten; `.env`
+  (Cockpit-Auth, ChirpStack-Zugang).
+- Realised by: n/a (Single-Repo)
+- Linked directives / ADRs: Issue #10
+- History: 2026-07-02 added (proposed)
