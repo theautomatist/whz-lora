@@ -2,17 +2,20 @@
 #show: report.with(
   title: "Testkonzept — LoRaWAN-Funkabdeckung, -Stabilität & -Koexistenz",
   subtitle: "Mini-Messkampagne im WHZ-Neubau · empirische Kalibrierung des Sizing-Modells (Studien-Phase 4)",
-  meta: "Projekt whz-lora · WHZ · Rev. 2026-06-23 · 1 Kerlink-Gateway + dedizierter Testknoten + wenige TRV-Aktoren · ADR aus, feste SF · vier Messphasen inkl. Fremd-LoRaWAN-Scan",
+  meta: "Projekt whz-lora · WHZ · Rev. 2026-07-02 · 1 Kerlink-Gateway + dedizierter Testknoten + wenige TRV-Aktoren · ADR aus, feste SF · fünf Messphasen, abgestimmt auf das Register offener Punkte",
 )
 
 #callout(title: "Worum es geht", color: accent)[
   Das Sizing-Modell der Studie stützt sich auf einige Funk-Kennzahlen, die bisher nur
   *aus der Literatur* (teils nicht einmal LoRa-spezifisch) stammen. Diese Kampagne misst
-  sie *am realen Neubau* nach — mit minimalem Aufbau, in einem halben bis ganzen Tag,
-  systematisch und reproduzierbar. Neu in dieser Revision: eine vierte, *passive* Messphase
-  prüft, ob im Gebäude *fremde LoRaWAN-Netze* aktiv sind und unser Netz stören könnten.
+  sie *am realen Neubau* nach — mit minimalem Aufbau, systematisch und reproduzierbar.
+  Neu in dieser Revision ist die *Abstimmung auf das Register offener Punkte*
+  (`offene-punkte-register.pdf`): Jede Messung liefert gezielt Daten für einen dort
+  benannten offenen Punkt. Dafür kommen zwei Phasen hinzu — ein *passiver*
+  Fremd-LoRaWAN-Scan (Koexistenz, H5) und ein *Downlink-Loopback* (H6), der erstmals prüft,
+  ob auch der *Rückweg* zum Aktor (Sollwerte, Stellbefehle) am ungünstigsten Punkt ankommt.
   Ergebnis: belastbare, gebäudespezifische Zahlen statt geschätzter Defaults — und ein
-  früher Koexistenz-Befund, der zugleich die Blaupause für die spätere Kunden-Begehung ist.
+  Feldtest, dessen Ausbeute nachweislich die richtigen offenen Fragen bedient.
 ]
 
 = Ausgangslage & Erkenntnisse
@@ -30,8 +33,9 @@ mit *sehr unterschiedlicher Konfidenz*. Genau die unsicheren Werte sind das Ziel
   [Gateway-Empfindlichkeit @ SF12], [−140 dBm], [#text(fill: good)[hoch]], [Kerlink-Datenblatt (Referenz)],
   [Gateway-Dichte (Archetyp A)], [ca. 1 GW / 2–3 Etagen], [#text(fill: bad)[niedrig]], [Faustregel],
   [Fremd-LoRaWAN-Last am Standort], [unbekannt], [#text(fill: bad)[offen]], [bisher nicht erhoben — Ziel H5],
+  [Downlink-Erreichbarkeit (Rückweg)], [ungeprüft], [#text(fill: bad)[offen]], [nur Uplink belegt — Ziel H6 (Register T1)],
 )
-#plain[Den rot/gelb markierten Zahlen vertrauen wir nicht blind — wir messen sie nach. Die Fremd-LoRaWAN-Last ist überhaupt erst zu erheben.]
+#plain[Den rot/gelb markierten Zahlen vertrauen wir nicht blind — wir messen sie nach. Fremd-LoRaWAN-Last und Downlink-Erreichbarkeit sind überhaupt erst zu erheben.]
 
 = Das Gebäude als Messumgebung
 
@@ -83,7 +87,7 @@ kalibrierten Einzelwert.
 
 = Forschungsfragen & Hypothesen
 
-Fünf testbare Fragen, jede mit Erwartung und der Entscheidung, die sie trägt:
+Sechs testbare Fragen, jede mit Erwartung und der Entscheidung, die sie trägt:
 
 #table(
   columns: (auto, 1.3fr, 1fr, 1.2fr),
@@ -94,12 +98,41 @@ Fünf testbare Fragen, jede mit Erwartung und der Entscheidung, die sie trägt:
   [H3], [Wie viel dämpft das *Low-E-Glas* real (LoRa, 868 MHz)?], [20–40 dB (erstmals LoRa-gemessen)], [RF-Klasse / Pfadverlust — der wertvollste Einzelwert],
   [H4], [Bringt eine *High-Gain-Antenne* indoor messbar mehr?], [horizontal ja, vertikal evtl. schlechter; Netto gering], [Antennen- & Platzierungswahl (Kostenfrage)],
   [H5], [Ist am Standort ein *fremdes LoRaWAN* aktiv, und wie hoch ist dessen Kanal-Airtime-Anteil?], [CAF < 2 % (unkritisch; typisch für Wohngebiete)], [Kanalplan, Zweit-Gateway-Risiko & PDR-Erwartung (Begehung)],
+  [H6], [Erreicht ein *bestätigter Downlink* (Sollwert) den Aktor auch am Worst-Case-Punkt?], [Downlink-PDR ≥ 95 % bei SF12 (Rückweg schwächer als Uplink)], [ob eine Klasse-A-Steuerung trägt (Register T1); Budget bei Last → Simulator (T2)],
 )
 
-= Die vier Messphasen im Überblick
+= Abstimmung auf das Register offener Punkte
 
-Die Kampagne ist in vier Blöcke gegliedert. Die ersten drei *senden aktiv* mit festem
-Spreizfaktor; die vierte *hört nur passiv mit* und kann während der anderen mitlaufen.
+Diese Kampagne ist bewusst so zugeschnitten, dass jede Messung *Daten für einen konkreten
+offenen Punkt* des Projekts liefert. Grundlage ist das konsolidierte Register
+(`offene-punkte-register.pdf`, Register B „Technik & Test-Grenzen"). Die folgende Tabelle
+macht die Zuordnung explizit — und benennt ehrlich, was der Feldtest *schließt*, was er nur
+*informiert* und was *außerhalb* seiner Reichweite bleibt (mit Verweis auf die ergänzende
+Methode). Sie ist zugleich die Abhak-Liste: Jeder gemessene Wert wird im Register am
+zugehörigen Punkt vermerkt.
+
+#table(
+  columns: (auto, 1.4fr, 1.5fr, auto),
+  stroke: 0.5pt + rulec, inset: 6pt, align: top + left,
+  table.header(th("Offener Punkt"), th("Was er braucht"), th("Wie dieser Test ihn bedient"), th("Grad")),
+  [*T1* Downlink-Erreichbarkeit], [Downlink-PDR je Punkt], [Messphase 5 — Downlink-Loopback (bestätigter Downlink, ACK-Quote; am Test-TRV, Zielgerät via T8-Korrekturfaktor)], [#text(fill: good)[schließt (Feld)]],
+  [*T4* GW-Position & Diversity], [Alternativ-Standort / 2. GW im A/B], [Kontingenz-Szenario B: zweiter Anker + geliehenes 2. GW an denselben Punkten], [#text(fill: warn)[informiert → schließt bei Leihgerät]],
+  [*T6* Bauzustand WDVS/Low-E], [Materialprotokoll + Wiederholung], [Protokollpflicht + `MATERIAL_UNSICHER`-Tag + Low-E-Paar (H3)], [#text(fill: good)[schließt (bei Fertigbau-Wdh.)]],
+  [*T7* Fremdnetz (Koexistenz)], [CAF-Momentaufnahme + Trend], [Messphase 4 — passiver CAF-Scan (H5)], [#text(fill: warn)[Momentaufnahme; Trend → Monitoring]],
+  [*T8* Geräte-Repräsentativität], [A/B Ziel-TRV gegen Test-TRV], [A/B an 1 Punkt: Δ Link-Budget als Korrekturfaktor], [#text(fill: warn)[schließt bei vorliegendem Ziel-TRV]],
+  [*T9* Schnappschuss & Statistik], [≥ 20 Punkte/Etage, Soak, Fade-Margin], [Fixpunkt-Soak + optionaler Walk-Knoten + Fade-Margin-Ansatz], [#text(fill: warn)[räumlich geschlossen; Saison offen (1 Termin)]],
+  [*T2* Downlink-Duty-Cycle], [Last-Simulation Downlink-Budget], [→ `chirpstack-simulator` (Labor, Ergänzung zu Phase 5)], [#text(fill: muted)[außerhalb Feld → Simulator]],
+  [*T3* Kapazität / SF12-Well], [Lasttest 35/120 Aktoren], [→ `chirpstack-simulator` (Labor)], [#text(fill: muted)[außerhalb Feld → Simulator]],
+  [*T5* Archetyp-Übertragung], [Referenz je Archetyp], [nur Neubau A kalibriert], [#text(fill: muted)[außerhalb → 2. Archetyp-Messung]],
+  [*K1* Einsparquote], [Energie-Ersparnis am Pilot], [Funktest misst keine Energie], [#text(fill: muted)[außerhalb → Pilot/Testbed]],
+)
+#plain[„schließt" = der Test liefert den belastbaren Wert selbst · „informiert" = er verengt die Unsicherheit, schließt aber erst mit einer Zusatzbedingung (Leihgerät, Fertigbau, Zielgerät) · „außerhalb" = am Feldtermin nicht erzeugbar, gehört in Simulator, zweite Messung oder Pilot.]
+
+= Die fünf Messphasen im Überblick
+
+Die Kampagne ist in fünf Blöcke gegliedert. Die ersten drei *senden aktiv* im Uplink mit
+festem Spreizfaktor; die vierte *hört nur passiv mit*; die fünfte prüft den *Downlink*
+(Rückweg) und läuft an denselben aktiven Punkten wie Phase 1/2 mit — ohne zusätzliche Begehung.
 
 #table(
   columns: (auto, 1.4fr, 1fr, 1.3fr),
@@ -109,13 +142,14 @@ Spreizfaktor; die vierte *hört nur passiv mit* und kann während der anderen mi
   [*2 · Reserve*], [reicht ein Gateway im Worst-Case? (H2)], [aktiv, SF12], [Funk-Reserve, 1-vs-2-Gateways],
   [*3 · Antenne*], [Nutzen High-Gain vs. Standard (H4)], [aktiv, A/B-Tausch], [ΔRSSI/ΔPDR je Etagenlage],
   [*4 · Koexistenz*], [stört fremdes LoRaWAN? (H5)], [passiv, alle SF], [CAF + Ampel + Begehungs-Befund],
+  [*5 · Downlink*], [kommt der Sollwert an? (H6)], [aktiv, bestätigt, SF12], [Downlink-PDR je Punkt + Budget-Hinweis],
 )
 
 = Wirkungskette: von der Messung zur Entscheidung
 
 #figure(
   image("assets/test-wirkungskette.svg", width: 100%),
-  caption: [Jede der fünf Messgrößen speist genau einen Modell-Parameter und damit eine konkrete Entscheidung — nichts wird „auf Vorrat" gemessen. Zeile 5 ergänzt die passive Koexistenz-Messung.],
+  caption: [Jede der sechs Messgrößen speist genau einen Modell-Parameter und damit eine konkrete Entscheidung — nichts wird „auf Vorrat" gemessen. Die sechs Fragen H1–H6 verteilen sich auf fünf Phasen (H1 und H3 teilen sich Phase 1). Zeile 5 ergänzt die passive Koexistenz-Messung, Zeile 6 den Downlink-Rückweg zum Aktor.],
 )
 
 = Messgrößen & Qualitätskriterien
@@ -128,7 +162,8 @@ Welche Werte erfassen wir, und welche Bereiche sind interessant?
   table.header(th("Größe"), th("Bedeutung"), th("Erfasst über"), th("Interessanter Bereich")),
   [RSSI], [Empfangspegel (dBm)], [`rxInfo.rssi` je Uplink], [sehr gut über −80; brauchbar bis ca. −110; kritisch unter −120 (nahe −140 Empfindlichkeit)],
   [SNR], [Abstand zum Rauschen (dB)], [`rxInfo.snr` je Uplink], [LoRa funkt *unter* dem Rauschen → negativ ist normal; über 0 komfortabel; −20 dB = Demod-Limit (gesättigt)],
-  [PDR], [Paket-Zustellrate (%)], [empfangen ÷ gesendet (fCnt)], [ab 99 % exzellent; ab 80 % für Heizung ausreichend; unter 50 % = Abdeckungslücke],
+  [PDR (Uplink)], [Paket-Zustellrate Hinweg (%)], [empfangen ÷ gesendet (fCnt)], [ab 99 % exzellent; ab 80 % für Heizung ausreichend; unter 50 % = Abdeckungslücke],
+  [PDR (Downlink)], [Zustellrate Rückweg (%) — Sollwert erreicht den Aktor (H6)], [bestätigte Downlinks: ACKs ÷ gesendet], [ab 95 % gut; unter 80 % = Steuerbarkeit kritisch, RX2-Anteil/Budget prüfen],
   [SF], [genutzter Spreizfaktor], [im Test fest gesetzt], [SF7 reicht ⇒ ca. 14 dB Reserve bis SF12 ⇒ Punkt sicher],
   [Airtime/ToA], [Sendedauer je Paket], [aus SF/BW berechnet], [Duty-Cycle-Budget (SF12 ca. 1,15 s)],
   [σ(RSSI), σ(SNR)], [*Stabilität* über die Zeit], [Streuung der N Werte], [kleine Streuung = stabil; große = wackelig (Stabilitäts-Indikator)],
@@ -144,11 +179,12 @@ Welche Werte erfassen wir, und welche Bereiche sind interessant?
   caption: [Erst jeden Effekt einzeln isolieren, dann den kombinierten Worst-Case — sonst lässt sich aus einem schlechten Messwert nicht zurückrechnen, *woran* es lag.],
 )
 
-Vier Methodik-Regeln machen die Messung wissenschaftlich verwertbar:
+Fünf Methodik-Regeln machen die Messung wissenschaftlich verwertbar:
 - *ADR aus, festes SF* je Phase — sonst regelt ChirpStack den Spreizfaktor selbst und keine zwei Messwerte sind vergleichbar (H2 wäre nie gemessen).
 - *Baseline zuerst und zuletzt* (P0, Sichtlinie 5–10 m): beweist, dass Aufbau und Knoten funktionieren, bevor man einem „schlechten" Wert traut; der Schluss-Baseline ist der Drift-Check.
 - *Duty-Cycle-konform senden* (EU868, 1 %): Sendeintervall aus der Airtime ableiten — sonst werden Protokoll-Pausen als Funkverlust fehlgedeutet und verfälschen genau die Reserve-Zahl.
 - *Koexistenz passiv und parallel:* Messphase 4 sendet nichts, sondern hört nur mit — sie braucht kein De-Confounding (rein beobachtend) und läuft am besten über die gesamte Termin-Dauer mit.
+- *Downlink-Loopback am selben Punkt:* Messphase 5 sendet je aktivem Punkt ein bis mehrere *bestätigte* Downlinks (z. B. `DevStatusReq` oder ein TRV-Konfig-Kommando) und zählt die ACKs im nächsten Uplink — so entsteht die Downlink-PDR ohne eigene Begehung. Das Gateway *als Sender* unterliegt dabei selbst dem Duty-Cycle (ca. 1 % auf RX1-, 10 % im RX2-Subband): im Test unkritisch (wenige Frames), im Betrieb die Kapazitätsgrenze aus Register T2.
 
 = Aufbau im Gelände: ein Gateway, drei Thermostate
 
@@ -219,6 +255,31 @@ unteren Teil dieses Fensters. Das ist eine *Größenordnung*, kein gemessener We
   Abstand > 30 cm zu Low-E-Glas halten, sonst kippt der Fehler ins Gegenteil (zu
   pessimistisch, > 20 dB Glasdämpfung).
 
+== Gateway-Position absichern: Alternativ-Standort & Zweit-Gateway (schließt T4)
+
+Der Standardaufbau misst *eine* Gateway-Position — ob sie optimal ist und was ein zweites
+Gateway an *Diversity* bringt (dem Gewinn dadurch, dass zwei getrennte Empfänger dasselbe
+Paket hören), bleibt sonst offen (Register T4). Zwei schlanke Zusätze schließen die Lücke,
+wenn der Termin es zulässt:
+
+- *Alternativ-Anker (kostenlos):* dieselben 2–3 Worst-Case-Punkte einmal mit dem Gateway an
+  einem zweiten plausiblen Standort messen. Das ΔRSSI zeigt, wie stark die Position das
+  Ergebnis trägt — schon das entzerrt die „1 vs. 2 GW"-Faustformel.
+- *Zweit-Gateway-Kontingenz (Leihgerät):* liegt ein zweites Gateway vor, beide gleichzeitig
+  betreiben und je Punkt das *bessere* der beiden RSSI werten. Die Differenz zum
+  Ein-Gateway-Fall ist der direkt gemessene Diversity-Gewinn — die Zahl, die im Modell bisher
+  nur als Literaturwert (+60 % Kapazität) steht.
+
+#plain[Beides ist ein *A/B-Vergleich*: dieselben Punkte einmal mit Variante A (ein Gateway, Referenzstandort) und einmal mit Variante B (verschobenes bzw. zweites Gateway) direkt gegeneinander.]
+
+== Geräte-Repräsentativität: Ziel-TRV gegen Test-TRV (schließt T8)
+
+Der Test-Aktor ist evtl. nicht das später beschaffte Serienprodukt; schon 3–6 dB anderes
+*Link-Budget* (die Pegel-Bilanz von Sender bis Empfänger) können die „1 vs. 2 GW"-Entscheidung
+drehen (Register T8). Sobald das Zielgerät feststeht, an *einem* Punkt beide Modelle unmittelbar
+nacheinander messen (gleiche Position, gleiches SF, je 20 Pakete). Das ΔRSSI/ΔPDR ist der
+*Korrekturfaktor*, mit dem sich die Kalibrierung vom Test-TRV auf das Seriengerät übertragen lässt.
+
 = Messpunkt-Plan
 
 Mit drei TRVs deckt jede *Runde* drei Punkte gleichzeitig ab; das Gateway steht je Runde
@@ -233,6 +294,9 @@ fest. Die Punkt-Typen bilden die De-Confounding-Leiter:
   [Horizontaler Lauf (eine Etage, 0 Decken)], [Wand-/Distanz-Dämpfung], [Messphase 1, SF9], [20/Pkt],
   [Low-E-Paar (innen an der Scheibe vs. 3–5 m im Raum)], [Glas-Dämpfung (H3)], [Messphase 1, SF9], [20/Pkt],
   [Worst-Case (entfernteste Ecke, höchstes/tiefstes Geschoss)], [Funk-Reserve (H2, F7)], [Messphase 2, SF12], [20/Pkt],
+  [Downlink-Loopback (an aktiven Punkten, v. a. Worst-Case)], [Downlink-Erreichbarkeit (H6, T1)], [Messphase 5, SF12 bestätigt], [10/Pkt],
+  [A/B Ziel-TRV (1 Punkt, sobald Zielgerät bekannt)], [Geräte-Delta (T8)], [Messphase 1, SF9], [20/Modell],
+  [A/B Gateway (Alternativ-/2. Standort, Kontingenz)], [Position & Diversity (T4)], [Worst-Case-Punkte, SF12], [20/Pkt],
   [Koexistenz-Scan (passiv, *kein* Walk)], [Fremd-LoRaWAN-Last EU868 (H5)], [Messphase 4, alle SF], [≥ 60 min, empf. 120 min],
 )
 
@@ -404,6 +468,73 @@ ein Zweit-Gateway und erlaubt realistische PDR-Zusagen (z. B. 96–99 % statt ga
   Semtech TN1300.05; Adelantado et al., arXiv:1607.08011.
 ]
 
+= Messphase 5 — Downlink-Erreichbarkeit: der Rückweg zum Aktor (H6)
+
+Alle bisherigen Phasen messen den *Uplink* (Aktor → Gateway). Eine Heizungssteuerung lebt aber
+vom *Downlink* (Gateway → Aktor): Sollwerte, Stellbefehle, Konfiguration. Uplink- und
+Downlink-Pfad sind *nicht* symmetrisch — ein erreichbarer Uplink garantiert keinen ankommenden
+Sollwert. Diese Phase schließt den in Register T1 benannten offenen Punkt und liefert eine
+*Downlink-PDR-Karte* je Messpunkt.
+
+== Warum der Rückweg gesondert zählt
+
+LoRaWAN-Aktoren sind *Klasse-A*-Geräte: Ein Downlink kann sie nur in einem der zwei kurzen
+Empfangsfenster erreichen, die das Gerät *nach jedem eigenen Uplink* öffnet — *RX1* (gleiche
+Frequenz und SF wie der Uplink, 1 s danach) oder *RX2* (fest 869,525 MHz, SF12, 2 s danach).
+Verpasst der Server beide Fenster, wartet der Befehl bis zum nächsten Uplink. Drei Effekte
+machen den Downlink anfälliger als den Uplink:
+
+- *Asymmetrische Pegelbilanz:* Der Aktor empfängt mit kleiner, oft metallnaher Antenne
+  (Heizkörper) — der Empfang *am Aktor* ist meist schlechter als der am hochgelegenen Gateway.
+- *RX2 ist der langsame Rückfall:* Fällt RX1 aus, landet alles auf RX2 — fest bei SF12 und auf
+  *einem* geteilten Kanal (869,525 MHz). Dessen Subband (g3) hat zwar das großzügigere
+  10-%-Duty-Cycle, doch die lange SF12-Airtime und der *eine* gemeinsame Kanal machen ihn zum
+  Engpass — nicht das Budget (Register T2).
+- *Gateway-Duty-Cycle:* Das Gateway *als Sender* teilt sich das Sendezeit-Budget je Subband —
+  ca. 1 % auf den RX1-Kanälen (868,x), 10 % im RX2-Subband g3. Bei vielen Aktoren mit bestätigten
+  Sollwerten wird es dennoch knapp (Register T2).
+
+== Wie der Loopback misst
+
+An denselben aktiven Punkten (Schwerpunkt Worst-Case) wird je Punkt ein *bestätigter* Downlink
+ausgelöst und die Bestätigung gezählt:
+
++ In ChirpStack einen *confirmed Downlink* einreihen — entweder ein MAC-Kommando
+  (`DevStatusReq`, antwortet mit Batterie/SNR) oder ein harmloses TRV-Konfig-Kommando auf einem
+  Test-FPort.
++ Das Gerät quittiert mit gesetztem *ACK*-Bit (Acknowledgement, Empfangsbestätigung) im nächsten
+  Uplink; ChirpStack meldet Zustellung bzw. Timeout je Versuch.
++ *Downlink-PDR* = quittierte ÷ gesendete Downlinks je Punkt (empfohlen N = 10 je Punkt, wegen
+  der Soak-Zeit weniger als beim Uplink).
++ Notieren, ob die Zustellung über *RX1* oder *RX2* erfolgte (im Frame-Log erkennbar) — reiner
+  RX2-Betrieb trotz gutem Uplink ist ein Frühwarnzeichen für knappes Downlink-Budget.
+
+#table(
+  columns: (auto, 1fr, 1.6fr),
+  stroke: 0.5pt + rulec, inset: 6pt, align: (x, y) => if x == 1 { center } else { left },
+  table.header(th("Downlink-PDR (Worst-Case)"), th("Bewertung"), th("Konsequenz")),
+  [≥ 95 %], [#text(fill: good)[*gut*]], [Klasse-A-Steuerung trägt; Standardplan genügt],
+  [80–95 %], [#text(fill: warn)[*grenzwertig*]], [Sollwert-Wiederholung einplanen; RX2-Anteil prüfen],
+  [< 80 %], [#text(fill: bad)[*kritisch*]], [Downlink limitiert die Steuerung — Gateway-Position / 2. GW (T4) oder Antenne (H4) nötig],
+)
+
+== Grenze: Kapazität bei vielen Aktoren gehört ins Labor
+
+Der Feld-Loopback beweist die *Erreichbarkeit* mit drei Geräten — er zeigt *nicht* das
+Downlink-Budget bei 35–120 Aktoren (Register T2/T3). Diese Kapazitätsfrage (Duty-Cycle-Sättigung,
+SF12-Well) ist am realen Termin nicht erzeugbar und gehört in einen *Simulator-Lasttest* mit dem
+`chirpstack-simulator` (35/120 Geräte, bestätigter Betrieb) — eine Schreibtisch-Ergänzung, die
+denselben offenen Punkt vom Kapazitäts-Ende her schließt. Feld-Loopback und Simulator-Lasttest
+sind im Register bewusst als *ein* Schritt gebündelt (Priorität 6).
+
+#callout(title: "Werkzeug (Folge-Direktive)", color: teal)[
+  Der Downlink-Loopback braucht das Einreihen bestätigter Downlinks (ChirpStack-API/UI) und das
+  Auslesen von TX-Ack/ACK — dieselbe schlanke `field_logger.py`-Erweiterung wie für Messphase 4
+  (Gateway-Topic), nur um einen Downlink-Zähler ergänzt. Für die Erstdiagnose genügt die
+  ChirpStack-UI (Device → *Queue* zum Einreihen, *LoRaWAN frames* zum Ablesen von ACK und
+  RX1/RX2). Noch nicht umgesetzt.
+]
+
 = Technischer Aufbau
 
 *Hardware* — die Strom- und Compose-Grundlage steht bereit; der Stack lässt sich am
@@ -415,7 +546,7 @@ Gateway-Standort betreiben und frei im Gebäude positionieren:
 
 *Software* — der vorhandene whz-lora-Stack:
 - `docker compose up -d --wait` (ChirpStack v4, Gateway Bridge, Mosquitto, PostgreSQL, Redis).
-- `scripts/field_logger.py` (MQTT-Subscribe → CSV je Frame, nach dem `smoke_test.py`-Muster). Für Messphase 4 vom Application- auf das Gateway-Topic `eu868/gateway/+/event/up` umgestellt (Folge-Direktive).
+- `scripts/field_logger.py` (MQTT-Subscribe → CSV je Frame, nach dem `smoke_test.py`-Muster). Für Messphase 4 vom Application- auf das Gateway-Topic `eu868/gateway/+/event/up` umgestellt; für Messphase 5 zusätzlich bestätigte Downlinks einreihen (ChirpStack-API/UI) und TX-Ack/ACK in die CSV zählen — dieselbe Folge-Direktive.
 - Device-Profil mit *ADR = Disabled*; Gateway mit *`stats_interval` = 30*.
 
 = ChirpStack startklar machen
@@ -441,22 +572,27 @@ Gateway-Standort betreiben und frei im Gebäude positionieren:
   [TRV-Sendeintervall (Test)], [ca. 5 min (per Downlink)], [halbiert die Soak-Zeit ggü. Default 10 min; bei SF9/SF12 Duty-Cycle-konform],
   [Intervall dedizierter Knoten], [20 s (SF9) / ≥ 120 s (SF12)], [nur falls ein Walk-Knoten ergänzt wird; Duty-Cycle 1 %],
   [N je Punkt], [20 Pakete], [pragmatisches Mittel (PDR ca. ±13 PP bei N=20); N=10 grob, N≥50 präzise],
+  [Downlink Messphase 5], [bestätigt, SF12 (RX1/RX2)], [misst Rückweg-Erreichbarkeit (H6); ACK-Quote = Downlink-PDR],
+  [N Downlink je Punkt], [10 bestätigte], [weniger als Uplink-N wegen Soak-Zeit; genügt für die Ampel],
   [Soak-Dauer je Runde], [N × Intervall (ca. 100–200 min)], [gilt für alle 3 TRVs gleichzeitig; 5 Runden ≈ 8–17 h],
   [MQTT-Topic Messphase 4], [`eu868/gateway/+/event/up`], [enthält *alle* Frames inkl. Fremdnetz; Application-Topic trägt Fremdes nie],
   [Messdauer Koexistenz], [≥ 60 min, empf. 120 min], [Geräte mit 10–15-min-Intervall erscheinen sonst nicht; Schätzung braucht Stichprobe],
   [Gateway `stats_interval`], [30 s], [verhindert die Falsch-„offline"-Anzeige],
-  [Messpunkte], [9–12 + 1 Passiv-Scan], [De-Confounding-Leiter, 3 TRVs × 3–4 Runden],
+  [Messpunkte], [9–12 + 1 Passiv-Scan + Downlink an aktiven Punkten], [De-Confounding-Leiter, 3 TRVs × 3–4 Runden],
 )
 
 = Erfolgskriterien
 
 - *Setup verifiziert:* Baseline P0 liefert RSSI −60…−80 dBm und PDR 100 % (sonst Setup- statt Funkproblem).
 - *H1 erfüllt:* Dämpfung dB/Etage als Zahl aus einer vertikalen Säule über ≥ 3 Etagen.
-- *H2 / F7 beantwortet:* am ungünstigsten Punkt bei SF12 ist PDR ≥ 80 % *und* RSSI über −112 dBm ⇒ ein Gateway genügt; sonst ist ein zweiter Standort dokumentiert (F8).
+- *H2 / F7 beantwortet:* am ungünstigsten Punkt bei SF12 ist PDR ≥ 80 % *und* RSSI über −112 dBm ⇒ ein Gateway genügt; sonst ist ein zweiter Standort dokumentiert (F8). Bei N = 20 trägt die PDR ca. ±13 PP Konfidenz — steht die 1-vs-2-GW-Entscheidung auf der Kippe, N an diesem Punkt erhöhen.
 - *H3 erfüllt:* Low-E-Dämpfung als gebäudespezifischer LoRa-Messwert (ersetzt den 35–60-dB-Schätzwert).
 - *H4 beantwortet:* ΔRSSI/ΔPDR High-Gain vs. Standard je Etagenlage — klare Aussage „lohnt sich / lohnt sich nicht".
 - *H5 beantwortet:* `CAF` je Kanal/SF als Zahlenwert mit Ampel-Bewertung; DevAddr-Klassifikation (eigen/fremd) und SF-Verteilung des Fremdverkehrs; Ergebnis im RF-Survey-Feld „Band-Occupancy / Koexistenz-Befund".
+- *H6 beantwortet:* Downlink-PDR je Punkt (bestätigte Downlinks, ACK-Quote); am Worst-Case ≥ 95 % ⇒ Klasse-A-Steuerung trägt, sonst RX2-Anteil und Downlink-Budget dokumentiert (schließt Register T1).
 - *Aufbau realitätsnah:* TRVs im 3D-Halter gemessen; an 1–2 Punkten ΔRSSI des Heizkörper-Metalls (A/B mit Metallplatte) beziffert und — falls > 6 dB — als Fade-Margin-Zuschlag vermerkt.
+- *Offene Punkte bedient:* sofern der Termin es zuließ — Alternativ-/Zweit-Gateway (T4) und A/B Ziel-TRV (T8) als Δ dokumentiert; andernfalls ausdrücklich als bewusst offen vermerkt.
+- *Register abgestimmt:* je gemessenem Wert notiert, welchen offenen Punkt er schließt oder informiert (Tabelle „Abstimmung auf das Register"); die geschlossenen Punkte sind im Register abgehakt und die Quelle aktualisiert.
 - *Reproduzierbar:* persistente CSV + Punktblatt + Grundriss-Foto in `docs/developer/analysis/`; je Szenario ein *Gateway-Anker* und je TRV-Punkt ein *Funkstrecken-Protokoll* (Distanz, Decken/Wände, LOS/NLOS) festgehalten.
 
 = Stolperfallen
@@ -472,12 +608,18 @@ Gateway-Standort betreiben und frei im Gebäude positionieren:
 - *Gateway-Bridge-Filter ungeprüft:* sind `[filters]` (NetID/JoinEUI) konfiguriert, werden Fremd-Frames unterdrückt. Vor Messphase 4 prüfen, dass die Filtersektion leer ist.
 - *Fensterbank-Falle (fehlendes Heizkörper-Metall):* den TRV lose hinzulegen blendet die ca. 3–10 dB Metallnähe-Dämpfung aus ⇒ Ergebnis zu optimistisch. Lösung: 3D-Halter (echte Orientierung) + A/B-Metallcheck an 1–2 Punkten. *Aber:* > 30 cm Abstand zu Low-E-Glas halten, sonst kippt der Fehler ins Gegenteil (zu pessimistisch).
 - *Funkstrecke nicht dokumentiert:* ohne Gateway-Anker und Pfad-Protokoll je Punkt (Distanz, Decken/Wände, LOS/NLOS) ist ein schlechter RSSI-Wert nicht zuzuordnen — Gebäude-, Geräte- oder Reichweiten-Ursache bleibt offen.
+- *Downlink nur als „gesendet" werten* (Loopback-Killer): ein eingereihter Downlink ist nicht zugestellt. Nur *bestätigte* Downlinks mit ACK im Folge-Uplink zählen; Timeout = Fehlversuch. Reiner RX2-Betrieb (SF12, 869,525 MHz) trotz gutem Uplink ist ein Warnzeichen für knappes Budget.
+- *Confirmed-Downlink-Sturm:* zu viele bestätigte Downlinks kurz hintereinander erschöpfen das Gateway-Sendezeit-Budget (ca. 1 % auf RX1-Kanälen, 10 % im RX2-Subband g3) — im Test wenige Frames je Punkt (N=10) einplanen; im Betrieb ist genau das die Kapazitätsgrenze T2.
 
 #callout(color: teal)[
-  *Was dieser Test bewusst NICHT abdeckt* — Downlink-Erreichbarkeit, Kapazität bei 35–120 Aktoren,
-  der Diversity-Nutzen eines zweiten Gateways, Langzeit-/Saisonstabilität — steht mit Restrisiken
-  (Schweregrad + Maßnahme) und ergänzenden Methoden im Begleitpapier *„Grenzen, Restrisiken &
-  ergänzende Methoden"* (`test-concept-grenzen-risiken.pdf`).
+  *Was dieser Test auch nach der Abstimmung NICHT selbst abdeckt* — die *Kapazität* bei 35–120
+  Aktoren und das Downlink-Budget unter Last (Register T2/T3 → `chirpstack-simulator`), *andere
+  Archetypen* außer Neubau A (T5), das *Wachstum* der Fremd-LoRaWAN-Last über die Zeit (T7 →
+  Dauer-Monitoring) sowie die tatsächliche *Energie-Einsparquote* (K1 → Pilot/Testbed, kein
+  Funkmesswert). Diese Punkte stehen mit Schweregrad und ergänzender Methode im Register
+  (`offene-punkte-register.pdf`) und im Begleitpapier *„Grenzen, Restrisiken & ergänzende
+  Methoden"* (`test-concept-grenzen-risiken.pdf`). Neu *abgedeckt* gegenüber der Vorrevision:
+  Downlink-Erreichbarkeit (Feld, T1) und — als Kontingenz — Diversity/Zweit-Gateway (T4).
 ]
 
 #pagebreak()
@@ -487,9 +629,10 @@ Gateway-Standort betreiben und frei im Gebäude positionieren:
 Pro Messpunkt nur die Kontext-Angaben hier eintragen. *RSSI, SNR, SF, Frequenz, fCnt und PDR*
 loggt `field_logger.py` je `pos_id` automatisch in die CSV
 (Spalten: `timestamp_utc, dev_eui, pos_id, rssi_dbm, snr_db, sf, freq_hz, f_cnt, gw_eui`).
-Punkt-Typ: `BASELINE` · `VERTIKALE_SAEULE` · `HORIZONTAL` · `LOW_E_INNEN` · `LOW_E_RAUM` · `WORST_CASE` · `ANTENNE_HIGH_GAIN` · `KOEXISTENZ_SCAN`.
+Punkt-Typ: `BASELINE` · `VERTIKALE_SAEULE` · `HORIZONTAL` · `LOW_E_INNEN` · `LOW_E_RAUM` · `WORST_CASE` · `ANTENNE_HIGH_GAIN` · `KOEXISTENZ_SCAN` · `DOWNLINK_LOOPBACK` · `AB_ZIEL_TRV` · `AB_GATEWAY`.
 Montage: `HK` (am Heizkörper) · `3D` (3D-Halter) · `frei`. Pfad→GW: Anzahl Decken, Wände als Typ×n (`GK`/`KS`/`SB`/`LoE`/`WDVS`), `LOS`/`NLOS`.
 Für `KOEXISTENZ_SCAN` zusätzlich notieren: Messdauer (min) · Fremd-Frames gesamt · stärkste fremde RSSI · erkannte NetID-Blöcke (TTN/Helium/privat/unbekannt) · Ampel-Ergebnis (Grün/Gelb/Rot).
+Für `DOWNLINK_LOOPBACK` zusätzlich: gesendete/quittierte Downlinks · Downlink-PDR (%) · Zustellfenster (RX1/RX2). Für `AB_ZIEL_TRV` / `AB_GATEWAY`: gemessenes ΔRSSI/ΔPDR gegenüber der Referenz.
 #v(5pt)
 #block(fill: soft, inset: 7pt, radius: 3pt, width: 100%)[
   *Gateway-Anker (je Runde — vor den Messpunkten ausfüllen):*
@@ -500,6 +643,6 @@ Für `KOEXISTENZ_SCAN` zusätzlich notieren: Messdauer (min) · Fremd-Frames ges
   columns: (auto, auto, auto, 1fr, 1fr, auto, auto, 1.5fr, auto, auto, 1.1fr),
   stroke: 0.5pt + rulec, inset: 5pt,
   table.header(th("POS_ID"), th("Runde"), th("Etage"), th("Raum / Lage"), th("Punkt-Typ"), th("SF"), th("Höhe m"), th("Pfad→GW (Decken·Wände·LOS)"), th("Montage"), th("Uhrzeit"), th("Bemerkung")),
-  ..range(15).map(i => ([#v(12pt)], [], [], [], [], [], [], [], [], [], [])).flatten()
+  ..range(13).map(i => ([#v(12pt)], [], [], [], [], [], [], [], [], [], [])).flatten()
 )
 ]

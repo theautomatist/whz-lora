@@ -235,16 +235,18 @@ Signal-Rausch-Abstand *SNR* und die Paket-Zustellrate *PDR* (Packet Delivery Rat
 angekommener Pakete). Eine Heizungssteuerung lebt aber von *Downlinks* (Sollwerte, Stellbefehle). Die
 Quelle (Dossier A1) erklärt die *Link-Asymmetrie*: ein Downlink wird in einem der zwei kurzen
 Empfangsfenster geliefert, die ein Gerät nach jedem Uplink öffnet — *RX1* (gleiche Frequenz wie der
-Uplink) oder *RX2* (fest 869,525 MHz, langsamster Modus). Beide werden im Test nicht aktiv geprüft.
+Uplink) oder *RX2* (fest 869,525 MHz, langsamster Modus). Der Feldtest deckte den Downlink
+zunächst nicht ab; das Testkonzept schließt diese Lücke jetzt mit *Messphase 5 (Downlink-Loopback)*
+— durchzuführen am Messtermin.
 
 #band(
   [Uplink], [gemessen (RSSI/PDR)], [belegt],
-  [Downlink], [NICHT gemessen], [offen — Sollwert kommt evtl. nicht an],
+  [Downlink], [Verfahren steht (Messphase 5); noch nicht durchgeführt], [offen bis zum Messtermin — Sollwert kommt evtl. nicht an],
 )
 
 #why[Uplink- und Downlink-Pfad sind nicht symmetrisch; ein erreichbarer Uplink garantiert keinen ankommenden Sollwert. Bleibt der Downlink aus, kann das Netz die Datenrate nicht mehr nachregeln und die Sendezeit steigt.]
 
-#closes[einen *Downlink-Loopback* in den Feldtest integrieren — einen Gegentest, bei dem das Gateway einen bestätigten Downlink sendet und das Gerät ihn per *ACK* (Acknowledgement, Empfangsbestätigung) im nächsten Uplink quittiert → so entsteht eine Downlink-PDR-Karte je Messpunkt.]
+#closes[Der *Downlink-Loopback* ist als *Messphase 5* im Testkonzept spezifiziert — ein Gegentest, bei dem das Gateway einen bestätigten Downlink sendet und das Gerät ihn per *ACK* (Acknowledgement, Empfangsbestätigung) im nächsten Uplink quittiert → Downlink-PDR-Karte je Messpunkt. Am Messtermin durchführen und die Werte hier eintragen.]
 
 == T2 — Downlink-Duty-Cycle (Kapazität)
 #strip("hoch", [Technik · Quelle: `risiken` A2])
@@ -517,7 +519,7 @@ Entscheidungen*, nicht mit Hardware.
   [3], [*WHZ-Grenzkostensatz festlegen* (45–65 €/h) für das Make-/Buy-Urteil], [K4], [niedrig],
   [4], [*Betriebsmodell entscheiden* (ereignisgesteuertes Monitoring + Portfolio)], [K3], [niedrig],
   [5], [*120-Stück-Bulk-Angebot* einholen (dnt + Vicki), Artikelnummern], [K5], [niedrig],
-  [6], [*Downlink-Loopback in den Feldtest* + Simulator-Lasttest 35/120], [T1, T2, T3], [niedrig–mittel],
+  [6], [*Downlink-Loopback durchführen* (Testkonzept Messphase 5) + Simulator-Lasttest 35/120], [T1, T2, T3], [niedrig–mittel],
   [7], [*Einsparquote am Pilot messen* (netto, mit Rebound) — das breiteste Band], [K1], [hoch],
   [8], [*2. Gateway leihen* (Diversity/Position) + A/B Ziel-TRV; Walk-Survey], [T4, T8, T9], [mittel],
 )
