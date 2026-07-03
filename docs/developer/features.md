@@ -156,7 +156,10 @@ records what was removed and why. The entry format is defined in
   (Etage/Raum/Punkt-Typ/Pfad→GW/Montage), startet/stoppt die CSV-Aufzeichnung,
   sieht live RSSI/SNR/SF je Gerät + PDR je Punkt, taggt die aktive Antenne
   (3 dBi/12 dBi), löst bestätigte Downlinks aus (Downlink-PDR) und startet den
-  passiven Koexistenz-Scan (CAF/Ampel).
+  passiven Koexistenz-Scan (CAF/Ampel). Über einen Phasen-Schalter setzt er
+  alle Geräte per Klick auf ein festes SF (SF9/SF12) oder normales ADR um
+  (server-seitig via ChirpStack-ADR-Plugins + Profile) und sendet
+  MClimate-Vicki-Downlinks (5-min-Intervall `02 05`, Loopback `04`).
 - Acceptance criteria:
   - Nach `docker compose up` unter `http://<host>:8000` erreichbar (HTTP 200 auf
     `/`), eigener Container `cockpit` (arm64, gepinnte Basis-Version, kein
@@ -175,6 +178,9 @@ records what was removed and why. The entry format is defined in
     Fremd-Frames je Kanal/SF, zeigt CAF-Ampel; keine aktiven Sendungen.
   - Antennen-Toggle: aktiver Typ (3 dBi/12 dBi) wird als Tag in jede CSV-Zeile
     geschrieben; keine Hardware-Schaltung.
+  - Phasen-Schalter: `POST /api/phase {sf9|sf12|adr}` setzt alle Geräte der App
+    auf das zugehörige Device-Profil (festes SF via ADR-Plugin `fixed_dr3`/
+    `fixed_dr0` bzw. normales ADR); die Phase wird als CSV-Spalte getaggt.
   - Zugriffsschutz: einfacher Token/Basic-Auth aus `.env` schützt UI/API;
     Credentials nicht im Repo.
 - Dependencies: F-0001 (Gateway-Anbindung), F-0002 (Geräte-Verwaltung —
@@ -182,7 +188,9 @@ records what was removed and why. The entry format is defined in
 - Interfaces & data: HTTP/8000 (UI + SSE); ChirpStack-gRPC (8080,
   Geräte/Queue); MQTT (1883, `application/#` + `eu868/gateway/#`, read via
   `testsubscriber`); CSV wie `field_logger` + Metadaten; `.env`
-  (Cockpit-Auth, ChirpStack-Zugang).
+  (Cockpit-Auth, ChirpStack-Zugang); ChirpStack-ADR-Plugins
+  `chirpstack/adr_fixed_dr{0,3}.js` + Profile `WHZ-Feldtest-SF9`/`-SF12`.
 - Realised by: n/a (Single-Repo)
-- Linked directives / ADRs: Issue #10
-- History: 2026-07-02 added (proposed)
+- Linked directives / ADRs: Issue #10, PR #11
+- History: 2026-07-02 added (proposed); 2026-07-03 active — first wave +
+  Phasen-/festes-SF-Schalter (PR #11)

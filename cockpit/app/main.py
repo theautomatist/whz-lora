@@ -12,6 +12,7 @@ Routes:
   POST /api/downlink           enqueue a confirmed downlink
   POST /api/antenna            toggle antenna type tag
   POST /api/coex               enable/disable coexistence scan
+  POST /api/phase              switch all devices to a fixed-SF or ADR device profile
   GET  /api/events             SSE stream of live events (uplink/join/ack/nack/coex/state)
 """
 import asyncio
@@ -73,11 +74,15 @@ async def _lifespan(app: FastAPI):
         try:
             ch = cs.get_channel()
             tok = cs.get_token(ch)
-            tid = cs.find_tenant_id(ch, tok)
-            aid = cs.find_app_id(ch, tok, tid)
+            tid, t_created = cs.find_or_create_tenant(ch, tok)
+            aid, a_created = cs.find_or_create_application(ch, tok, tid)
             _grpc_channel, _grpc_token, _tenant_id, _app_id = ch, tok, tid, aid
             logger.info(
-                "ChirpStack gRPC ready: tenant=%s app=%s", _tenant_id, _app_id
+                "ChirpStack gRPC ready: tenant=%s (%s) app=%s (%s)",
+                _tenant_id,
+                "created" if t_created else "found",
+                _app_id,
+                "created" if a_created else "found",
             )
             break
         except Exception as e:
@@ -90,6 +95,35 @@ async def _lifespan(app: FastAPI):
         logger.error(
             "ChirpStack gRPC not reachable after 10 attempts — cockpit degraded"
         )
+
+    # Ensure all three device profiles exist (idempotent; resilient — a missing
+    # ADR plugin just logs a warning and does not crash the cockpit).
+    if _grpc_channel and _tenant_id:
+        _PROFILE_SPECS = [
+            (config.PROFILE_NAME, "default"),
+            (config.PROFILE_SF9,  "fixed_dr3"),
+            (config.PROFILE_SF12, "fixed_dr0"),
+        ]
+        for prof_name, adr_id in _PROFILE_SPECS:
+            try:
+                _, p_created = cs.find_or_create_profile(
+                    _grpc_channel, _grpc_token, _tenant_id, prof_name, adr_id
+                )
+                logger.info(
+                    "Device profile %r (adr=%s): %s",
+                    prof_name,
+                    adr_id,
+                    "created" if p_created else "found",
+                )
+            except Exception as e:
+                logger.warning(
+                    "Could not provision profile %r (adr=%s): %s — "
+                    "POST /api/phase %r will 502 until this is resolved.",
+                    prof_name,
+                    adr_id,
+                    e,
+                    adr_id.replace("fixed_", "") if "fixed_" in adr_id else "adr",
+                )
 
     # Fetch known DevAddrs for coex own/foreign classification (best-effort)
     if _grpc_channel and _app_id:
@@ -199,6 +233,7 @@ class DownlinkRequest(BaseModel):
     dev_eui: str
     f_port: int
     data_hex: str = "00"
+    count: bool = True  # when False, skip record_downlink_sent (keep-alive/config commands)
 
     @field_validator("f_port")
     @classmethod
@@ -226,6 +261,25 @@ class AntennaRequest(BaseModel):
 
 class CoexRequest(BaseModel):
     on: bool
+
+
+class PhaseRequest(BaseModel):
+    phase: str
+
+    @field_validator("phase")
+    @classmethod
+    def _check_phase(cls, v: str) -> str:
+        if v not in ("sf9", "sf12", "adr"):
+            raise ValueError("phase must be 'sf9', 'sf12', or 'adr'")
+        return v
+
+
+# Map logical phase names to ChirpStack device-profile names
+_PHASE_PROFILES: dict[str, str] = {
+    "sf9":  config.PROFILE_SF9,
+    "sf12": config.PROFILE_SF12,
+    "adr":  config.PROFILE_NAME,
+}
 
 
 # ---------------------------------------------------------------------------
@@ -344,7 +398,8 @@ def enqueue_downlink(req: DownlinkRequest):
     channel, token, _, _ = _grpc()
     try:
         cs.enqueue_downlink(channel, token, req.dev_eui, req.f_port, req.data_hex)
-        campaign.record_downlink_sent(req.dev_eui)
+        if req.count:
+            campaign.record_downlink_sent(req.dev_eui)
     except grpc.RpcError as e:
         raise HTTPException(status_code=502, detail=e.details())
     return {"status": "enqueued", "dev_eui": req.dev_eui, "f_port": req.f_port}
@@ -375,6 +430,68 @@ async def set_antenna(req: AntennaRequest):
         )
     campaign.set_antenna(req.type)
     return {"antenna": req.type}
+
+
+# ---------------------------------------------------------------------------
+# Panel 0 — Phase / fixed-SF switch
+# Plain `def` — gRPC DeviceService calls must not block the event loop.
+# ---------------------------------------------------------------------------
+
+
+def _apply_phase_to_devices(
+    channel: grpc.Channel,
+    token: str,
+    app_id: str,
+    profile_id: str,
+) -> tuple[list, list]:
+    """Switch all devices in *app_id* to *profile_id*.
+
+    Returns (switched, failed) where:
+      switched — list of dev_eui strings that succeeded
+      failed   — list of {dev_eui, error} dicts for RpcError failures
+    """
+    devices = cs.list_devices(channel, token, app_id)
+    switched: list[str] = []
+    failed: list[dict] = []
+    for d in devices:
+        try:
+            cs.set_device_profile(channel, token, d["dev_eui"], profile_id)
+            switched.append(d["dev_eui"])
+        except grpc.RpcError as e:
+            failed.append({"dev_eui": d["dev_eui"], "error": e.details()})
+    return switched, failed
+
+
+@app.post("/api/phase", dependencies=[Depends(_require_auth)])
+def set_phase(req: PhaseRequest):
+    """Switch every device in the application to the profile matching *phase*.
+
+    campaign.set_phase is called ONLY when all devices switched successfully.
+    On partial failure, returns HTTP 502 with {phase, switched, failed} so the
+    frontend can surface which devices failed without mislabelling the campaign
+    phase in the CSV.
+    """
+    channel, token, tenant_id, app_id = _grpc()
+    profile_name = _PHASE_PROFILES[req.phase]
+    try:
+        profile_id = cs.find_profile_id_by_name(channel, token, tenant_id, profile_name)
+    except (ValueError, grpc.RpcError) as e:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Cannot find profile {profile_name!r}: {e}",
+        )
+    try:
+        switched, failed = _apply_phase_to_devices(channel, token, app_id, profile_id)
+    except grpc.RpcError as e:
+        raise HTTPException(status_code=502, detail=e.details())
+
+    if failed:
+        raise HTTPException(
+            status_code=502,
+            detail={"phase": req.phase, "switched": switched, "failed": failed},
+        )
+    campaign.set_phase(req.phase)
+    return {"phase": req.phase, "switched": switched, "failed": failed}
 
 
 # ---------------------------------------------------------------------------

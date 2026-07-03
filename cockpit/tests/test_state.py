@@ -252,6 +252,67 @@ def test_antenna_set():
 
 
 # ---------------------------------------------------------------------------
+# CampaignState — phase / fixed-SF switch
+# ---------------------------------------------------------------------------
+
+
+def test_phase_default():
+    state = CampaignState(data_dir=tempfile.mkdtemp())
+    assert state.get_dashboard()["phase"] == "adr"
+
+
+def test_phase_set_sf9():
+    state = CampaignState(data_dir=tempfile.mkdtemp())
+    state.set_phase("sf9")
+    assert state.get_dashboard()["phase"] == "sf9"
+
+
+def test_phase_set_sf12():
+    state = CampaignState(data_dir=tempfile.mkdtemp())
+    state.set_phase("sf12")
+    assert state.get_dashboard()["phase"] == "sf12"
+
+
+def test_phase_roundtrip():
+    """Switching phase multiple times always reflects the last value."""
+    state = CampaignState(data_dir=tempfile.mkdtemp())
+    for ph in ("sf9", "sf12", "adr", "sf9"):
+        state.set_phase(ph)
+    assert state.get_dashboard()["phase"] == "sf9"
+
+
+def test_phase_in_csv_row():
+    """build_csv_row includes the phase field in the output row."""
+    row = build_csv_row(SAMPLE_UPLINK, SAMPLE_POINT, "3dbi", "sf12")
+    assert row["phase"] == "sf12"
+
+
+def test_phase_default_in_csv_row():
+    """build_csv_row defaults phase to 'adr' when omitted."""
+    row = build_csv_row(SAMPLE_UPLINK, SAMPLE_POINT, "3dbi")
+    assert row["phase"] == "adr"
+
+
+def test_phase_written_to_csv():
+    """The phase column must appear in a recorded CSV row."""
+    tmpdir = tempfile.mkdtemp()
+    state = CampaignState(data_dir=tmpdir)
+    state.set_point("P1", "EG", "R1", "indoor", "direct", "LOS", "desk", 10)
+    state.set_phase("sf9")
+    path = state.start_recording()
+    state.process_uplink(SAMPLE_UPLINK)
+    state.stop_recording()
+
+    import csv as _csv
+    with open(path, encoding="utf-8") as f:
+        reader = _csv.DictReader(f)
+        rows = list(reader)
+
+    assert len(rows) == 1
+    assert rows[0]["phase"] == "sf9"
+
+
+# ---------------------------------------------------------------------------
 # CampaignState — CSV recording
 # ---------------------------------------------------------------------------
 

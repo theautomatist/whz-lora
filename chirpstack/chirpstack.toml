@@ -19,6 +19,13 @@
   net_id="000000"
   # Only EU868 is enabled for the WHZ deployment.
   enabled_regions=["eu868"]
+  # Fixed-DR ADR plugins for the field test — pin SF9 / SF12 on the
+  # network-server side (the MClimate Vicki has no device-side DR command).
+  # Selected per device via the device profile's ADR algorithm. See F-0005.
+  adr_plugins=[
+    "/etc/chirpstack/adr_fixed_dr0.js",
+    "/etc/chirpstack/adr_fixed_dr3.js",
+  ]
 
 [api]
   bind="0.0.0.0:8080"

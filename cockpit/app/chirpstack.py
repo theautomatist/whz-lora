@@ -23,6 +23,7 @@ from chirpstack_api.api import (
     tenant_pb2,
     tenant_pb2_grpc,
 )
+from chirpstack_api.common import common_pb2
 
 from . import config
 
@@ -112,8 +113,115 @@ def find_app_id(channel: grpc.Channel, token: str, tenant_id: str) -> str:
     raise ValueError(f"Application {config.APP_NAME!r} not found")
 
 
-def find_profile_id(channel: grpc.Channel, token: str, tenant_id: str) -> str:
-    """Return the ID of PROFILE_NAME inside tenant_id; raises ValueError if absent."""
+# ---------------------------------------------------------------------------
+# Idempotent provisioning (find-or-create)
+# ---------------------------------------------------------------------------
+
+
+def find_or_create_tenant(
+    channel: grpc.Channel, token: str
+) -> tuple[str, bool]:
+    """Return (tenant_id, created).  Creates TENANT_NAME if it does not exist."""
+    stub = tenant_pb2_grpc.TenantServiceStub(channel)
+    meta = _grpc_meta(token)
+    resp = stub.List(
+        tenant_pb2.ListTenantsRequest(limit=100),
+        metadata=meta,
+        timeout=_GRPC_TIMEOUT,
+    )
+    for t in resp.result:
+        if t.name == config.TENANT_NAME:
+            return t.id, False
+    resp = stub.Create(
+        tenant_pb2.CreateTenantRequest(
+            tenant=tenant_pb2.Tenant(
+                name=config.TENANT_NAME,
+                description="Created by whz-lora cockpit",
+                can_have_gateways=True,
+            )
+        ),
+        metadata=meta,
+        timeout=_GRPC_TIMEOUT,
+    )
+    return resp.id, True
+
+
+def find_or_create_application(
+    channel: grpc.Channel, token: str, tenant_id: str
+) -> tuple[str, bool]:
+    """Return (app_id, created).  Creates APP_NAME if it does not exist."""
+    stub = application_pb2_grpc.ApplicationServiceStub(channel)
+    meta = _grpc_meta(token)
+    resp = stub.List(
+        application_pb2.ListApplicationsRequest(limit=100, tenant_id=tenant_id),
+        metadata=meta,
+        timeout=_GRPC_TIMEOUT,
+    )
+    for a in resp.result:
+        if a.name == config.APP_NAME:
+            return a.id, False
+    resp = stub.Create(
+        application_pb2.CreateApplicationRequest(
+            application=application_pb2.Application(
+                name=config.APP_NAME,
+                description="Created by whz-lora cockpit",
+                tenant_id=tenant_id,
+            )
+        ),
+        metadata=meta,
+        timeout=_GRPC_TIMEOUT,
+    )
+    return resp.id, True
+
+
+def find_or_create_profile(
+    channel: grpc.Channel,
+    token: str,
+    tenant_id: str,
+    name: str,
+    adr_algorithm_id: str,
+) -> tuple[str, bool]:
+    """Return (profile_id, created).
+
+    Creates a device profile with EU868 / MAC 1.0.3 / RP002-1.0.3 / Class A /
+    OTAA / uplink_interval=300 s if a profile named *name* does not exist yet.
+    The given *adr_algorithm_id* must be a plugin registered in ChirpStack
+    (e.g. "default", "fixed_dr3", "fixed_dr0").
+    """
+    stub = device_profile_pb2_grpc.DeviceProfileServiceStub(channel)
+    meta = _grpc_meta(token)
+    resp = stub.List(
+        device_profile_pb2.ListDeviceProfilesRequest(limit=100, tenant_id=tenant_id),
+        metadata=meta,
+        timeout=_GRPC_TIMEOUT,
+    )
+    for dp in resp.result:
+        if dp.name == name:
+            return dp.id, False
+    resp = stub.Create(
+        device_profile_pb2.CreateDeviceProfileRequest(
+            device_profile=device_profile_pb2.DeviceProfile(
+                name=name,
+                description=f"Created by whz-lora cockpit (adr={adr_algorithm_id})",
+                tenant_id=tenant_id,
+                region=common_pb2.Region.EU868,
+                mac_version=common_pb2.MacVersion.LORAWAN_1_0_3,
+                reg_params_revision=common_pb2.RegParamsRevision.RP002_1_0_3,
+                adr_algorithm_id=adr_algorithm_id,
+                supports_otaa=True,
+                uplink_interval=300,
+            )
+        ),
+        metadata=meta,
+        timeout=_GRPC_TIMEOUT,
+    )
+    return resp.id, True
+
+
+def find_profile_id_by_name(
+    channel: grpc.Channel, token: str, tenant_id: str, name: str
+) -> str:
+    """Return the ID of the device profile with the given name; raises ValueError if absent."""
     stub = device_profile_pb2_grpc.DeviceProfileServiceStub(channel)
     resp = stub.List(
         device_profile_pb2.ListDeviceProfilesRequest(limit=100, tenant_id=tenant_id),
@@ -121,9 +229,39 @@ def find_profile_id(channel: grpc.Channel, token: str, tenant_id: str) -> str:
         timeout=_GRPC_TIMEOUT,
     )
     for dp in resp.result:
-        if dp.name == config.PROFILE_NAME:
+        if dp.name == name:
             return dp.id
-    raise ValueError(f"Device profile {config.PROFILE_NAME!r} not found")
+    raise ValueError(f"Device profile {name!r} not found")
+
+
+def find_profile_id(channel: grpc.Channel, token: str, tenant_id: str) -> str:
+    """Return the ID of PROFILE_NAME (default ADR profile). Backward-compat wrapper."""
+    return find_profile_id_by_name(channel, token, tenant_id, config.PROFILE_NAME)
+
+
+def set_device_profile(
+    channel: grpc.Channel, token: str, dev_eui: str, profile_id: str
+) -> None:
+    """Switch a device to a different device profile (e.g. fixed-SF9/SF12).
+
+    Reads the current Device, replaces device_profile_id, and calls Update
+    so that all other fields (name, AppEUI, tags …) are preserved.
+    """
+    stub = device_pb2_grpc.DeviceServiceStub(channel)
+    meta = _grpc_meta(token)
+    get_resp = stub.Get(
+        device_pb2.GetDeviceRequest(dev_eui=dev_eui),
+        metadata=meta,
+        timeout=_GRPC_TIMEOUT,
+    )
+    device = get_resp.device
+    device.device_profile_id = profile_id
+    stub.Update(
+        device_pb2.UpdateDeviceRequest(device=device),
+        metadata=meta,
+        timeout=_GRPC_TIMEOUT,
+    )
+    logger.debug("Device %s switched to profile %s", dev_eui, profile_id)
 
 
 # ---------------------------------------------------------------------------

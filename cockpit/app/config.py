@@ -31,4 +31,6 @@ DATA_DIR: str = os.environ.get("DATA_DIR", "/data")
 # Well-known ChirpStack entities that must already exist
 TENANT_NAME: str = "whz-lora"
 APP_NAME: str = "whz-feldtest"
-PROFILE_NAME: str = "WHZ-Feldtest-EU868"
+PROFILE_NAME: str = "WHZ-Feldtest-EU868"   # normal ADR (default)
+PROFILE_SF9: str  = "WHZ-Feldtest-SF9"     # fixed DR3 = SF9  (adr_algorithm_id: fixed_dr3)
+PROFILE_SF12: str = "WHZ-Feldtest-SF12"    # fixed DR0 = SF12 (adr_algorithm_id: fixed_dr0)

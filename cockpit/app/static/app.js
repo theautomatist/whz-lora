@@ -8,6 +8,7 @@
 const _devMetrics = {};   // { dev_eui: { rssi, snr, sf, f_cnt, pos_received, pdr, acked, downlinks_sent, dl_pdr } }
 const _coexData   = {};   // { "ch<n>_sf<n>": { channel, sf, frames, caf, tl } }
 let _sseConnected = false;
+let _currentDevices = [];  // last list returned by /api/devices — used by Vicki bulk commands
 
 // ---------------------------------------------------------------------------
 // Toast
@@ -79,6 +80,7 @@ async function loadDevices() {
 }
 
 function renderDeviceList(devices) {
+  _currentDevices = devices;  // keep reference for Vicki bulk commands
   const tbody = document.getElementById('dev-list-body');
   if (!devices.length) {
     tbody.innerHTML = '<tr><td colspan="4" style="color:var(--muted)">No devices.</td></tr>';
@@ -254,7 +256,7 @@ function renderCoexTable() {
       <td>CH${r.channel >= 0 ? r.channel : '?'}</td>
       <td>SF${r.sf}</td>
       <td>${r.frames}</td>
-      <td>${(r.caf * 100).toFixed(3)} %</td>
+      <td>${r.caf != null ? (r.caf * 100).toFixed(3) + ' %' : '—'}</td>
       <td class="tl-${r.tl}">${r.tl.toUpperCase()}</td>
     </tr>
   `).join('');
@@ -279,6 +281,98 @@ function _applyAntenna(type) {
   document.getElementById('badge-antenna').textContent = `Antenna: ${type}`;
   document.getElementById('ant-3dbi').classList.toggle('active',  type === '3dbi');
   document.getElementById('ant-12dbi').classList.toggle('active', type === '12dbi');
+}
+
+// ---------------------------------------------------------------------------
+// Panel 0 — Phase / fixed-SF switch
+// ---------------------------------------------------------------------------
+
+const _PHASE_LABELS = {
+  sf9:  'Phase 1 · SF9',
+  sf12: 'Phase 2 · SF12',
+  adr:  'Normal · ADR',
+};
+
+async function setPhase(phase) {
+  const msg = document.getElementById('phase-msg');
+  try {
+    const res = await apiFetch('/api/phase', { method: 'POST', body: JSON.stringify({ phase }) });
+    if (res.ok) {
+      const data = await res.json();
+      msg.textContent = `Switched: ${(data.switched || []).length} device(s).`;
+      msg.className = 'msg';
+      _applyPhase(phase);
+      toast(`Phase: ${_PHASE_LABELS[phase] || phase}`);
+    } else {
+      // 4xx/5xx: parse detail from FastAPI error envelope
+      let detail;
+      try { detail = (await res.json()).detail; } catch (_) { detail = null; }
+      if (detail && typeof detail === 'object' && detail.failed && detail.failed.length) {
+        const first = detail.failed[0];
+        msg.textContent = `${detail.failed.length} device(s) failed. First: ${first.dev_eui}: ${first.error}`;
+      } else {
+        msg.textContent = `Error ${res.status}: ${typeof detail === 'string' ? detail : JSON.stringify(detail)}`;
+      }
+      msg.className = 'msg error';
+      // _applyPhase intentionally NOT called — indicator stays at previous phase
+    }
+  } catch (e) {
+    msg.textContent = `Error: ${e.message}`;
+    msg.className = 'msg error';
+  }
+}
+
+function _applyPhase(phase) {
+  const label = _PHASE_LABELS[phase] || phase;
+  document.getElementById('phase-indicator').textContent = label;
+  document.getElementById('badge-phase').textContent = label;
+  ['sf9', 'sf12', 'adr'].forEach(p => {
+    document.getElementById(`phase-${p}`).classList.toggle('active', p === phase);
+  });
+}
+
+// Vicki MClimate convenience downlinks — sent to all devices in _currentDevices
+
+async function sendVickiKeepalive() {
+  const msg = document.getElementById('vicki-msg');
+  if (!_currentDevices.length) {
+    msg.textContent = 'No devices — refresh device list first.';
+    msg.className = 'msg error';
+    return;
+  }
+  let ok = 0, fail = 0, firstErr = null;
+  for (const d of _currentDevices) {
+    try {
+      // Vicki: set send interval to 5 min (0x02=SetSendPeriod, 0x05=5 min).
+      // count:false — interval command must not inflate the DL-PDR denominator.
+      await apiJSON('/api/downlink', { method: 'POST', body: JSON.stringify({ dev_eui: d.dev_eui, f_port: 1, data_hex: '0205', count: false }) });
+      ok++;
+    } catch (e) { fail++; if (!firstErr) firstErr = e.message; }
+  }
+  msg.textContent = `Intervall enqueued: ${ok} ok` + (fail ? `, ${fail} failed: ${firstErr}` : '') + '.';
+  msg.className = 'msg' + (fail ? ' error' : '');
+  toast(`Vicki keep-alive: ${ok} enqueued.`);
+}
+
+async function sendVickiLoopback() {
+  const msg = document.getElementById('vicki-msg');
+  if (!_currentDevices.length) {
+    msg.textContent = 'No devices — refresh device list first.';
+    msg.className = 'msg error';
+    return;
+  }
+  let ok = 0, fail = 0, firstErr = null;
+  for (const d of _currentDevices) {
+    try {
+      // Vicki: 0x04 = Read device hardware & software version (confirmed,
+      // elicits a reply — feeds DL-PDR; count:true keeps the denominator correct).
+      await apiJSON('/api/downlink', { method: 'POST', body: JSON.stringify({ dev_eui: d.dev_eui, f_port: 1, data_hex: '04', count: true }) });
+      ok++;
+    } catch (e) { fail++; if (!firstErr) firstErr = e.message; }
+  }
+  msg.textContent = `HW/SW-Version read enqueued: ${ok} ok` + (fail ? `, ${fail} failed: ${firstErr}` : '') + '.';
+  msg.className = 'msg' + (fail ? ' error' : '');
+  toast(`Vicki HW/SW-Version: ${ok} enqueued.`);
 }
 
 // ---------------------------------------------------------------------------
@@ -352,6 +446,7 @@ function handleEvent(ev) {
     case 'state':
       if (ev.antenna)  _applyAntenna(ev.antenna);
       if (ev.pos_id)   document.getElementById('cur-point').textContent = `Point: ${ev.pos_id}`;
+      if (ev.phase)    _applyPhase(ev.phase);
       break;
   }
 }
@@ -373,6 +468,7 @@ async function init() {
 
 function applyInitialState(s) {
   if (s.antenna) _applyAntenna(s.antenna);
+  _applyPhase(s.phase || 'adr');
   if (s.point && s.point.pos_id) {
     document.getElementById('cur-point').textContent  = `Point: ${s.point.pos_id}`;
     document.getElementById('badge-point').textContent = `Point: ${s.point.pos_id}`;

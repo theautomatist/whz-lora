@@ -13,12 +13,32 @@
   <div id="status-bar">
     <span class="badge" id="badge-point">Point: —</span>
     <span class="badge" id="badge-antenna">Antenna: —</span>
+    <span class="badge" id="badge-phase">Normal · ADR</span>
     <span class="badge stopped" id="badge-rec">&#9679; Stopped</span>
     <span class="badge" id="badge-sse">SSE: connecting</span>
   </div>
 </header>
 
 <main>
+
+  <!-- Panel 0: Phase / Fixed-SF switch (full width — campaign-defining control) -->
+  <section class="panel" id="panel-phase" style="grid-column: 1 / -1">
+    <h2>0 · Phase / SF-Switch</h2>
+    <div class="big-indicator" id="phase-indicator">Normal · ADR</div>
+    <div class="phase-group">
+      <button class="phase-btn" id="phase-sf9"  onclick="setPhase('sf9')">Phase 1 · SF9 (DR3, fixed)</button>
+      <button class="phase-btn" id="phase-sf12" onclick="setPhase('sf12')">Phase 2 · SF12 (DR0, fixed)</button>
+      <button class="phase-btn active" id="phase-adr" onclick="setPhase('adr')">Normal · ADR</button>
+    </div>
+    <div class="msg" id="phase-msg">Change takes effect at the next uplink / rejoin of each device.</div>
+    <hr style="margin:10px 0; border-color:var(--border)">
+    <p style="font-size:0.82rem;color:var(--muted);margin-bottom:6px">MClimate Vicki — Convenience downlinks (all registered devices, confirmed)</p>
+    <div class="btn-row">
+      <button class="btn btn-outline" onclick="sendVickiKeepalive()">Intervall 5 min (alle)</button>
+      <button class="btn btn-outline" onclick="sendVickiLoopback()">HW/SW-Version lesen (alle, bestätigt)</button>
+    </div>
+    <div class="msg" id="vicki-msg"></div>
+  </section>
 
   <!-- Panel 1: Device registration -->
   <section class="panel" id="panel-devices">

@@ -36,6 +36,7 @@ CSV_COLUMNS = [
     "f_cnt",
     "gw_eui",
     "antenna",
+    "phase",
     "floor",
     "room",
     "point_type",
@@ -104,6 +105,7 @@ def build_csv_row(
     metrics: dict,
     point: Optional[PointMeta],
     antenna: str,
+    phase: str = "adr",
 ) -> dict:
     """Build a CSV row dict from uplink metrics + current point metadata.
 
@@ -122,6 +124,7 @@ def build_csv_row(
         "f_cnt": metrics.get("f_cnt", ""),
         "gw_eui": metrics.get("gw_eui", ""),
         "antenna": antenna,
+        "phase": phase,
         "floor": point.floor if point else "",
         "room": point.room if point else "",
         "point_type": point.point_type if point else "",
@@ -150,6 +153,7 @@ class CampaignState:
         # Current measurement point
         self._point: Optional[PointMeta] = None
         self._antenna: str = "3dbi"
+        self._phase: str = "adr"  # "adr" | "sf9" | "sf12"
 
         # CSV recording
         self._recording: bool = False
@@ -222,6 +226,12 @@ class CampaignState:
             self._antenna = antenna_type
         self._broadcast({"type": "state", "antenna": antenna_type})
 
+    def set_phase(self, phase: str) -> None:
+        """Switch the active measurement phase (\"adr\", \"sf9\" or \"sf12\")."""
+        with self._lock:
+            self._phase = phase
+        self._broadcast({"type": "state", "phase": phase})
+
     # ------------------------------------------------------------------
     # CSV recording
     # ------------------------------------------------------------------
@@ -287,7 +297,7 @@ class CampaignState:
                 and self._point is not None
                 and self._csv_writer is not None
             ):
-                row = build_csv_row(metrics, self._point, self._antenna)
+                row = build_csv_row(metrics, self._point, self._antenna, self._phase)
                 self._csv_writer.writerow(row)
                 self._csv_file.flush()
 
@@ -454,6 +464,7 @@ class CampaignState:
                 "recording": self._recording,
                 "csv_path": self._csv_path,
                 "antenna": self._antenna,
+                "phase": self._phase,
                 "point": point_dict,
                 "devices": devices,
                 "pos_counts": dict(self._pos_counts),

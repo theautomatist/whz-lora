@@ -225,9 +225,35 @@ tr.highlight { animation: flashrow .6s; }
 }
 
 /* ---- Coex traffic light ---- */
-.coex-table td.tl-green  { color: var(--green);  font-weight: 700; }
-.coex-table td.tl-yellow { color: var(--yellow); font-weight: 700; }
-.coex-table td.tl-red    { color: var(--red);    font-weight: 700; }
+.coex-table td.tl-green     { color: var(--green);  font-weight: 700; }
+.coex-table td.tl-yellow    { color: var(--yellow); font-weight: 700; }
+.coex-table td.tl-red       { color: var(--red);    font-weight: 700; }
+.coex-table td.tl-measuring { color: var(--muted);  font-style: italic; }
+
+/* ---- Phase / SF-switch toggle group ---- */
+.phase-group { display: flex; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
+
+.phase-btn {
+  flex: 1;
+  min-width: 140px;
+  padding: 10px 12px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  cursor: pointer;
+  font-size: 0.9rem;
+  text-align: center;
+  font-weight: 700;
+  transition: border-color .15s, background .15s;
+}
+
+.phase-btn.active {
+  border-color: var(--primary);
+  background: #eff6ff;
+  color: var(--primary);
+}
+
+.phase-btn:hover:not(.active) { background: var(--bg); }
 
 /* ---- Toast notifications ---- */
 #toast {
