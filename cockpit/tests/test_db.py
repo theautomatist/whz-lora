@@ -4,6 +4,7 @@ Every test gets its own temp SQLite file — no shared state, no /data
 dependency, no ChirpStack/MQTT involved.
 """
 import csv
+import datetime
 import os
 import tempfile
 
@@ -13,6 +14,8 @@ from app.db import (
     MAX_PHOTOS_PER_PLACEMENT,
     RF_FRAME_COLUMNS,
     RF_FRAME_RETENTION_MAX,
+    RF_RECENT_FRAMES_LIMIT,
+    RF_TIMELINE_HOURS,
     Database,
     parse_dl_counts,
 )
@@ -1122,3 +1125,248 @@ def test_rf_frame_retention_noop_under_cap(monkeypatch):
 
 def test_rf_frame_retention_default_is_generous():
     assert RF_FRAME_RETENTION_MAX >= 100_000
+
+
+# ---------------------------------------------------------------------------
+# get_rf_environment — traffic timeline (24 h, hourly, zero-filled),
+# recent_frames (live log), sf_distribution, rssi_distribution
+# ---------------------------------------------------------------------------
+
+
+def _insert_frame_at(d, ts, dev_addr="aaaaaaaa", sf=7, rssi=-90, mtype=2):
+    """Insert a rf_frame row at an exact timestamp — bypasses
+    record_rf_frame (which always stamps "now") so timeline/window tests
+    can be deterministic without depending on wall-clock time."""
+    d._conn.execute(
+        "INSERT INTO rf_frame "
+        "(ts, dev_addr, network, channel, sf, rssi, snr, mtype, join_deveui, join_joineui, vendor) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (ts.isoformat(timespec="seconds"), dev_addr, "other", 0, sf, rssi, None, mtype, None, None, None),
+    )
+    d._conn.commit()
+
+
+_NOW = datetime.datetime(2026, 7, 9, 14, 30, 0, tzinfo=datetime.timezone.utc)
+
+
+def test_get_rf_environment_now_defaults_to_current_time():
+    """Without an explicit now=, get_rf_environment must still work (uses
+    the real wall clock) — the deterministic tests below always pass one."""
+    d = _new_db()
+    env = d.get_rf_environment()
+    assert len(env["timeline"]) == RF_TIMELINE_HOURS
+
+
+def test_timeline_has_24_zero_filled_buckets_when_empty():
+    d = _new_db()
+    env = d.get_rf_environment(now=_NOW)
+    timeline = env["timeline"]
+    assert len(timeline) == RF_TIMELINE_HOURS == 24
+    assert all(b["count"] == 0 for b in timeline)
+    # oldest -> newest: each bucket is exactly 1h after the previous one.
+    for i in range(1, len(timeline)):
+        prev = datetime.datetime.fromisoformat(timeline[i - 1]["bucket"])
+        cur = datetime.datetime.fromisoformat(timeline[i]["bucket"])
+        assert cur - prev == datetime.timedelta(hours=1)
+    # the newest bucket starts at the current hour.
+    assert timeline[-1]["bucket"] == _NOW.replace(minute=0, second=0, microsecond=0).isoformat(
+        timespec="seconds"
+    )
+
+
+def test_timeline_buckets_a_frame_in_the_current_hour():
+    d = _new_db()
+    _insert_frame_at(d, _NOW)  # same hour as "now"
+    env = d.get_rf_environment(now=_NOW)
+    timeline = env["timeline"]
+    assert timeline[-1]["count"] == 1  # newest (current-hour) bucket
+    assert sum(b["count"] for b in timeline) == 1
+
+
+def test_timeline_buckets_a_frame_a_few_hours_ago():
+    d = _new_db()
+    _insert_frame_at(d, _NOW - datetime.timedelta(hours=3, minutes=10))
+    env = d.get_rf_environment(now=_NOW)
+    timeline = env["timeline"]
+    # 3 whole hours before the current-hour bucket -> 3rd-from-last bucket.
+    assert timeline[-4]["count"] == 1
+    assert sum(b["count"] for b in timeline) == 1
+
+
+def test_timeline_excludes_frames_older_than_24h_window():
+    d = _new_db()
+    hour_start = _NOW.replace(minute=0, second=0, microsecond=0)
+    _insert_frame_at(d, hour_start - datetime.timedelta(hours=24))  # just outside the window
+    env = d.get_rf_environment(now=_NOW)
+    assert sum(b["count"] for b in env["timeline"]) == 0
+
+
+def test_timeline_includes_the_oldest_in_window_hour():
+    d = _new_db()
+    hour_start = _NOW.replace(minute=0, second=0, microsecond=0)
+    _insert_frame_at(d, hour_start - datetime.timedelta(hours=23))  # oldest bucket, still in window
+    env = d.get_rf_environment(now=_NOW)
+    timeline = env["timeline"]
+    assert timeline[0]["count"] == 1  # the oldest (first) bucket
+    assert sum(b["count"] for b in timeline) == 1
+
+
+def test_recent_frames_empty_initially():
+    d = _new_db()
+    env = d.get_rf_environment(now=_NOW)
+    assert env["recent_frames"] == []
+
+
+def test_recent_frames_newest_first():
+    d = _new_db()
+    for i in range(3):
+        _insert_frame_at(d, _NOW - datetime.timedelta(minutes=10 - i), dev_addr=f"{i:08x}")
+    env = d.get_rf_environment(now=_NOW)
+    frames = env["recent_frames"]
+    assert [f["dev_addr"] for f in frames] == ["00000002", "00000001", "00000000"]
+
+
+def test_recent_frames_limited_to_20():
+    d = _new_db()
+    for i in range(30):
+        _insert_frame_at(d, _NOW - datetime.timedelta(minutes=30 - i), dev_addr=f"{i:08x}")
+    env = d.get_rf_environment(now=_NOW)
+    frames = env["recent_frames"]
+    assert len(frames) == RF_RECENT_FRAMES_LIMIT == 20
+    # newest 20 (dev_addr 10..29), newest first.
+    assert frames[0]["dev_addr"] == "0000001d"  # 29
+    assert frames[-1]["dev_addr"] == "0000000a"  # 10
+
+
+def test_recent_frames_field_shape():
+    d = _new_db()
+    _insert_frame_at(d, _NOW, dev_addr="aaaaaaaa", sf=9, rssi=-95, mtype=2)
+    env = d.get_rf_environment(now=_NOW)
+    frame = env["recent_frames"][0]
+    assert set(frame.keys()) == {"ts", "dev_addr", "network", "sf", "rssi", "mtype"}
+    assert frame["dev_addr"] == "aaaaaaaa"
+    assert frame["sf"] == 9
+    assert frame["rssi"] == -95
+    assert frame["mtype"] == 2
+
+
+def test_recent_frames_includes_join_requests():
+    d = _new_db()
+    d.record_rf_frame(
+        dev_addr=None, network=None, channel=0, sf=7, rssi=-90, snr=None, mtype=0,
+        join_deveui="a84041aabbccddee", vendor="Dragino",
+    )
+    env = d.get_rf_environment()
+    assert len(env["recent_frames"]) == 1
+    assert env["recent_frames"][0]["dev_addr"] is None
+
+
+def test_sf_distribution_all_sfs_present_with_zeros():
+    d = _new_db()
+    env = d.get_rf_environment(now=_NOW)
+    assert env["sf_distribution"] == {"7": 0, "8": 0, "9": 0, "10": 0, "11": 0, "12": 0}
+
+
+def test_sf_distribution_counts_by_sf():
+    d = _new_db()
+    _insert_frame_at(d, _NOW, dev_addr="aaaaaaaa", sf=7)
+    _insert_frame_at(d, _NOW, dev_addr="bbbbbbbb", sf=7)
+    _insert_frame_at(d, _NOW, dev_addr="cccccccc", sf=12)
+    env = d.get_rf_environment(now=_NOW)
+    assert env["sf_distribution"] == {"7": 2, "8": 0, "9": 0, "10": 0, "11": 0, "12": 1}
+
+
+def test_sf_distribution_excludes_join_requests():
+    """Matches channel_sf_matrix's existing scope (data frames only) so the
+    SF distribution agrees with the heatmap it's displayed alongside."""
+    d = _new_db()
+    d.record_rf_frame(
+        dev_addr=None, network=None, channel=0, sf=9, rssi=-90, snr=None, mtype=0,
+        join_deveui="a84041aabbccddee", vendor="Dragino",
+    )
+    env = d.get_rf_environment()
+    assert env["sf_distribution"]["9"] == 0
+
+
+def test_rssi_distribution_empty_initially():
+    d = _new_db()
+    env = d.get_rf_environment(now=_NOW)
+    assert env["rssi_distribution"] == [
+        {"label": "≥ -80 dBm", "count": 0},
+        {"label": "-80…-100 dBm", "count": 0},
+        {"label": "-100…-115 dBm", "count": 0},
+        {"label": "< -115 dBm", "count": 0},
+    ]
+
+
+def test_rssi_distribution_bucket_boundaries():
+    d = _new_db()
+    # exact boundary values, one per bucket + one comfortably inside each.
+    for i, rssi in enumerate([-70, -80, -90, -100, -110, -115, -120]):
+        _insert_frame_at(d, _NOW, dev_addr=f"{i:08x}", rssi=rssi)
+    env = d.get_rf_environment(now=_NOW)
+    by_label = {b["label"]: b["count"] for b in env["rssi_distribution"]}
+    # strong (>= -80): -70, -80  -> 2
+    assert by_label["≥ -80 dBm"] == 2
+    # -80..-100 (< -80, >= -100): -90, -100 -> 2
+    assert by_label["-80…-100 dBm"] == 2
+    # -100..-115 (< -100, >= -115): -110, -115 -> 2
+    assert by_label["-100…-115 dBm"] == 2
+    # weak (< -115): -120 -> 1
+    assert by_label["< -115 dBm"] == 1
+    assert sum(by_label.values()) == 7
+
+
+def test_rssi_distribution_excludes_join_requests():
+    d = _new_db()
+    d.record_rf_frame(
+        dev_addr=None, network=None, channel=0, sf=7, rssi=-70, snr=None, mtype=0,
+        join_deveui="a84041aabbccddee", vendor="Dragino",
+    )
+    env = d.get_rf_environment()
+    assert env["rssi_distribution"][0]["count"] == 0
+
+
+# ---------------------------------------------------------------------------
+# list_rf_frames — limit / newest_first (used by get_rf_environment's live
+# frame-log; default behavior for the CSV export stays unchanged)
+# ---------------------------------------------------------------------------
+
+
+def test_list_rf_frames_default_unchanged():
+    d = _new_db()
+    for i in range(3):
+        d.record_rf_frame(dev_addr=f"{i:08x}", network="other", channel=0, sf=7, rssi=-80, snr=None, mtype=2)
+    rows = d.list_rf_frames()
+    assert [r["dev_addr"] for r in rows] == ["00000000", "00000001", "00000002"]
+
+
+def test_list_rf_frames_newest_first():
+    d = _new_db()
+    for i in range(3):
+        d.record_rf_frame(dev_addr=f"{i:08x}", network="other", channel=0, sf=7, rssi=-80, snr=None, mtype=2)
+    rows = d.list_rf_frames(newest_first=True)
+    assert [r["dev_addr"] for r in rows] == ["00000002", "00000001", "00000000"]
+
+
+def test_list_rf_frames_limit():
+    d = _new_db()
+    for i in range(5):
+        d.record_rf_frame(dev_addr=f"{i:08x}", network="other", channel=0, sf=7, rssi=-80, snr=None, mtype=2)
+    rows = d.list_rf_frames(limit=2, newest_first=True)
+    assert [r["dev_addr"] for r in rows] == ["00000004", "00000003"]
+
+
+# ---------------------------------------------------------------------------
+# get_rf_environment — full snapshot shape includes the new fields
+# ---------------------------------------------------------------------------
+
+
+def test_get_rf_environment_shape_includes_new_fields():
+    d = _new_db()
+    env = d.get_rf_environment(now=_NOW)
+    assert set(env.keys()) == {
+        "own_frames", "foreign_frames", "foreign_devices", "networks", "vendors",
+        "mtype_counts", "channel_sf_matrix", "frames_per_min", "frames_per_min_sparkline",
+        "timeline", "recent_frames", "sf_distribution", "rssi_distribution",
+    }

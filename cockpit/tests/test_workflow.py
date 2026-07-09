@@ -1408,9 +1408,19 @@ def test_rf_environment_endpoint_returns_snapshot_shape(workflow, fresh_campaign
         "own_frames", "foreign_frames",
         "foreign_devices", "networks", "vendors", "mtype_counts",
         "channel_sf_matrix", "frames_per_min", "frames_per_min_sparkline",
+        "timeline", "recent_frames", "sf_distribution", "rssi_distribution",
     }
     assert result["foreign_devices"] == {}
     assert result["mtype_counts"] == {"join": 0, "data_up": 0, "data_down": 0, "other": 0}
+    assert len(result["timeline"]) == 24
+    assert result["recent_frames"] == []
+    assert result["sf_distribution"] == {"7": 0, "8": 0, "9": 0, "10": 0, "11": 0, "12": 0}
+    assert result["rssi_distribution"] == [
+        {"label": "≥ -80 dBm", "count": 0},
+        {"label": "-80…-100 dBm", "count": 0},
+        {"label": "-100…-115 dBm", "count": 0},
+        {"label": "< -115 dBm", "count": 0},
+    ]
 
 
 def test_rf_environment_endpoint_reflects_foreign_traffic(workflow, fresh_campaign):
@@ -1427,6 +1437,10 @@ def test_rf_environment_endpoint_reflects_foreign_traffic(workflow, fresh_campai
     assert len(result["foreign_devices"]) == 1
     assert result["networks"] == {"The Things Network": {"devices": 1, "frames": 1}}
     assert result["foreign_frames"] == 1
+    assert len(result["recent_frames"]) == 1
+    assert result["recent_frames"][0]["dev_addr"] == "26ccbbaa"
+    assert result["sf_distribution"]["7"] == 1
+    assert sum(b["count"] for b in result["timeline"]) == 1
 
 
 def test_rf_environment_endpoint_survives_a_fresh_campaign_state(monkeypatch):
