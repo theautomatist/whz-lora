@@ -551,18 +551,31 @@ class Database:
             ).fetchone()
             return row["packets"] if row else 0
 
-    def list_runs_for_node(self, node_id: int) -> list[dict]:
+    def list_runs(self, node_id: Optional[int] = None) -> list[dict]:
+        """Run history, newest first. *node_id* filters to one device (the
+        per-device History section in "Selected device / gateway"); omitted,
+        every device's runs across the whole campaign (F-0007 History view).
+
+        Each row carries device name/eui plus BOTH placements' floor/room/
+        description (device AND gateway, as they stood at the time the run
+        started) so a caller never needs a second query per row."""
         with self._lock:
-            rows = self._conn.execute(
+            sql = (
                 "SELECT r.*, "
+                "n.name AS device_name, n.eui AS device_eui, "
                 "dp.floor AS d_floor, dp.room AS d_room, dp.description AS d_description, "
-                "gp.description AS g_description "
+                "gp.floor AS g_floor, gp.room AS g_room, gp.description AS g_description "
                 "FROM run r "
+                "JOIN node n ON n.id = r.device_node_id "
                 "JOIN placement dp ON dp.id = r.device_placement_id "
                 "JOIN placement gp ON gp.id = r.gateway_placement_id "
-                "WHERE r.device_node_id = ? ORDER BY r.id DESC",
-                (node_id,),
-            ).fetchall()
+            )
+            params: tuple = ()
+            if node_id is not None:
+                sql += "WHERE r.device_node_id = ? "
+                params = (node_id,)
+            sql += "ORDER BY r.id DESC"
+            rows = self._conn.execute(sql, params).fetchall()
             return [dict(r) for r in rows]
 
     # ------------------------------------------------------------------

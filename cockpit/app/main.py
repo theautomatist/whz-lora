@@ -30,10 +30,17 @@ Routes:
   POST /api/relocate           close run, new placement, start new run — one call
   POST /api/gateway/move       move the gateway (409 while any run is active)
   POST /api/gateway/move/force move the gateway, aborting active runs
-  GET  /api/runs               run history for a device (?node_id=)
+  GET  /api/runs               run history — every run (F-0007 History view), or one
+                                device's with ?node_id=; newest first, each entry carries
+                                device + both placements' summaries and an overall PDR
   GET  /api/run/{id}/csv       download a run's CSV file
   GET  /api/run/{id}/series    per-run RSSI/SNR/SF time series for the "Verlauf" line chart
   GET  /api/run/{id}/stats     per-SF uplink + downlink PDR for one run (coverage that matters)
+
+  F-0007 History / Analysis view (Phase 1) — browse past measurements:
+  GET  /api/run/{id}/detail    run + device/gateway names + both placements (incl. photo_ids)
+                                as they stood during the run; measurement data itself stays on
+                                the /series, /stats, /csv, and /api/photo/{id} endpoints above
 
   F-0006 Phase B — timed per-device SF-sweep on top of /api/run/start:
   optional duration_seconds/sf_schedule/interval_minutes switch the device
@@ -1196,18 +1203,25 @@ async def gateway_move_force(req: GatewayMoveRequest):
 
 
 @app.get("/api/runs", dependencies=[Depends(_require_auth)])
-async def list_runs(node_id: int):
-    """Run history for a device, newest first. floor/room/description are
-    the device's placement at the time of the run (joined from db.py).
-    Each entry also carries the Phase B sweep summary (planned_seconds/
-    elapsed_seconds/current_sf/segment_index/progress/sf_schedule/done) —
-    frozen at ended_at for finished runs, live for a running one."""
+async def list_runs(node_id: Optional[int] = None):
+    """Run history, newest first — every run across the whole campaign
+    (F-0007 History view), or one device's with ?node_id= (the per-device
+    History section in "Selected device / gateway" — unchanged behavior).
+
+    floor/room/description are each placement as it stood at the time of
+    the run (joined from db.py) — device AND gateway. Each entry also
+    carries the Phase B sweep summary (planned_seconds/elapsed_seconds/
+    current_sf/segment_index/progress/sf_schedule/done, frozen at ended_at
+    for finished runs, live for a running one) and an overall uplink-PDR
+    summary (see _compute_run_stats) — reading every run's CSV is fine at
+    field-test campaign scale; there is no separate lightweight path."""
     d = _dbh()
-    runs = d.list_runs_for_node(node_id)
+    runs = d.list_runs(node_id)
     out = []
     for r in runs:
         entry = {
             "id": r["id"],
+            "run_id": r["id"],  # F-0007 History view's preferred key name
             "status": r["status"],
             "phase": r["phase"],
             "started_at": r["started_at"],
@@ -1215,6 +1229,7 @@ async def list_runs(node_id: int):
             "reason": r["reason"],
             "packets": r["packets"],
             "csv_path": r["csv_path"],
+            "device": {"name": r["device_name"], "eui": r["device_eui"]},
             "floor": r["d_floor"],
             "room": r["d_room"],
             "description": r["d_description"],
@@ -1225,10 +1240,65 @@ async def list_runs(node_id: int):
                 "room": r["d_room"],
                 "description": r["d_description"],
             },
+            "gateway_placement": {
+                "floor": r["g_floor"],
+                "room": r["g_room"],
+                "description": r["g_description"],
+            },
+            "overall": _compute_run_stats(r)["overall"],
         }
         entry.update(scheduler.run_summary_fields(r))
         out.append(entry)
     return {"runs": out}
+
+
+@app.get("/api/run/{run_id}/detail", dependencies=[Depends(_require_auth)])
+async def run_detail(run_id: int):
+    """Everything the F-0007 History detail view needs about one run beyond
+    the measurement data itself (that stays on the existing /series,
+    /stats, /csv, and /api/photo/{id} endpoints — not duplicated here): the
+    run row (+ sweep summary, via _run_entry), the device and gateway node
+    identities, and both placements as they stood during this run (floor/
+    room/description/note[/antenna for the device]/started_at/ended_at/
+    photo_ids)."""
+    d = _dbh()
+    run = d.get_run(run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="run not found")
+
+    device_node = d.get_node(run["device_node_id"])
+    device_placement = d.get_placement(run["device_placement_id"])
+    gateway_placement = d.get_placement(run["gateway_placement_id"])
+    gateway_node = d.get_node(gateway_placement["node_id"]) if gateway_placement else None
+
+    def _placement_summary(p: Optional[dict], include_antenna: bool = False) -> Optional[dict]:
+        if p is None:
+            return None
+        out = {
+            "floor": p["floor"],
+            "room": p["room"],
+            "description": p["description"],
+            "note": p["note"],
+            "started_at": p["started_at"],
+            "ended_at": p["ended_at"],
+            "photo_ids": [ph["id"] for ph in d.list_photos(p["id"])],
+        }
+        if include_antenna:
+            out["antenna"] = p["antenna"]
+        return out
+
+    run_summary = _run_entry(run)
+    run_summary["ended_at"] = run.get("ended_at")
+    run_summary["phase"] = run.get("phase")
+    run_summary["reason"] = run.get("reason")
+
+    return {
+        "run": run_summary,
+        "device": {"name": device_node["name"], "eui": device_node["eui"]} if device_node else None,
+        "gateway": {"name": gateway_node["name"], "eui": gateway_node["eui"]} if gateway_node else None,
+        "device_placement": _placement_summary(device_placement, include_antenna=True),
+        "gateway_placement": _placement_summary(gateway_placement),
+    }
 
 
 @app.get("/api/run/{run_id}/csv", dependencies=[Depends(_require_auth)])
