@@ -19,6 +19,18 @@ Schema (see _SCHEMA below):
                Sichtbarkeit" adds a per-SF downlink reliability test
                (downlink_test/dl_counts) on top of that — see
                maybe_trigger_downlink_test/record_downlink_test_ack below.
+  rf_frame   — append-only log of foreign LoRa traffic seen by the gateway
+               (RF-environment survey, F-0006). One row per foreign data
+               frame or foreign join-request; see
+               CampaignState._record_rf_environment_frame (state.py) for the
+               writer and get_rf_environment below for the reader. This is
+               what makes the RF-environment panel survive a cockpit
+               restart / page reload — the panel is a view over this log,
+               not in-memory state. Bounded by RF_FRAME_RETENTION_MAX (see
+               _trim_rf_frames).
+  rf_stat    — small persistent key/value counter table alongside rf_frame
+               (currently just "own_frames") so the own/foreign totals
+               also survive a restart.
 
 No GPS anywhere — placements are floor/room/description, not coordinates.
 """
@@ -34,6 +46,30 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 MAX_PHOTOS_PER_PLACEMENT = 3
+
+# rf_frame retention — a generous cap so the RF-environment survey log
+# cannot grow unbounded over a long campaign, without losing recent data
+# prematurely (foreign traffic is currently sparse). Checked/trimmed only
+# every _RF_FRAME_TRIM_EVERY inserts, not on every insert, to keep the
+# common-path write cheap.
+RF_FRAME_RETENTION_MAX = 200_000
+_RF_FRAME_TRIM_EVERY = 500
+
+# Column order for the rf_frame CSV export (GET /api/rf-environment/csv).
+RF_FRAME_COLUMNS = [
+    "id",
+    "ts",
+    "dev_addr",
+    "network",
+    "channel",
+    "sf",
+    "rssi",
+    "snr",
+    "mtype",
+    "join_deveui",
+    "join_joineui",
+    "vendor",
+]
 
 # CSV schema for per-run recordings (written by record_uplink_for_run).
 CSV_COLUMNS = [
@@ -112,6 +148,28 @@ CREATE TABLE IF NOT EXISTS run (
 );
 CREATE INDEX IF NOT EXISTS idx_run_device ON run(device_node_id);
 CREATE INDEX IF NOT EXISTS idx_run_status ON run(status);
+
+CREATE TABLE IF NOT EXISTS rf_frame (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts            TEXT NOT NULL,
+    dev_addr      TEXT,             -- NULL for join-requests
+    network       TEXT,             -- classify_network label; NULL for join-requests
+    channel       INTEGER,
+    sf            INTEGER,
+    rssi          INTEGER,
+    snr           REAL,
+    mtype         INTEGER NOT NULL,
+    join_deveui   TEXT,             -- set only for mtype == 0 (join-request)
+    join_joineui  TEXT,
+    vendor        TEXT              -- OUI-derived vendor name; join-requests only
+);
+CREATE INDEX IF NOT EXISTS idx_rf_frame_ts ON rf_frame(ts);
+CREATE INDEX IF NOT EXISTS idx_rf_frame_dev_addr ON rf_frame(dev_addr);
+
+CREATE TABLE IF NOT EXISTS rf_stat (
+    key   TEXT PRIMARY KEY,
+    value INTEGER NOT NULL DEFAULT 0
+);
 """
 
 # NOTE — schema deviation from the original brief: a `packets INTEGER` column
@@ -164,6 +222,7 @@ class Database:
         self._conn.row_factory = sqlite3.Row
         self._conn.execute("PRAGMA foreign_keys = ON")
         self._lock = threading.RLock()
+        self._rf_frame_insert_count = 0
 
     def init_schema(self) -> None:
         with self._lock:
@@ -643,3 +702,212 @@ class Database:
                 "UPDATE run SET dl_counts = ? WHERE id = ?", (json.dumps(counts), run["id"])
             )
             self._conn.commit()
+
+    # ------------------------------------------------------------------
+    # rf_frame / rf_stat — RF-environment survey (F-0006)
+    #
+    # Foreign-traffic detail is written here by
+    # CampaignState._record_rf_environment_frame (state.py) on every
+    # confirmed-foreign data frame and every foreign join-request. The panel
+    # reads back via get_rf_environment, which aggregates FROM this log —
+    # never from transient in-memory state — so a page reload or a cockpit
+    # restart still shows the accumulated recording.
+    # ------------------------------------------------------------------
+
+    def record_rf_frame(
+        self,
+        dev_addr: Optional[str],
+        network: Optional[str],
+        channel: Optional[int],
+        sf: Optional[int],
+        rssi: Optional[int],
+        snr: Optional[float],
+        mtype: int,
+        join_deveui: Optional[str] = None,
+        join_joineui: Optional[str] = None,
+        vendor: Optional[str] = None,
+    ) -> None:
+        """Append one row to the rf_frame log. Callers (state.py) treat this
+        as best-effort — a DB error here must never break coex
+        classification — but this method itself just lets exceptions
+        propagate; the caller is responsible for catching."""
+        with self._lock:
+            self._conn.execute(
+                "INSERT INTO rf_frame "
+                "(ts, dev_addr, network, channel, sf, rssi, snr, mtype, "
+                " join_deveui, join_joineui, vendor) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    self._now(),
+                    dev_addr,
+                    network,
+                    channel,
+                    sf,
+                    rssi,
+                    snr,
+                    mtype,
+                    join_deveui,
+                    join_joineui,
+                    vendor,
+                ),
+            )
+            self._conn.commit()
+            self._rf_frame_insert_count += 1
+            if self._rf_frame_insert_count % _RF_FRAME_TRIM_EVERY == 0:
+                self._trim_rf_frames()
+
+    def _trim_rf_frames(self) -> None:
+        """Enforce RF_FRAME_RETENTION_MAX by deleting the oldest rows once
+        the log exceeds it. Uses an OFFSET lookup to find the cutoff id
+        rather than a NOT IN subquery scan, so it stays cheap even at the
+        cap. A no-op while the log is still under the cap."""
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT id FROM rf_frame ORDER BY id DESC LIMIT 1 OFFSET ?",
+                (RF_FRAME_RETENTION_MAX - 1,),
+            ).fetchone()
+            if row is None:
+                return  # fewer than RF_FRAME_RETENTION_MAX rows — nothing to trim
+            self._conn.execute("DELETE FROM rf_frame WHERE id < ?", (row["id"],))
+            self._conn.commit()
+
+    def increment_rf_stat(self, key: str, by: int = 1) -> int:
+        """UPSERT-increment a persistent counter (currently just
+        "own_frames") and return its new value."""
+        with self._lock:
+            self._conn.execute(
+                "INSERT INTO rf_stat (key, value) VALUES (?, ?) "
+                "ON CONFLICT(key) DO UPDATE SET value = value + excluded.value",
+                (key, by),
+            )
+            self._conn.commit()
+            row = self._conn.execute(
+                "SELECT value FROM rf_stat WHERE key = ?", (key,)
+            ).fetchone()
+            return row["value"] if row else 0
+
+    def get_rf_stat(self, key: str) -> int:
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT value FROM rf_stat WHERE key = ?", (key,)
+            ).fetchone()
+            return row["value"] if row else 0
+
+    def list_rf_frames(self) -> list[dict]:
+        """Full dump of the rf_frame log, oldest first — used by the CSV
+        export. Bounded by RF_FRAME_RETENTION_MAX, so this is a modest,
+        non-streamed read even for a long campaign."""
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT id, ts, dev_addr, network, channel, sf, rssi, snr, mtype, "
+                "join_deveui, join_joineui, vendor FROM rf_frame ORDER BY id"
+            ).fetchall()
+            return [dict(r) for r in rows]
+
+    def get_rf_environment(self, recent_window_s: int = 900, sparkline_buckets: int = 10) -> dict:
+        """Aggregate the RF-environment survey snapshot straight from the
+        rf_frame log (plus the rf_stat own_frames counter) — this is the
+        DB-backed replacement for the old in-memory
+        CampaignState.get_rf_environment. See the rf_frame table comment
+        above for what feeds it.
+
+        Returns own_frames/foreign_frames totals, per-dev_addr latest-seen
+        detail (foreign_devices), a per-network rollup, a foreign-only
+        (channel, SF) matrix, per-OUI vendor counts (from join-requests),
+        an MType breakdown, and a recent-window frames/min figure with a
+        short sparkline.
+        """
+        with self._lock:
+            own_frames = self.get_rf_stat("own_frames")
+            total_row = self._conn.execute("SELECT COUNT(*) AS c FROM rf_frame").fetchone()
+            foreign_frames = total_row["c"] if total_row else 0
+
+            device_rows = self._conn.execute(
+                "SELECT f.dev_addr, f.network, f.rssi AS last_rssi, f.snr AS last_snr, "
+                "f.sf AS last_sf, f.channel AS last_channel, f.ts AS last_seen, c.frames "
+                "FROM rf_frame f JOIN ("
+                "  SELECT dev_addr, MAX(id) AS max_id, COUNT(*) AS frames "
+                "  FROM rf_frame WHERE dev_addr IS NOT NULL GROUP BY dev_addr"
+                ") c ON c.dev_addr = f.dev_addr AND c.max_id = f.id"
+            ).fetchall()
+            foreign_devices = {
+                row["dev_addr"]: {
+                    "frames": row["frames"],
+                    "network": row["network"],
+                    "last_seen": row["last_seen"],
+                    "last_rssi": row["last_rssi"],
+                    "last_snr": row["last_snr"],
+                    "last_sf": row["last_sf"],
+                    "last_channel": row["last_channel"],
+                }
+                for row in device_rows
+            }
+
+            networks: dict[str, dict] = {}
+            for entry in foreign_devices.values():
+                label = entry.get("network") or "other"
+                bucket = networks.setdefault(label, {"devices": 0, "frames": 0})
+                bucket["devices"] += 1
+                bucket["frames"] += entry["frames"]
+
+            matrix_rows = self._conn.execute(
+                "SELECT channel, sf, COUNT(*) AS cnt FROM rf_frame "
+                "WHERE dev_addr IS NOT NULL GROUP BY channel, sf"
+            ).fetchall()
+            channel_sf_matrix = {
+                f"ch{row['channel']}_sf{row['sf']}": row["cnt"] for row in matrix_rows
+            }
+
+            vendor_rows = self._conn.execute(
+                "SELECT substr(join_deveui, 1, 6) AS oui, vendor, COUNT(*) AS joins "
+                "FROM rf_frame WHERE mtype = 0 AND join_deveui IS NOT NULL GROUP BY oui"
+            ).fetchall()
+            vendors = {
+                row["oui"]: {"name": row["vendor"], "joins": row["joins"]} for row in vendor_rows
+            }
+
+            mtype_rows = self._conn.execute(
+                "SELECT mtype, COUNT(*) AS cnt FROM rf_frame GROUP BY mtype"
+            ).fetchall()
+            mtype_counts = {"join": 0, "data_up": 0, "data_down": 0, "other": 0}
+            for row in mtype_rows:
+                if row["mtype"] == 0:
+                    mtype_counts["join"] += row["cnt"]
+                elif row["mtype"] in (2, 4):
+                    mtype_counts["data_up"] += row["cnt"]
+                elif row["mtype"] in (3, 5):
+                    mtype_counts["data_down"] += row["cnt"]
+                else:
+                    mtype_counts["other"] += row["cnt"]
+
+            now = datetime.datetime.now(datetime.timezone.utc)
+            cutoff = (now - datetime.timedelta(seconds=recent_window_s)).isoformat(
+                timespec="seconds"
+            )
+            recent_rows = self._conn.execute(
+                "SELECT ts FROM rf_frame WHERE ts >= ? ORDER BY ts", (cutoff,)
+            ).fetchall()
+            recent_times = [datetime.datetime.fromisoformat(row["ts"]) for row in recent_rows]
+
+            frames_per_min = (
+                round(len(recent_times) / (recent_window_s / 60), 2) if recent_times else 0.0
+            )
+            bucket_seconds = recent_window_s / sparkline_buckets
+            sparkline = [0] * sparkline_buckets
+            for t in recent_times:
+                age_s = (now - t).total_seconds()
+                idx = int(age_s // bucket_seconds)
+                if 0 <= idx < sparkline_buckets:
+                    sparkline[sparkline_buckets - 1 - idx] += 1
+
+            return {
+                "own_frames": own_frames,
+                "foreign_frames": foreign_frames,
+                "foreign_devices": foreign_devices,
+                "networks": networks,
+                "vendors": vendors,
+                "mtype_counts": mtype_counts,
+                "channel_sf_matrix": channel_sf_matrix,
+                "frames_per_min": frames_per_min,
+                "frames_per_min_sparkline": sparkline,
+            }

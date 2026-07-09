@@ -14,7 +14,9 @@ Routes:
   POST /api/coex               no-op (kept for API compat) — "Funkumgebung" is
                                 always-on; see /api/state's coex_* fields
   GET  /api/rf-environment     full RF-environment / spectrum survey snapshot (foreign
-                                traffic: devices/networks/vendors/MType/heatmap/rate)
+                                traffic: devices/networks/vendors/MType/heatmap/rate) —
+                                aggregated from the persistent rf_frame log
+  GET  /api/rf-environment/csv download the rf_frame survey log as CSV
   POST /api/phase              switch all devices to a fixed-SF or ADR device profile
   GET  /api/events             SSE stream of live events (uplink/join/ack/nack/coex/state/nodes)
 
@@ -54,6 +56,7 @@ import asyncio
 import base64
 import csv
 import datetime
+import io
 import json
 import logging
 import math
@@ -73,7 +76,7 @@ from pydantic import BaseModel, field_validator
 from . import chirpstack as cs
 from . import config
 from . import scheduler
-from .db import MAX_PHOTOS_PER_PLACEMENT, Database, parse_dl_counts
+from .db import MAX_PHOTOS_PER_PLACEMENT, RF_FRAME_COLUMNS, Database, parse_dl_counts
 from .ingest import MQTTIngest
 from .state import CampaignState
 
@@ -118,6 +121,7 @@ async def _lifespan(app: FastAPI):
     # never needs a retry loop like the ChirpStack gRPC connect below.
     _db = Database(config.DB_PATH)
     _db.init_schema()
+    campaign.set_db(_db)
     gw_node_id, gw_created = _db.upsert_node(
         "gateway", config.GATEWAY_NAME, config.GATEWAY_EUI
     )
@@ -708,9 +712,30 @@ async def rf_environment():
     """Full RF-environment / spectrum survey snapshot (F-0006) — foreign-
     traffic detail (per-device, per-network, per-vendor from joins, MType
     breakdown, foreign-only per-(channel,SF) matrix, frames/min + a short
-    sparkline) on top of the always-on coex classification. See
-    CampaignState.get_rf_environment for the aggregation."""
-    return campaign.get_rf_environment()
+    sparkline) on top of the always-on coex classification.
+
+    Aggregated straight from the persistent rf_frame log (see
+    Database.get_rf_environment), not from in-memory state — so this
+    reflects the whole campaign's recording, survives a cockpit restart,
+    and a page reload shows the accumulated data."""
+    return _dbh().get_rf_environment()
+
+
+@app.get("/api/rf-environment/csv", dependencies=[Depends(_require_auth)])
+async def rf_environment_csv():
+    """Export the full rf_frame survey log as CSV — a research artifact on
+    top of the aggregated /api/rf-environment snapshot."""
+    rows = _dbh().list_rf_frames()
+    buf = io.StringIO()
+    writer = csv.DictWriter(buf, fieldnames=RF_FRAME_COLUMNS)
+    writer.writeheader()
+    writer.writerows(rows)
+    filename = f"rf_environment_{datetime.datetime.now(datetime.timezone.utc):%Y%m%dT%H%M%SZ}.csv"
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 # ---------------------------------------------------------------------------

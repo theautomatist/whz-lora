@@ -14,6 +14,7 @@ import statistics
 import threading
 from typing import Optional
 
+from .db import Database
 from .lorawan import (
     caf as calc_caf,
     classify_network,
@@ -36,17 +37,6 @@ _COEX_MIN_WINDOW_S: int = 60
 # based interval_seconds estimate (7 timestamps -> up to 6 gaps, "median of
 # the last ~6 uplink gaps").
 _UPLINK_HISTORY_LEN: int = 7
-
-# RF-environment survey (F-0006) — bounded LRU-ish maps (evict the least-
-# recently-updated entry once over cap) so an RF-noisy campus can't grow
-# these without bound.
-_MAX_FOREIGN_DEVICES: int = 200
-_MAX_VENDORS: int = 100
-# Rolling window for frames_per_min + its sparkline, and a hard cap on the
-# raw timestamp history regardless of elapsed time (defensive vs. a flood).
-_FRAME_HISTORY_WINDOW_S: int = 900  # 15 min
-_FRAME_HISTORY_MAX: int = 3000
-_SPARKLINE_BUCKETS: int = 10  # ~1.5 min per bucket across the 15 min window
 
 # ---------------------------------------------------------------------------
 # CSV schema
@@ -244,23 +234,14 @@ class CampaignState:
         self._coex_foreign_frames: int = 0
         self._coex_unknown_frames: int = 0
 
-        # RF-environment survey (F-0006) — foreign-traffic detail on top of
-        # the own/foreign split above. Bounded (see _MAX_* / _FRAME_HISTORY_*
-        # above); see process_coex_frame/_record_rf_environment_frame and
-        # get_rf_environment().
-        self._foreign_devices: collections.OrderedDict = collections.OrderedDict()
-        self._vendors: collections.OrderedDict = collections.OrderedDict()
-        self._mtype_counts: dict[str, int] = {
-            "join": 0, "data_up": 0, "data_down": 0, "other": 0,
-        }
-        # {(channel, sf): foreign_frame_count} — distinct from _coex_frames
-        # above (which counts ALL classified/unclassified frames); this one
-        # is scoped to definitively-foreign data frames only, so the survey
-        # heatmap isn't skewed by our own devices' steady sweep traffic.
-        self._foreign_channel_sf: dict[tuple, int] = {}
-        self._foreign_frame_times: collections.deque = collections.deque(
-            maxlen=_FRAME_HISTORY_MAX
-        )
+        # RF-environment survey (F-0006) — foreign-traffic detail is
+        # PERSISTED (see set_db/_record_rf_environment_frame and
+        # db.Database.get_rf_environment) rather than kept in memory, so it
+        # survives a cockpit restart and a page reload shows the
+        # accumulated recording. self._db is None until set_db() is called
+        # (e.g. in a unit test that doesn't need persistence) — best-effort
+        # no-op in that case.
+        self._db: Optional[Database] = None
 
         # SSE subscriber queues and the asyncio loop they belong to
         self._subscribers: list[asyncio.Queue] = []
@@ -273,6 +254,12 @@ class CampaignState:
     def set_loop(self, loop: asyncio.AbstractEventLoop) -> None:
         """Register the asyncio event loop; required before SSE fan-out works."""
         self._loop = loop
+
+    def set_db(self, db: Database) -> None:
+        """Register the persistent Database for the RF-environment survey
+        log (F-0006) — mirrors set_loop(). Without it, process_coex_frame's
+        foreign-frame detail is simply not persisted (best-effort no-op)."""
+        self._db = db
 
     # ------------------------------------------------------------------
     # Measurement point + antenna
@@ -603,128 +590,66 @@ class CampaignState:
         snr: Optional[float],
         phy_payload: bytes,
     ) -> None:
-        """Foreign-traffic detail for GET /api/rf-environment: per-device,
-        per-vendor (from joins) and MType/per-(channel,SF) tallies — scoped
-        to frames NOT attributable to one of our own devices. Best-effort:
-        a parse failure here must never break the coex classification in
-        process_coex_frame above, so every step is defensive (matches
-        lorawan.py's parser contracts — malformed input returns None/partial,
-        never raises).
+        """Persist foreign-traffic detail to the rf_frame log (F-0006
+        RF-Environment survey). GET /api/rf-environment aggregates FROM
+        THAT LOG (see db.Database.get_rf_environment), not from in-memory
+        state — this is what makes the survey outlive a cockpit restart and
+        show its accumulated recording again after a page reload.
+
+        Best-effort throughout: a DB error must never break the coex
+        classification in process_coex_frame above, and a parse failure
+        here must never raise (matches lorawan.py's parser contracts —
+        malformed input returns None/partial, never raises).
         """
-        now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat(
-            timespec="seconds"
-        )
+        if self._db is None:
+            return  # no persistence configured (e.g. a unit test) — no-op
 
         if mtype == 0:  # join-request — no DevAddr; OUI/vendor detail instead
-            with self._lock:
-                self._mtype_counts["join"] += 1
             join = parse_join_request(phy_payload)
             if join and join["dev_eui"] not in known_dev_euis:
-                oui = join["dev_eui"][:6]
-                vendor = vendor_for_oui(oui)
-                with self._lock:
-                    entry = self._vendors.get(oui)
-                    if entry is None:
-                        entry = {"name": vendor["name"], "joins": 0}
-                        self._vendors[oui] = entry
-                    entry["joins"] += 1
-                    self._vendors.move_to_end(oui)
-                    while len(self._vendors) > _MAX_VENDORS:
-                        self._vendors.popitem(last=False)  # evict least-recently-updated
+                vendor = vendor_for_oui(join["dev_eui"][:6])
+                try:
+                    self._db.record_rf_frame(
+                        dev_addr=None,
+                        network=None,
+                        channel=channel,
+                        sf=sf,
+                        rssi=rssi,
+                        snr=snr,
+                        mtype=mtype,
+                        join_deveui=join["dev_eui"],
+                        join_joineui=join["join_eui"],
+                        vendor=vendor["name"],
+                    )
+                except Exception as e:
+                    logger.warning("record_rf_frame (join) failed: %s", e)
             return
 
-        if mtype in (2, 4):
-            with self._lock:
-                self._mtype_counts["data_up"] += 1
-        elif mtype in (3, 5):
-            with self._lock:
-                self._mtype_counts["data_down"] += 1
-        else:
-            with self._lock:
-                self._mtype_counts["other"] += 1
+        if is_own is True:
+            try:
+                self._db.increment_rf_stat("own_frames")
+            except Exception as e:
+                logger.warning("increment_rf_stat(own_frames) failed: %s", e)
 
         if is_own is not False or not dev_addr:
             return  # only definitively-foreign data frames feed the survey below
 
         net = classify_network(dev_addr)
-        with self._lock:
-            key = (channel, sf)
-            self._foreign_channel_sf[key] = self._foreign_channel_sf.get(key, 0) + 1
-            self._foreign_frame_times.append(datetime.datetime.now(datetime.timezone.utc))
-
-            entry = self._foreign_devices.get(dev_addr)
-            if entry is None:
-                entry = {"frames": 0}
-                self._foreign_devices[dev_addr] = entry
-            entry["frames"] += 1
-            entry["last_rssi"] = rssi
-            entry["last_snr"] = snr
-            entry["last_sf"] = sf
-            entry["last_channel"] = channel
-            entry["last_seen"] = now_iso
-            entry["network"] = net["label"]
-            self._foreign_devices.move_to_end(dev_addr)
-            while len(self._foreign_devices) > _MAX_FOREIGN_DEVICES:
-                self._foreign_devices.popitem(last=False)  # evict least-recently-updated
-
-    def get_rf_environment(self) -> dict:
-        """Snapshot for GET /api/rf-environment — the full spectrum-survey
-        picture on top of the coex own/foreign totals (F-0006 "RF
-        environment"): per-device, per-network (derived from the currently-
-        tracked, bounded foreign_devices — so it's a *recent* survey, not a
-        lifetime history), per-vendor (from joins), MType breakdown, the
-        foreign-only per-(channel,SF) matrix, and a frames/min rate + a
-        short sparkline over the last _FRAME_HISTORY_WINDOW_S.
-        """
-        with self._lock:
-            now = datetime.datetime.now(datetime.timezone.utc)
-            cutoff = now - datetime.timedelta(seconds=_FRAME_HISTORY_WINDOW_S)
-            recent_times = [t for t in self._foreign_frame_times if t >= cutoff]
-
-            frames_per_min = (
-                round(len(recent_times) / (_FRAME_HISTORY_WINDOW_S / 60), 2)
-                if recent_times
-                else 0.0
+        try:
+            self._db.record_rf_frame(
+                dev_addr=dev_addr,
+                network=net["label"],
+                channel=channel,
+                sf=sf,
+                rssi=rssi,
+                snr=snr,
+                mtype=mtype,
+                join_deveui=None,
+                join_joineui=None,
+                vendor=None,
             )
-
-            bucket_seconds = _FRAME_HISTORY_WINDOW_S / _SPARKLINE_BUCKETS
-            sparkline = [0] * _SPARKLINE_BUCKETS
-            for t in recent_times:
-                age_s = (now - t).total_seconds()
-                idx = int(age_s // bucket_seconds)
-                if 0 <= idx < _SPARKLINE_BUCKETS:
-                    sparkline[_SPARKLINE_BUCKETS - 1 - idx] += 1  # oldest -> newest
-
-            foreign_devices = {
-                dev_addr: dict(entry) for dev_addr, entry in self._foreign_devices.items()
-            }
-
-            networks: dict[str, dict] = {}
-            for entry in foreign_devices.values():
-                label = entry.get("network") or "other"
-                bucket = networks.setdefault(label, {"devices": 0, "frames": 0})
-                bucket["devices"] += 1
-                bucket["frames"] += entry.get("frames", 0)
-
-            vendors = {oui: dict(entry) for oui, entry in self._vendors.items()}
-
-            channel_sf_matrix = {
-                f"ch{ch}_sf{sf}": cnt
-                for (ch, sf), cnt in self._foreign_channel_sf.items()
-            }
-
-            return {
-                "own_frames": self._coex_own_frames,
-                "foreign_frames": self._coex_foreign_frames,
-                "unknown_frames": self._coex_unknown_frames,
-                "foreign_devices": foreign_devices,
-                "networks": networks,
-                "vendors": vendors,
-                "mtype_counts": dict(self._mtype_counts),
-                "channel_sf_matrix": channel_sf_matrix,
-                "frames_per_min": frames_per_min,
-                "frames_per_min_sparkline": sparkline,
-            }
+        except Exception as e:
+            logger.warning("record_rf_frame (data) failed: %s", e)
 
     # ------------------------------------------------------------------
     # Dashboard snapshot
