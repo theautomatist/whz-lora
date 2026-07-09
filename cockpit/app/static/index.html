@@ -11,6 +11,12 @@
 <!-- ===== STICKY HEADER ===== -->
 <header id="app-header">
   <span id="app-title">WHZ LoRa Field Test</span>
+  <!-- F-0007 top-level view switch — swaps #main (Live, unchanged) for
+       #history-view (browse past measurements). See switchView() in app.js. -->
+  <div id="view-switch">
+    <button type="button" class="vsw-btn active" id="vsw-live" onclick="switchView('live')">Live</button>
+    <button type="button" class="vsw-btn" id="vsw-history" onclick="switchView('history')">History</button>
+  </div>
   <div id="status-pills">
     <span class="pill" id="pill-node">—</span>
     <span class="pill" id="pill-run" style="display:none">No run</span>
@@ -19,7 +25,7 @@
   <button id="btn-help" onclick="openHelp()" aria-label="Help">?</button>
 </header>
 
-<!-- ===== MAIN GRID ===== -->
+<!-- ===== MAIN GRID (Live) ===== -->
 <div id="main">
 
   <!-- Campaign status — hero: goal-gradient anchor, never zero -->
@@ -351,6 +357,73 @@
 
 </div><!-- #main -->
 
+<!-- ===== HISTORY / ANALYSIS VIEW (F-0007, Phase 1) — browse past
+     measurements; hidden unless the header switch is on "History". Two
+     sub-views inside: the filterable list, and the left/right run detail
+     (tap a row). See switchView()/loadHistoryList()/openHistoryDetail() in
+     app.js. ===== -->
+<div id="history-view" style="display:none">
+
+  <div id="history-list-view">
+    <section class="card full" id="card-history-list">
+      <div class="card-title">
+        <span class="ti">▤</span>
+        <span>Measurement History</span>
+      </div>
+      <div class="hist-filter-row">
+        <label for="hist-device-filter" class="hint">Device</label>
+        <select id="hist-device-filter" onchange="renderHistoryList()">
+          <option value="">All devices</option>
+        </select>
+      </div>
+      <div id="history-list-body"><p class="hint">Loading…</p></div>
+    </section>
+  </div>
+
+  <div id="history-detail-view" style="display:none">
+    <section class="card full" id="card-history-detail">
+      <div class="card-title">
+        <button type="button" class="btn btn-g" onclick="closeHistoryDetail()">← Back</button>
+        <span id="hist-detail-title">Run detail</span>
+      </div>
+
+      <div class="hist-detail-grid">
+        <!-- LEFT = device: placement + photos + the measurement itself -->
+        <div class="hist-detail-col">
+          <div class="hist-detail-subtitle">Device</div>
+          <div class="place-info" id="hist-detail-device-place"><div class="place-empty">Loading…</div></div>
+          <div class="photo-thumbs" id="hist-detail-device-photos"></div>
+
+          <div class="pdr-sf-wrap" style="margin-top:14px">
+            <div class="pdr-sf-hdr">
+              <span class="pdr-sf-title">PDR per SF</span>
+              <span class="pdr-sf-overall" id="hist-pdr-sf-overall"></span>
+            </div>
+            <div class="pdr-sf-grid" id="hist-pdr-sf-grid"></div>
+            <div class="hint" id="hist-pdr-sf-hint"></div>
+          </div>
+
+          <div class="hist-chart" id="hist-detail-chart" style="margin-top:14px"><p class="hint">Loading…</p></div>
+
+          <div class="hist-detail-meta" id="hist-detail-meta"></div>
+
+          <div class="brow" style="margin-top:10px">
+            <a class="btn btn-g" id="hist-detail-csv-link" href="#" target="_blank">↓ Download CSV</a>
+          </div>
+        </div>
+
+        <!-- RIGHT = gateway, as it stood during this run -->
+        <div class="hist-detail-col">
+          <div class="hist-detail-subtitle">Gateway position during this run</div>
+          <div class="place-info" id="hist-detail-gateway-place"><div class="place-empty">Loading…</div></div>
+          <div class="photo-thumbs" id="hist-detail-gateway-photos"></div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+</div><!-- #history-view -->
+
 <!-- ===== PLACE / RELOCATE SHEET (device + gateway) ===== -->
 <div id="place-ov" class="sheet-ov" onclick="closeSheetBackdrop(event)">
   <div class="sheet-panel">
@@ -517,6 +590,11 @@
           <li><strong>RF Environment</strong> — always running passively, no start/stop needed, recorded continuously; a spectrum survey of what the gateway overhears: a channel × SF heatmap of foreign traffic, detected networks (TTN/private/other), a scrollable foreign-device list, nearby vendors (from joins, best-effort), band busyness (frames/min + MType breakdown), and a CSV download of the full log.</li>
           <li><strong>Device registration</strong> (collapsible) — register new OTAA devices in ChirpStack; also holds the bulk Vicki commands (set interval / read version) for all registered devices.</li>
         </ul>
+      </div>
+
+      <div class="h-sec">
+        <h3>History</h3>
+        <p>The <strong>Live | History</strong> switch at the top swaps this whole view for a browsable log of every measurement — filterable by device, newest first, with the PDR summary right in the list. Tap a row for the full detail: the device's location/photos/PDR-per-SF/RSSI chart/CSV on the left, and the gateway's position <em>during that run</em> on the right — useful once the gateway has moved since.</p>
       </div>
 
     </div><!-- .h-body -->

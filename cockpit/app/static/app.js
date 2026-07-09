@@ -365,6 +365,29 @@ function startSignalAgeTicker() {
 // Selected device / gateway
 // ---------------------------------------------------------------------------
 
+/** Location block markup — floor/room/description/note[/antenna]. Shared by
+ * the Selected-device panel and the History detail view (F-0007, both the
+ * device AND the gateway placement there). */
+function placeInfoHtml(p, opts = {}) {
+  const emptyText = opts.emptyText || 'Not placed yet.';
+  if (!p) return `<div class="place-empty">${esc(emptyText)}</div>`;
+  const antennaLine = opts.showAntenna && p.antenna
+    ? `<div class="place-note">Antenna: ${esc(p.antenna === '12dbi' ? '12 dBi' : '3 dBi')}</div>`
+    : '';
+  return `<div class="place-loc">${esc(p.floor || '—')} · ${esc(p.room || '—')}</div>
+    <div class="place-desc">${esc(p.description || '—')}</div>
+    ${p.note ? `<div class="place-note">${esc(p.note)}</div>` : ''}
+    ${antennaLine}`;
+}
+
+/** Larger photo thumbnails (not the small Overview-card photoStripHtml) —
+ * "your collection" (endowment), shared by the Selected-device panel and
+ * the History detail view. */
+function photoThumbsHtml(photoIds) {
+  if (!photoIds || !photoIds.length) return '';
+  return photoIds.map(id => `<div class="pthumb view"><img src="/api/photo/${id}" alt="Photo" loading="lazy"></div>`).join('');
+}
+
 function renderSelectedNode() {
   const node          = _nodesById[_selectedNodeId];
   const nameEl        = document.getElementById('sel-name');
@@ -411,16 +434,10 @@ function renderSelectedNode() {
 
   // Placement
   const p = node.placement;
-  placeInfo.innerHTML = p
-    ? `<div class="place-loc">${esc(p.floor || '—')} · ${esc(p.room || '—')}</div>
-       <div class="place-desc">${esc(p.description || '—')}</div>
-       ${p.note ? `<div class="place-note">${esc(p.note)}</div>` : ''}`
-    : `<div class="place-empty">Not placed yet.</div>`;
+  placeInfo.innerHTML = placeInfoHtml(p);
 
   // Photos of the current placement — "your collection" (endowment)
-  photosEl.innerHTML = (p && p.photo_ids && p.photo_ids.length)
-    ? p.photo_ids.map(id => `<div class="pthumb view"><img src="/api/photo/${id}" alt="Photo" loading="lazy"></div>`).join('')
-    : '';
+  photosEl.innerHTML = photoThumbsHtml(p && p.photo_ids);
 
   if (isDevice) {
     const run = node.active_run;
@@ -1454,10 +1471,14 @@ async function loadSelectedPdrStats() {
   }
 }
 
-function renderPdrSfBlock(data) {
-  const grid = document.getElementById('pdr-sf-grid');
-  const overallEl = document.getElementById('pdr-sf-overall');
-  const hintEl = document.getElementById('pdr-sf-hint');
+/** Renders into #pdr-sf-grid/#pdr-sf-overall/#pdr-sf-hint by default (the
+ * Selected-device panel); pass *ids* ({grid,overall,hint}) to target a
+ * different set of elements — the History detail view (F-0007) reuses this
+ * same builder for its own #hist-pdr-sf-* elements. */
+function renderPdrSfBlock(data, ids = {}) {
+  const grid = document.getElementById(ids.grid || 'pdr-sf-grid');
+  const overallEl = document.getElementById(ids.overall || 'pdr-sf-overall');
+  const hintEl = document.getElementById(ids.hint || 'pdr-sf-hint');
   if (!grid) return;
 
   if (!data.sf_stats || !data.sf_stats.length) {
@@ -1602,6 +1623,177 @@ function buildRunChartHtml(data) {
     </div>`;
 
   return svg + legend;
+}
+
+// ---------------------------------------------------------------------------
+// F-0007 Measurement History / Analysis view (Phase 1) — top-level Live |
+// History switch (header), a browsable/filterable-by-device list of every
+// run (GET /api/runs, no node_id), and a left(device)/right(gateway) run
+// detail (GET /api/run/{id}/detail + the existing /stats, /series, /csv).
+// A read/browse view — reuses buildRunChartHtml, renderPdrSfBlock,
+// placeInfoHtml, photoThumbsHtml, histStatusLabel, pdrClass unchanged.
+// ---------------------------------------------------------------------------
+
+let _currentView = 'live';
+
+function switchView(view) {
+  if (view === _currentView) return;
+  _currentView = view;
+  const liveBtn = document.getElementById('vsw-live');
+  const histBtn = document.getElementById('vsw-history');
+  if (liveBtn) liveBtn.classList.toggle('active', view === 'live');
+  if (histBtn) histBtn.classList.toggle('active', view === 'history');
+  const mainEl = document.getElementById('main');
+  const histEl = document.getElementById('history-view');
+  if (mainEl) mainEl.style.display = view === 'live' ? '' : 'none';
+  if (histEl) histEl.style.display = view === 'history' ? '' : 'none';
+  if (view === 'history') {
+    closeHistoryDetail(); // always land on the list, never a stale detail
+    loadHistoryList();
+  }
+}
+
+let _historyRuns = [];
+
+async function loadHistoryList() {
+  const body = document.getElementById('history-list-body');
+  if (!body) return;
+  body.innerHTML = '<p class="hint">Loading…</p>';
+  try {
+    const data = await apiJSON('/api/runs');
+    _historyRuns = data.runs || [];
+    populateHistoryDeviceFilter();
+    renderHistoryList();
+  } catch (e) {
+    body.innerHTML = `<p class="hint">Error: ${esc(e.message)}</p>`;
+  }
+}
+
+/** Device options built from the runs themselves — no extra request. Keeps
+ * the previous selection across a reload when that device still has runs. */
+function populateHistoryDeviceFilter() {
+  const sel = document.getElementById('hist-device-filter');
+  if (!sel) return;
+  const prev = sel.value;
+  const seen = new Map(); // eui -> name
+  for (const r of _historyRuns) {
+    if (r.device && r.device.eui && !seen.has(r.device.eui)) seen.set(r.device.eui, r.device.name);
+  }
+  const devices = Array.from(seen.entries()).sort((a, b) => a[1].localeCompare(b[1]));
+  sel.innerHTML = '<option value="">All devices</option>' +
+    devices.map(([eui, name]) => `<option value="${esc(eui)}">${esc(name)}</option>`).join('');
+  if (devices.some(([eui]) => eui === prev)) sel.value = prev;
+}
+
+function renderHistoryList() {
+  const body = document.getElementById('history-list-body');
+  if (!body) return;
+  const filterSel = document.getElementById('hist-device-filter');
+  const filterEui = filterSel ? filterSel.value : '';
+  const runs = filterEui ? _historyRuns.filter(r => r.device && r.device.eui === filterEui) : _historyRuns;
+
+  if (!runs.length) {
+    body.innerHTML = _historyRuns.length
+      ? '<p class="hint">No measurements for this device yet.</p>'
+      : '<p class="hint">No measurements recorded yet — place a device and start a run.</p>';
+    return;
+  }
+  body.innerHTML = runs.map(historyRowHtml).join('');
+}
+
+/** One row: device · location · date/time · status · packets · PDR
+ * summary. Tap -> openHistoryDetail(). */
+function historyRowHtml(r) {
+  const o = r.overall || {};
+  const pdrKnown = o.expected != null && o.expected > 0;
+  const pdrText = pdrKnown ? `${Math.round(o.pdr * 100)}% PDR` : '—';
+  const pdrCls = pdrKnown ? pdrClass(o.pdr) : '';
+  const deviceName = r.device ? r.device.name : '—';
+  return `
+    <div class="hist-row" onclick="openHistoryDetail(${r.run_id})">
+      <div class="hist-row-main">
+        <span class="hist-row-device">${esc(deviceName)}</span>
+        <span class="hist-row-loc">${esc(r.floor || '—')} · ${esc(r.room || '—')}</span>
+      </div>
+      <div class="hist-row-meta">
+        <span class="hist-row-time">${fmtTime(r.started_at)}</span>
+        <span class="hist-badge hist-${esc(r.status)}">${histStatusLabel(r.status)}</span>
+        <span>${r.packets} pkts</span>
+        <span class="hist-row-pdr ${pdrCls}">${pdrText}</span>
+      </div>
+    </div>`;
+}
+
+function openHistoryDetail(runId) {
+  const listView = document.getElementById('history-list-view');
+  const detailView = document.getElementById('history-detail-view');
+  if (listView) listView.style.display = 'none';
+  if (detailView) detailView.style.display = '';
+  loadHistoryDetail(runId);
+}
+
+function closeHistoryDetail() {
+  const listView = document.getElementById('history-list-view');
+  const detailView = document.getElementById('history-detail-view');
+  if (detailView) detailView.style.display = 'none';
+  if (listView) listView.style.display = '';
+}
+
+let _histDetailRunId = null; // guards against a stale response after a quick second tap
+
+async function loadHistoryDetail(runId) {
+  _histDetailRunId = runId;
+  document.getElementById('hist-detail-title').textContent = 'Loading…';
+  document.getElementById('hist-detail-device-place').innerHTML = '<div class="place-empty">Loading…</div>';
+  document.getElementById('hist-detail-gateway-place').innerHTML = '<div class="place-empty">Loading…</div>';
+  document.getElementById('hist-detail-device-photos').innerHTML = '';
+  document.getElementById('hist-detail-gateway-photos').innerHTML = '';
+  document.getElementById('hist-detail-chart').innerHTML = '<p class="hint">Loading…</p>';
+  document.getElementById('hist-pdr-sf-grid').innerHTML = '';
+  document.getElementById('hist-detail-meta').innerHTML = '';
+  document.getElementById('hist-detail-csv-link').href = `/api/run/${runId}/csv`;
+
+  try {
+    const [detail, stats, series] = await Promise.all([
+      apiJSON(`/api/run/${runId}/detail`),
+      apiJSON(`/api/run/${runId}/stats`),
+      apiJSON(`/api/run/${runId}/series`),
+    ]);
+    if (_histDetailRunId !== runId) return; // a newer tap superseded this fetch
+    renderHistoryDetail(detail, stats, series);
+  } catch (e) {
+    if (_histDetailRunId !== runId) return;
+    document.getElementById('hist-detail-chart').innerHTML = `<p class="hint">Error: ${esc(e.message)}</p>`;
+  }
+}
+
+function renderHistoryDetail(detail, stats, series) {
+  const run = detail.run;
+  const device = detail.device;
+  const devicePlacement = detail.device_placement;
+  const gatewayPlacement = detail.gateway_placement;
+
+  document.getElementById('hist-detail-title').textContent =
+    device ? `${device.name} — ${fmtTime(run.started_at)}` : `Run #${run.id}`;
+
+  document.getElementById('hist-detail-device-place').innerHTML =
+    placeInfoHtml(devicePlacement, { showAntenna: true });
+  document.getElementById('hist-detail-device-photos').innerHTML =
+    photoThumbsHtml(devicePlacement && devicePlacement.photo_ids);
+
+  document.getElementById('hist-detail-gateway-place').innerHTML = placeInfoHtml(gatewayPlacement);
+  document.getElementById('hist-detail-gateway-photos').innerHTML =
+    photoThumbsHtml(gatewayPlacement && gatewayPlacement.photo_ids);
+
+  renderPdrSfBlock(stats, { grid: 'hist-pdr-sf-grid', overall: 'hist-pdr-sf-overall', hint: 'hist-pdr-sf-hint' });
+
+  document.getElementById('hist-detail-chart').innerHTML = buildRunChartHtml(series);
+
+  document.getElementById('hist-detail-meta').innerHTML = `
+    <div><strong>Status:</strong> ${histStatusLabel(run.status)}</div>
+    <div><strong>Started:</strong> ${fmtTime(run.started_at)}</div>
+    <div><strong>Ended:</strong> ${run.ended_at ? fmtTime(run.ended_at) : '—'}</div>
+    <div><strong>Packets:</strong> ${run.packets}</div>`;
 }
 
 // ---------------------------------------------------------------------------
