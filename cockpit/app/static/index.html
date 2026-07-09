@@ -232,12 +232,34 @@
     </div>
 
     <div class="rf-sec">
-      <div class="rf-sec-title">Channel × SF heatmap (foreign frames)</div>
-      <div id="rf-heatmap"><p class="hint">No data yet.</p></div>
-      <div class="rf-heat-legend">
-        <span>low</span>
-        <div class="rf-heat-legend-bar"></div>
-        <span>high</span>
+      <div class="rf-pair-grid rf-heat-pair">
+        <div>
+          <div class="rf-sec-title">Channel × SF heatmap (foreign frames)</div>
+          <div id="rf-heatmap"><p class="hint">No data yet.</p></div>
+          <div class="rf-heat-legend">
+            <span>low</span>
+            <div class="rf-heat-legend-bar"></div>
+            <span>high</span>
+          </div>
+        </div>
+        <div>
+          <div class="rf-sec-title">Traffic timeline (last 24 h)</div>
+          <svg id="rf-timeline" class="rf-timeline-svg" viewBox="0 0 100 32" preserveAspectRatio="none" aria-hidden="true"></svg>
+          <div class="rf-timeline-axis"><span>24 h ago</span><span>now</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="rf-sec">
+      <div class="rf-pair-grid rf-dist-pair">
+        <div>
+          <div class="rf-sec-title">SF distribution</div>
+          <div id="rf-sf-dist"><p class="hint">No data yet.</p></div>
+        </div>
+        <div>
+          <div class="rf-sec-title">RSSI distribution</div>
+          <div id="rf-rssi-dist"><p class="hint">No data yet.</p></div>
+        </div>
       </div>
     </div>
 
@@ -263,6 +285,11 @@
     <div class="rf-sec">
       <div class="rf-sec-title">Vendors nearby <span class="hint">(from joins, best-effort)</span></div>
       <div id="rf-vendors"><p class="hint">No data yet.</p></div>
+    </div>
+
+    <div class="rf-sec">
+      <div class="rf-sec-title">Live frame log <span class="hint">(last 20, newest first)</span></div>
+      <div id="rf-frame-log" class="rf-frame-log"><p class="hint">No foreign frames recorded yet.</p></div>
     </div>
   </section>
 

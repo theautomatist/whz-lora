@@ -1885,6 +1885,9 @@ function renderRfEnvironment(data) {
   const heatmapEl = document.getElementById('rf-heatmap');
   if (heatmapEl) heatmapEl.innerHTML = buildRfHeatmapHtml(data.channel_sf_matrix || {});
 
+  const timelineEl = document.getElementById('rf-timeline');
+  if (timelineEl) timelineEl.innerHTML = buildRfTimelineSvg(data.timeline || []);
+
   const rateEl = document.getElementById('rf-frames-per-min');
   if (rateEl) rateEl.textContent = (data.frames_per_min || 0).toFixed(1);
   const sparkEl = document.getElementById('rf-sparkline');
@@ -1894,6 +1897,9 @@ function renderRfEnvironment(data) {
   renderRfNetworks(data.networks || {});
   renderRfDevices(data.foreign_devices || {});
   renderRfVendors(data.vendors || {});
+  renderRfSfDistribution(data.sf_distribution || {});
+  renderRfRssiDistribution(data.rssi_distribution || []);
+  renderRfFrameLog(data.recent_frames || []);
 }
 
 /** Channel × SF grid, cells shaded by foreign-frame count (a single accent
@@ -1935,6 +1941,25 @@ function buildRfSparklineSvg(sparkline) {
     const x = i * barW;
     const y = H - h;
     return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${(barW * 0.7).toFixed(1)}" height="${h.toFixed(1)}" class="rf-spark-bar"/>`;
+  }).join('');
+}
+
+/** Foreign-frame traffic timeline — one bar per hour, oldest -> newest
+ * (last 24 h, left to right); pairs with the heatmap (heatmap = where/
+ * what-SF, timeline = when). Same tiny self-contained inline-SVG-bars
+ * pattern as the busyness sparkline above, with a <title> tooltip per bar
+ * since there's no room for per-bucket text labels at this size. */
+function buildRfTimelineSvg(timeline) {
+  if (!timeline || !timeline.length) return '';
+  const W = 100, H = 32;
+  const max = Math.max(1, ...timeline.map(b => b.count));
+  const barW = W / timeline.length;
+  return timeline.map((b, i) => {
+    const h = b.count > 0 ? Math.max(2, (b.count / max) * H) : 0.5;
+    const x = i * barW;
+    const y = H - h;
+    const tip = `${fmtTime(b.bucket)}: ${b.count} frame${b.count === 1 ? '' : 's'}`;
+    return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${(barW * 0.7).toFixed(1)}" height="${h.toFixed(1)}" class="rf-timeline-bar"><title>${esc(tip)}</title></rect>`;
   }).join('');
 }
 
@@ -1996,6 +2021,60 @@ function renderRfVendors(vendors) {
       <span>${esc(v.name)}</span>
       <span class="hint mono">${esc(oui)}</span>
       <span>${v.joins} join${v.joins === 1 ? '' : 's'}</span>
+    </div>`).join('');
+}
+
+/** Small horizontal bar row shared by the SF and RSSI distributions —
+ * label · thin bar (width relative to the loudest bucket) · count. */
+function _rfDistRowsHtml(entries) {
+  const max = Math.max(1, ...entries.map(([, c]) => c));
+  return entries.map(([label, c]) => `
+    <div class="rf-dist-row">
+      <span class="rf-dist-label">${esc(label)}</span>
+      <div class="rf-dist-bar-track"><div class="rf-dist-bar-fill" style="width:${c ? Math.max(4, (c / max) * 100).toFixed(0) : 0}%"></div></div>
+      <span class="rf-dist-count">${c}</span>
+    </div>`).join('');
+}
+
+function renderRfSfDistribution(sfDist) {
+  const el = document.getElementById('rf-sf-dist');
+  if (!el) return;
+  const entries = Object.entries(sfDist).map(([sf, c]) => [`SF${sf}`, c]);
+  const total = entries.reduce((a, [, c]) => a + c, 0);
+  if (!total) { el.innerHTML = '<p class="hint">No data yet.</p>'; return; }
+  el.innerHTML = _rfDistRowsHtml(entries);
+}
+
+function renderRfRssiDistribution(buckets) {
+  const el = document.getElementById('rf-rssi-dist');
+  if (!el) return;
+  const total = buckets.reduce((a, b) => a + b.count, 0);
+  if (!total) { el.innerHTML = '<p class="hint">No data yet.</p>'; return; }
+  el.innerHTML = _rfDistRowsHtml(buckets.map(b => [b.label, b.count]));
+}
+
+/** "HH:MM:SS" from a stored ts (already UTC, same raw-substring approach as
+ * fmtTime — no local-timezone conversion anywhere else in this app). */
+function fmtHms(iso) {
+  if (!iso) return '—';
+  const t = String(iso).split('T')[1] || '';
+  return t.substring(0, 8);
+}
+
+/** Compact live log — last ~20 foreign frames, newest first (recent_frames
+ * is already ordered that way by the backend). A join-request has no
+ * DevAddr, shown as "join" instead. */
+function renderRfFrameLog(frames) {
+  const el = document.getElementById('rf-frame-log');
+  if (!el) return;
+  if (!frames.length) { el.innerHTML = '<p class="hint">No foreign frames recorded yet.</p>'; return; }
+  el.innerHTML = frames.map(f => `
+    <div class="rf-log-row">
+      <span class="rf-log-time">${fmtHms(f.ts)}</span>
+      <span class="rf-log-addr mono">${f.dev_addr ? esc(f.dev_addr) : 'join'}</span>
+      <span class="rf-log-net">${esc(f.network || (f.dev_addr ? 'other' : '—'))}</span>
+      <span class="rf-log-sf">${f.sf != null ? 'SF' + f.sf : '—'}</span>
+      <span class="rf-log-rssi ${rssiClass(f.rssi)}">${fmtNum(f.rssi)}&nbsp;dBm</span>
     </div>`).join('');
 }
 

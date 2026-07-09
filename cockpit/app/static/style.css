@@ -712,6 +712,15 @@ details[open].coll > summary::before { transform: rotate(90deg); }
 }
 .rf-sec-count { color: var(--accent-light); font-weight: 800; text-transform: none; letter-spacing: normal; }
 
+/* Two-up pairing — heatmap+timeline, then SF+RSSI distribution — stacked on
+   mobile, side by side once there's room. Reuses the same min-width
+   breakpoint as #node-grid for consistency. */
+.rf-pair-grid { display: grid; grid-template-columns: 1fr; gap: 14px; align-items: start; }
+@media (min-width: 520px) {
+  .rf-pair-grid.rf-heat-pair { grid-template-columns: auto 1fr; }
+  .rf-pair-grid.rf-dist-pair { grid-template-columns: 1fr 1fr; }
+}
+
 /* Channel x SF heatmap — fixed, tight cell size (not 1fr) so the matrix
    reads as a small, dense grid instead of stretching to the panel width. */
 .rf-heat-grid { display: grid; grid-template-columns: 26px repeat(6, 24px); gap: 1px; }
@@ -731,6 +740,15 @@ details[open].coll > summary::before { transform: rotate(90deg); }
 .rf-heat-legend-bar {
   flex: 0 1 140px; height: 6px; border-radius: 3px; border: 1px solid var(--line);
   background: linear-gradient(90deg, rgba(34,211,238,.08), rgba(34,211,238,.9));
+}
+
+/* Traffic timeline — 24 hourly bars, pairs with the heatmap (where/what-SF
+   vs. when). Same flat inline-SVG-bars pattern as the busyness sparkline. */
+.rf-timeline-svg { width: 100%; height: 44px; display: block; }
+.rf-timeline-bar { fill: var(--accent1); }
+.rf-timeline-axis {
+  display: flex; justify-content: space-between;
+  font-size: .6rem; color: var(--muted); margin-top: 2px;
 }
 
 /* Band busyness */
@@ -772,6 +790,30 @@ details[open].coll > summary::before { transform: rotate(90deg); }
   font-size: .74rem; padding: 4px 0; border-bottom: 1px solid var(--line);
 }
 .rf-vendor-row:last-child { border-bottom: none; }
+
+/* SF / RSSI distribution — small horizontal bar rows, same flat look as
+   the network bars above. */
+.rf-dist-row {
+  display: grid; grid-template-columns: minmax(58px, auto) 1fr 24px; gap: 6px;
+  align-items: center; font-size: .72rem; padding: 3px 0;
+}
+.rf-dist-label { color: var(--text); font-weight: 700; white-space: nowrap; }
+.rf-dist-bar-track { height: 6px; border-radius: 3px; background: var(--bg-elev3); overflow: hidden; }
+.rf-dist-bar-fill { height: 100%; background: var(--accent1); border-radius: 3px; }
+.rf-dist-count { color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+
+/* Live frame log — compact, scrollable, newest on top. */
+.rf-frame-log { max-height: 200px; overflow-y: auto; font-size: .72rem; }
+.rf-log-row {
+  display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap;
+  padding: 4px 0; border-bottom: 1px solid var(--line);
+}
+.rf-log-row:last-child { border-bottom: none; }
+.rf-log-time { color: var(--muted); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.rf-log-addr { flex-shrink: 0; }
+.rf-log-net { color: var(--muted); font-size: .66rem; flex-shrink: 0; }
+.rf-log-sf { flex-shrink: 0; }
+.rf-log-rssi { flex-shrink: 0; font-variant-numeric: tabular-nums; }
 
 /* =================================================================
    GENERIC TABLE (device list, run history)
