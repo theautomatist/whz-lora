@@ -9,7 +9,7 @@ import tempfile
 
 import pytest
 
-from app.db import MAX_PHOTOS_PER_PLACEMENT, Database
+from app.db import MAX_PHOTOS_PER_PLACEMENT, Database, parse_dl_counts
 
 
 def _new_db() -> Database:
@@ -626,4 +626,223 @@ def test_get_last_run_returns_most_recent_regardless_of_status():
     run2 = d.start_run(node_id, dp2, gp, "adr", data_dir, "aaaa000000000001")
 
     assert d.get_last_run(node_id)["id"] == run2["id"]
+
+
+# ---------------------------------------------------------------------------
+# "Trust & Sichtbarkeit" — downlink_test flag + per-SF confirmed-downlink
+# reliability test (maybe_trigger_downlink_test / record_downlink_test_ack)
+# ---------------------------------------------------------------------------
+
+
+def _new_sweep_run(interval_minutes=5, downlink_test=True, schedule=None):
+    """A fresh DB with one device, both placements, and a running SF-sweep
+    (default SF7->SF9->SF12, 100 s each) — the setup every downlink-test
+    test below needs."""
+    d = _new_db()
+    node_id, _ = d.upsert_node("device", "d1", "aaaa000000000001")
+    gw_id, _ = d.upsert_node("gateway", "gw", "7076ff0064071a3d")
+    dp = d.create_placement(node_id, "3OG", "R301", "", "", "3dbi")
+    gp = d.create_placement(gw_id, "EG", "flur", "", "", "")
+    data_dir = tempfile.mkdtemp()
+    schedule = schedule if schedule is not None else [
+        {"sf": 7, "seconds": 100}, {"sf": 9, "seconds": 100}, {"sf": 12, "seconds": 100},
+    ]
+    run = d.start_run(
+        node_id, dp, gp, "adr", data_dir, "aaaa000000000001",
+        planned_seconds=sum(s["seconds"] for s in schedule),
+        sf_schedule=schedule, interval_minutes=interval_minutes,
+        downlink_test=downlink_test,
+    )
+    return d, node_id, run
+
+
+def test_fresh_db_has_downlink_test_columns():
+    d = _new_db()
+    cols = {row["name"] for row in d._conn.execute("PRAGMA table_info(run)").fetchall()}
+    assert {"downlink_test", "dl_counts"} <= cols
+
+
+def test_start_run_downlink_test_defaults_true():
+    d = _new_db()
+    node_id, _ = d.upsert_node("device", "d1", "aaaa000000000001")
+    gw_id, _ = d.upsert_node("gateway", "gw", "7076ff0064071a3d")
+    dp = d.create_placement(node_id, "EG", "R1", "", "", "3dbi")
+    gp = d.create_placement(gw_id, "EG", "flur", "", "", "")
+    run = d.start_run(node_id, dp, gp, "adr", tempfile.mkdtemp(), "aaaa000000000001")
+    assert run["downlink_test"] == 1
+    assert run["dl_counts"] is None
+
+
+def test_start_run_downlink_test_can_be_disabled():
+    d, node_id, run = _new_sweep_run(downlink_test=False)
+    assert run["downlink_test"] == 0
+
+
+def test_parse_dl_counts_defaults_for_empty_or_invalid():
+    assert parse_dl_counts(None) == {"by_sf": {}, "pending_sf": None}
+    assert parse_dl_counts("") == {"by_sf": {}, "pending_sf": None}
+    assert parse_dl_counts("not json") == {"by_sf": {}, "pending_sf": None}
+    assert parse_dl_counts("42") == {"by_sf": {}, "pending_sf": None}  # valid JSON, not a dict
+
+
+def test_parse_dl_counts_roundtrip():
+    raw = '{"by_sf": {"7": {"sent": 2, "acked": 1}}, "pending_sf": 9}'
+    assert parse_dl_counts(raw) == {"by_sf": {"7": {"sent": 2, "acked": 1}}, "pending_sf": 9}
+
+
+# --- maybe_trigger_downlink_test ---------------------------------------
+
+
+def test_maybe_trigger_unknown_device_returns_none():
+    d = _new_db()
+    assert d.maybe_trigger_downlink_test("ffffffffffffffff", 3) is None
+
+
+def test_maybe_trigger_no_active_run_returns_none():
+    d = _new_db()
+    d.upsert_node("device", "d1", "aaaa000000000001")
+    assert d.maybe_trigger_downlink_test("aaaa000000000001", 3) is None
+
+
+def test_maybe_trigger_disabled_returns_none():
+    d, node_id, run = _new_sweep_run(downlink_test=False)
+    assert d.maybe_trigger_downlink_test("aaaa000000000001", 15) is None
+
+
+def test_maybe_trigger_no_interval_minutes_returns_none():
+    """A Phase A fixed run (no commanded interval) has no rate to derive K
+    from, and no SF to attribute a test to."""
+    d = _new_db()
+    node_id, _ = d.upsert_node("device", "d1", "aaaa000000000001")
+    gw_id, _ = d.upsert_node("gateway", "gw", "7076ff0064071a3d")
+    dp = d.create_placement(node_id, "EG", "R1", "", "", "3dbi")
+    gp = d.create_placement(gw_id, "EG", "flur", "", "", "")
+    d.start_run(node_id, dp, gp, "adr", tempfile.mkdtemp(), "aaaa000000000001")
+    assert d.maybe_trigger_downlink_test("aaaa000000000001", 3) is None
+
+
+def test_maybe_trigger_no_schedule_returns_none():
+    """Defensive: interval_minutes set but no sf_schedule (not reachable via
+    the API, main._resolve_schedule always sets both or neither) — no SF to
+    attribute a test to."""
+    d = _new_db()
+    node_id, _ = d.upsert_node("device", "d1", "aaaa000000000001")
+    gw_id, _ = d.upsert_node("gateway", "gw", "7076ff0064071a3d")
+    dp = d.create_placement(node_id, "EG", "R1", "", "", "3dbi")
+    gp = d.create_placement(gw_id, "EG", "flur", "", "", "")
+    d.start_run(node_id, dp, gp, "adr", tempfile.mkdtemp(), "aaaa000000000001", interval_minutes=5)
+    assert d.maybe_trigger_downlink_test("aaaa000000000001", 3) is None
+
+
+def test_maybe_trigger_fires_on_kth_uplink():
+    """interval_minutes=5 -> K = max(1, round(15/5)) = 3."""
+    d, node_id, run = _new_sweep_run(interval_minutes=5)
+    assert d.maybe_trigger_downlink_test("aaaa000000000001", 1) is None
+    assert d.maybe_trigger_downlink_test("aaaa000000000001", 2) is None
+    dl = d.maybe_trigger_downlink_test("aaaa000000000001", 3)
+    assert dl == {
+        "dev_eui": "aaaa000000000001", "f_port": 1, "data_hex": "04",
+        "run_id": run["id"], "sf": 7,
+    }
+
+
+def test_maybe_trigger_k_scales_with_interval():
+    """interval_minutes=15 -> K = max(1, round(15/15)) = 1 -> every uplink."""
+    d, node_id, run = _new_sweep_run(interval_minutes=15)
+    assert d.maybe_trigger_downlink_test("aaaa000000000001", 1) is not None
+
+
+def test_maybe_trigger_k_never_below_one():
+    """A very short interval must not push K below 1 (would divide by
+    ~0/negative or fire more than once per uplink)."""
+    d, node_id, run = _new_sweep_run(interval_minutes=255)  # 15/255 rounds to 0
+    dl = d.maybe_trigger_downlink_test("aaaa000000000001", 1)
+    assert dl is not None  # K clamped to max(1, ...) == 1
+
+
+def test_maybe_trigger_never_piles_up_while_pending():
+    d, node_id, run = _new_sweep_run(interval_minutes=15)  # K=1
+    first = d.maybe_trigger_downlink_test("aaaa000000000001", 1)
+    assert first is not None
+    second = d.maybe_trigger_downlink_test("aaaa000000000001", 2)
+    assert second is None  # still pending — no ack yet
+
+
+def test_maybe_trigger_records_sent_count_by_sf():
+    d, node_id, run = _new_sweep_run(interval_minutes=15)  # K=1, current sf=7
+    d.maybe_trigger_downlink_test("aaaa000000000001", 1)
+    counts = parse_dl_counts(d.get_run(run["id"])["dl_counts"])
+    assert counts["by_sf"]["7"]["sent"] == 1
+    assert counts["pending_sf"] == 7
+
+
+def test_maybe_trigger_attributes_to_current_segment_sf():
+    d, node_id, run = _new_sweep_run(interval_minutes=15)
+    d.advance_run_segment(run["id"], 1, "2026-01-01T00:00:00+00:00")  # now SF9
+    dl = d.maybe_trigger_downlink_test("aaaa000000000001", 1)
+    assert dl["sf"] == 9
+
+
+# --- record_downlink_test_ack -------------------------------------------
+
+
+def test_record_ack_noop_without_active_run():
+    d = _new_db()
+    d.upsert_node("device", "d1", "aaaa000000000001")
+    d.record_downlink_test_ack("aaaa000000000001", True)  # must not raise
+
+
+def test_record_ack_noop_without_pending():
+    d, node_id, run = _new_sweep_run(interval_minutes=15)
+    d.record_downlink_test_ack("aaaa000000000001", True)  # nothing pending yet
+    counts = parse_dl_counts(d.get_run(run["id"])["dl_counts"])
+    assert counts["by_sf"] == {}
+
+
+def test_record_ack_true_increments_acked_and_clears_pending():
+    d, node_id, run = _new_sweep_run(interval_minutes=15)
+    d.maybe_trigger_downlink_test("aaaa000000000001", 1)  # sf7 pending
+
+    d.record_downlink_test_ack("aaaa000000000001", True)
+
+    counts = parse_dl_counts(d.get_run(run["id"])["dl_counts"])
+    assert counts["by_sf"]["7"] == {"sent": 1, "acked": 1}
+    assert counts["pending_sf"] is None
+
+
+def test_record_ack_false_clears_pending_without_incrementing():
+    d, node_id, run = _new_sweep_run(interval_minutes=15)
+    d.maybe_trigger_downlink_test("aaaa000000000001", 1)
+
+    d.record_downlink_test_ack("aaaa000000000001", False)
+
+    counts = parse_dl_counts(d.get_run(run["id"])["dl_counts"])
+    assert counts["by_sf"]["7"] == {"sent": 1, "acked": 0}
+    assert counts["pending_sf"] is None
+
+
+def test_record_ack_unblocks_next_trigger():
+    d, node_id, run = _new_sweep_run(interval_minutes=15)  # K=1
+    d.maybe_trigger_downlink_test("aaaa000000000001", 1)
+    assert d.maybe_trigger_downlink_test("aaaa000000000001", 2) is None  # still pending
+
+    d.record_downlink_test_ack("aaaa000000000001", True)
+
+    assert d.maybe_trigger_downlink_test("aaaa000000000001", 3) is not None  # free again
+
+
+def test_record_ack_attributed_to_sf_active_when_sent_not_when_acked():
+    """The pending downlink was sent while SF7 was current; the sweep then
+    advances to SF9 before the ack arrives — the ack must still count
+    against SF7, not SF9 (Class A: ack can arrive well after the send)."""
+    d, node_id, run = _new_sweep_run(interval_minutes=15)  # K=1, sf7
+    d.maybe_trigger_downlink_test("aaaa000000000001", 1)  # sent under SF7
+
+    d.advance_run_segment(run["id"], 1, "2026-01-01T00:00:00+00:00")  # now SF9
+
+    d.record_downlink_test_ack("aaaa000000000001", True)
+
+    counts = parse_dl_counts(d.get_run(run["id"])["dl_counts"])
+    assert counts["by_sf"]["7"] == {"sent": 1, "acked": 1}
+    assert "9" not in counts["by_sf"]
     assert d.get_last_run(node_id)["status"] == "running"

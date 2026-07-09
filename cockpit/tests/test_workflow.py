@@ -15,6 +15,7 @@ MQTT is never touched by this module.
 import asyncio
 import csv
 import datetime
+import json
 import os
 import tempfile
 
@@ -1096,3 +1097,298 @@ def test_run_series_missing_csv_file_returns_empty_points_not_error(workflow):
     result = _run(main.run_series(run["id"]))
     assert result["points"] == []
     assert result["total"] == 0
+
+
+# ---------------------------------------------------------------------------
+# "Trust & Sichtbarkeit" — per-SF PDR: _segment_bounds/_segment_index_for_offset
+# (pure) + _compute_run_stats (pure, CSV + a hand-built run dict) + GET
+# /api/run/{id}/stats + RunStartRequest.downlink_test
+# ---------------------------------------------------------------------------
+
+
+def test_segment_bounds():
+    schedule = [{"sf": 7, "seconds": 100}, {"sf": 9, "seconds": 50}]
+    assert main._segment_bounds(schedule) == [(0, 100), (100, 150)]
+
+
+def test_segment_bounds_empty_schedule():
+    assert main._segment_bounds([]) == []
+
+
+def test_segment_index_for_offset():
+    bounds = [(0, 300), (300, 600), (600, 900)]
+    assert main._segment_index_for_offset(-5, bounds) is None
+    assert main._segment_index_for_offset(0, bounds) == 0
+    assert main._segment_index_for_offset(150, bounds) == 0
+    assert main._segment_index_for_offset(300, bounds) == 1
+    assert main._segment_index_for_offset(599, bounds) == 1
+    assert main._segment_index_for_offset(600, bounds) == 2
+    assert main._segment_index_for_offset(1000, bounds) == 2  # folds into last
+    assert main._segment_index_for_offset(0, []) is None
+
+
+def test_compute_run_stats_full_scenario():
+    """Uplink PDR per segment (expected from the COMMANDED interval, not the
+    measured one), Ø RSSI/SNR per segment, downlink PDR from dl_counts, and
+    the overall aggregate row — all in one realistic-shaped scenario."""
+    base = datetime.datetime(2026, 1, 1, tzinfo=datetime.timezone.utc)
+    path = os.path.join(tempfile.mkdtemp(), "run.csv")
+    rows = []
+    # Segment 0 (SF7, [0,300)): 4 of the 5 expected packets arrived — one lost.
+    for i, t in enumerate([0, 60, 120, 180]):
+        rows.append({
+            "timestamp_utc": (base + datetime.timedelta(seconds=t)).isoformat(),
+            "rssi_dbm": str(-60 - i * 10),
+            "snr_db": str(8 - i * 2),
+            "sf": "7",
+        })
+    # Segment 1 (SF9, [300,600)): all 5 expected packets arrived.
+    for t in [300, 360, 420, 480, 540]:
+        rows.append({
+            "timestamp_utc": (base + datetime.timedelta(seconds=t)).isoformat(),
+            "rssi_dbm": "-50",
+            "snr_db": "5",
+            "sf": "9",
+        })
+    # Segment 2 (SF12, [600,900)) has not started yet at "now" below.
+    _write_run_csv(path, rows)
+
+    run = {
+        "csv_path": path,
+        "started_at": base.isoformat(),
+        "ended_at": None,
+        "status": "running",
+        "sf_schedule": json.dumps([
+            {"sf": 7, "seconds": 300}, {"sf": 9, "seconds": 300}, {"sf": 12, "seconds": 300},
+        ]),
+        "interval_minutes": 1,  # interval_s=60 -> 300s/segment -> 5 expected/segment
+        "dl_counts": json.dumps({
+            "by_sf": {"7": {"sent": 2, "acked": 1}, "9": {"sent": 1, "acked": 1}},
+            "pending_sf": None,
+        }),
+    }
+    now = base + datetime.timedelta(seconds=600)  # exactly at the seg1/seg2 boundary
+
+    result = main._compute_run_stats(run, now=now)
+
+    sf7, sf9, sf12 = result["sf_stats"]
+    assert sf7 == {
+        "sf": 7, "expected": 5, "received": 4, "pdr": 0.8,
+        "rssi_avg": -75.0, "snr_avg": 5.0,
+        "dl_sent": 2, "dl_acked": 1, "dl_pdr": 0.5,
+    }
+    assert sf9 == {
+        "sf": 9, "expected": 5, "received": 5, "pdr": 1.0,
+        "rssi_avg": -50.0, "snr_avg": 5.0,
+        "dl_sent": 1, "dl_acked": 1, "dl_pdr": 1.0,
+    }
+    assert sf12 == {
+        "sf": 12, "expected": 0, "received": 0, "pdr": 0.0,
+        "rssi_avg": None, "snr_avg": None,
+        "dl_sent": 0, "dl_acked": 0, "dl_pdr": None,
+    }
+
+    overall = result["overall"]
+    assert overall["expected"] == 10
+    assert overall["received"] == 9
+    assert overall["pdr"] == 0.9
+    assert overall["rssi_avg"] == -61.1
+    assert overall["snr_avg"] == 5.0
+    assert overall["dl_sent"] == 3
+    assert overall["dl_acked"] == 2
+    assert overall["dl_pdr"] == round(2 / 3, 4)
+
+
+def test_compute_run_stats_pdr_clamped_to_one():
+    """More packets than "expected" (e.g. a slightly-off clock or a burst)
+    must clamp PDR to 1.0, never go above."""
+    base = datetime.datetime(2026, 1, 1, tzinfo=datetime.timezone.utc)
+    path = os.path.join(tempfile.mkdtemp(), "run.csv")
+    _write_run_csv(path, [
+        {"timestamp_utc": (base + datetime.timedelta(seconds=t)).isoformat(), "sf": "7"}
+        for t in range(0, 60, 5)  # 12 packets in a 60 s segment
+    ])
+    run = {
+        "csv_path": path, "started_at": base.isoformat(), "ended_at": None,
+        "status": "running",
+        "sf_schedule": json.dumps([{"sf": 7, "seconds": 60}]),
+        "interval_minutes": 5,  # expected = round(60/300) = 0 -> denom clamped to 1
+        "dl_counts": None,
+    }
+    result = main._compute_run_stats(run, now=base + datetime.timedelta(seconds=60))
+    assert result["sf_stats"][0]["received"] == 12
+    assert result["sf_stats"][0]["pdr"] == 1.0
+
+
+def test_compute_run_stats_done_run_freezes_elapsed_at_ended_at():
+    """A finished run's per-segment "expected" must be computed against
+    ended_at, not against whatever "now" happens to be passed."""
+    base = datetime.datetime(2026, 1, 1, tzinfo=datetime.timezone.utc)
+    path = os.path.join(tempfile.mkdtemp(), "run.csv")
+    _write_run_csv(path, [])
+
+    run = {
+        "csv_path": path,
+        "started_at": base.isoformat(),
+        "ended_at": (base + datetime.timedelta(seconds=480)).isoformat(),
+        "status": "done",
+        "sf_schedule": json.dumps([{"sf": 7, "seconds": 300}, {"sf": 9, "seconds": 300}]),
+        "interval_minutes": 1,
+        "dl_counts": None,
+    }
+    result = main._compute_run_stats(run, now=base + datetime.timedelta(days=1))
+
+    sf7, sf9 = result["sf_stats"]
+    assert sf7["expected"] == 5   # fully elapsed: 300 s / 60 s
+    assert sf9["expected"] == 3   # 480 - 300 = 180 s elapsed / 60 s
+
+
+def test_compute_run_stats_phase_a_run_no_schedule():
+    """A Phase A fixed run (no sf_schedule/interval_minutes) has no SF
+    concept — sf_stats is empty, overall still summarises the CSV."""
+    base = datetime.datetime(2026, 1, 1, tzinfo=datetime.timezone.utc)
+    path = os.path.join(tempfile.mkdtemp(), "run.csv")
+    _write_run_csv(path, [
+        {"timestamp_utc": base.isoformat(), "rssi_dbm": "-70", "snr_db": "5"},
+        {"timestamp_utc": (base + datetime.timedelta(seconds=10)).isoformat(), "rssi_dbm": "-80", "snr_db": "3"},
+    ])
+    run = {
+        "csv_path": path, "started_at": base.isoformat(), "ended_at": None,
+        "status": "running", "sf_schedule": None, "interval_minutes": None,
+        "dl_counts": None,
+    }
+    result = main._compute_run_stats(run)
+    assert result["sf_stats"] == []
+    overall = result["overall"]
+    assert overall == {
+        "sf": None, "expected": None, "received": 2, "pdr": None,
+        "rssi_avg": -75.0, "snr_avg": 4.0,
+        "dl_sent": 0, "dl_acked": 0, "dl_pdr": None,
+    }
+
+
+def test_compute_run_stats_missing_csv_is_not_an_error():
+    run = {
+        "csv_path": "/no/such/file.csv",
+        "started_at": "2026-01-01T00:00:00+00:00", "ended_at": None,
+        "status": "running",
+        "sf_schedule": json.dumps([{"sf": 7, "seconds": 100}]),
+        "interval_minutes": 5,
+        "dl_counts": None,
+    }
+    result = main._compute_run_stats(
+        run, now=datetime.datetime(2026, 1, 1, tzinfo=datetime.timezone.utc)
+    )
+    assert result["sf_stats"][0]["received"] == 0
+
+
+# ---------------------------------------------------------------------------
+# GET /api/run/{run_id}/stats
+# ---------------------------------------------------------------------------
+
+
+def test_run_stats_unknown_run_404(workflow):
+    with pytest.raises(HTTPException) as exc:
+        _run(main.run_stats(999))
+    assert exc.value.status_code == 404
+
+
+def test_run_stats_defaults_downlink_test_true(workflow):
+    d, gw_id = workflow
+    node_id, _ = d.upsert_node("device", "d1", "aaaa000000000001")
+    d.create_placement(node_id, "3OG", "R301", "", "", "3dbi")
+    d.create_placement(gw_id, "EG", "flur", "", "", "")
+    run = main.start_run(main.RunStartRequest(device_node_id=node_id))
+
+    result = _run(main.run_stats(run["id"]))
+    assert result["downlink_test"] is True
+
+
+def test_run_stats_reflects_downlink_test_disabled(workflow):
+    d, gw_id = workflow
+    node_id, _ = d.upsert_node("device", "d1", "aaaa000000000001")
+    d.create_placement(node_id, "3OG", "R301", "", "", "3dbi")
+    d.create_placement(gw_id, "EG", "flur", "", "", "")
+    run = main.start_run(main.RunStartRequest(device_node_id=node_id, downlink_test=False))
+
+    result = _run(main.run_stats(run["id"]))
+    assert result["downlink_test"] is False
+
+
+def test_run_stats_sweep_run_returns_sf_stats_for_each_segment(workflow):
+    d, gw_id = workflow
+    node_id, _ = d.upsert_node("device", "d1", "aaaa000000000001")
+    d.create_placement(node_id, "3OG", "R301", "", "", "3dbi")
+    d.create_placement(gw_id, "EG", "flur", "", "", "")
+    run = main.start_run(main.RunStartRequest(
+        device_node_id=node_id,
+        sf_schedule=[{"sf": 7, "seconds": 100}, {"sf": 9, "seconds": 100}],
+        interval_minutes=5,
+    ))
+
+    for _ in range(3):
+        d.record_uplink_for_run("aaaa000000000001", {
+            "rssi_dbm": -70, "snr_db": 5.0, "sf": 7, "freq_hz": 868100000, "f_cnt": 1, "gw_eui": "x",
+        })
+
+    result = _run(main.run_stats(run["id"]))
+    assert len(result["sf_stats"]) == 2
+    assert result["sf_stats"][0]["sf"] == 7
+    assert result["sf_stats"][0]["received"] == 3
+    assert result["overall"]["received"] == 3
+
+
+def test_run_stats_phase_a_run_returns_empty_sf_stats(workflow):
+    d, gw_id = workflow
+    node_id, _ = d.upsert_node("device", "d1", "aaaa000000000001")
+    d.create_placement(node_id, "3OG", "R301", "", "", "3dbi")
+    d.create_placement(gw_id, "EG", "flur", "", "", "")
+    run = main.start_run(main.RunStartRequest(device_node_id=node_id))  # no sweep
+
+    result = _run(main.run_stats(run["id"]))
+    assert result["sf_stats"] == []
+    assert result["overall"]["received"] == 0
+
+
+def test_run_stats_includes_downlink_counts(workflow):
+    d, gw_id = workflow
+    node_id, _ = d.upsert_node("device", "d1", "aaaa000000000001")
+    d.create_placement(node_id, "3OG", "R301", "", "", "3dbi")
+    d.create_placement(gw_id, "EG", "flur", "", "", "")
+    run = main.start_run(main.RunStartRequest(
+        device_node_id=node_id,
+        sf_schedule=[{"sf": 7, "seconds": 100}],
+        interval_minutes=5,
+    ))
+
+    dl = d.maybe_trigger_downlink_test("aaaa000000000001", 3)  # K=3 for interval_minutes=5
+    assert dl is not None
+    d.record_downlink_test_ack("aaaa000000000001", True)
+
+    result = _run(main.run_stats(run["id"]))
+    assert result["sf_stats"][0]["dl_sent"] == 1
+    assert result["sf_stats"][0]["dl_acked"] == 1
+    assert result["sf_stats"][0]["dl_pdr"] == 1.0
+
+
+# ---------------------------------------------------------------------------
+# RunStartRequest.downlink_test — default True, passed through to db.start_run
+# ---------------------------------------------------------------------------
+
+
+def test_run_start_request_downlink_test_defaults_true():
+    assert main.RunStartRequest(device_node_id=1).downlink_test is True
+
+
+def test_run_start_request_downlink_test_can_be_disabled():
+    assert main.RunStartRequest(device_node_id=1, downlink_test=False).downlink_test is False
+
+
+def test_start_run_passes_downlink_test_through_to_db(workflow):
+    d, gw_id = workflow
+    node_id, _ = d.upsert_node("device", "d1", "aaaa000000000001")
+    d.create_placement(node_id, "3OG", "R301", "", "", "3dbi")
+    d.create_placement(gw_id, "EG", "flur", "", "", "")
+
+    run = main.start_run(main.RunStartRequest(device_node_id=node_id, downlink_test=False))
+    assert d.get_run(run["id"])["downlink_test"] == 0
