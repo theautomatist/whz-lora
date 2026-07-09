@@ -1399,10 +1399,13 @@ def test_start_run_passes_downlink_test_through_to_db(workflow):
 # ---------------------------------------------------------------------------
 
 
-def test_rf_environment_endpoint_returns_snapshot_shape(fresh_campaign):
+def test_rf_environment_endpoint_returns_snapshot_shape(workflow, fresh_campaign):
+    d, _ = workflow
+    fresh_campaign.set_db(d)
+
     result = _run(main.rf_environment())
     assert set(result.keys()) == {
-        "own_frames", "foreign_frames", "unknown_frames",
+        "own_frames", "foreign_frames",
         "foreign_devices", "networks", "vendors", "mtype_counts",
         "channel_sf_matrix", "frames_per_min", "frames_per_min_sparkline",
     }
@@ -1410,7 +1413,12 @@ def test_rf_environment_endpoint_returns_snapshot_shape(fresh_campaign):
     assert result["mtype_counts"] == {"join": 0, "data_up": 0, "data_down": 0, "other": 0}
 
 
-def test_rf_environment_endpoint_reflects_foreign_traffic(fresh_campaign):
+def test_rf_environment_endpoint_reflects_foreign_traffic(workflow, fresh_campaign):
+    """process_coex_frame persists to the same Database the endpoint reads
+    from (see db.py's rf_frame log) — the panel is a view over that log, not
+    over fresh_campaign's transient in-memory state."""
+    d, _ = workflow
+    fresh_campaign.set_db(d)
     fresh_campaign.process_join("aabbccdd00000001", "01020304")
     foreign_phy = bytes([0x40, 0xaa, 0xbb, 0xcc, 0x26, 0x00, 0x01, 0x00])
     fresh_campaign.process_coex_frame(7, 868100000, -80, foreign_phy, -5.0)
@@ -1419,3 +1427,39 @@ def test_rf_environment_endpoint_reflects_foreign_traffic(fresh_campaign):
     assert len(result["foreign_devices"]) == 1
     assert result["networks"] == {"The Things Network": {"devices": 1, "frames": 1}}
     assert result["foreign_frames"] == 1
+
+
+def test_rf_environment_endpoint_survives_a_fresh_campaign_state(monkeypatch):
+    """The whole point of persisting to the DB: a NEW CampaignState (as if
+    the cockpit had just restarted) still sees traffic recorded by the OLD
+    one, because the endpoint reads from the Database, not from
+    campaign — no set_db()/campaign wiring needed for the read side."""
+    d = Database(os.path.join(tempfile.mkdtemp(), "test.db"))
+    d.init_schema()
+    old_campaign = CampaignState(data_dir=tempfile.mkdtemp())
+    old_campaign.set_db(d)
+    old_campaign.process_join("aabbccdd00000001", "01020304")
+    foreign_phy = bytes([0x40, 0xaa, 0xbb, 0xcc, 0x26, 0x00, 0x01, 0x00])
+    old_campaign.process_coex_frame(7, 868100000, -80, foreign_phy, -5.0)
+
+    monkeypatch.setattr(main, "_db", d)
+    monkeypatch.setattr(main, "campaign", CampaignState(data_dir=tempfile.mkdtemp()))  # "post-restart"
+    result = _run(main.rf_environment())
+
+    assert len(result["foreign_devices"]) == 1
+    assert result["foreign_frames"] == 1
+
+
+def test_rf_environment_csv_endpoint(workflow, fresh_campaign):
+    d, _ = workflow
+    fresh_campaign.set_db(d)
+    fresh_campaign.process_join("aabbccdd00000001", "01020304")
+    foreign_phy = bytes([0x40, 0xaa, 0xbb, 0xcc, 0x26, 0x00, 0x01, 0x00])
+    fresh_campaign.process_coex_frame(7, 868100000, -80, foreign_phy, -5.0)
+
+    response = _run(main.rf_environment_csv())
+    assert response.media_type == "text/csv"
+    assert "attachment" in response.headers["content-disposition"]
+    body = response.body.decode("utf-8")
+    assert "dev_addr" in body.splitlines()[0]  # header row
+    assert "26ccbbaa" in body

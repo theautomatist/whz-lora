@@ -3,6 +3,7 @@
 Runs without grpc or fastapi — only stdlib + local pure modules are imported.
 """
 import datetime
+import sqlite3
 import tempfile
 import os
 import pytest
@@ -616,26 +617,36 @@ def test_process_uplink_uplink_times_capped_at_history_length():
 
 
 # ---------------------------------------------------------------------------
-# RF-environment survey (F-0006) — get_rf_environment() / _record_rf_environment_frame
+# RF-environment survey (F-0006) — _record_rf_environment_frame persists to a
+# Database (see db.Database.get_rf_environment for the aggregation itself,
+# tested in test_db.py). These tests cover state.py's side only: does
+# process_coex_frame write the right rows/counters through to a wired
+# Database, is it a safe no-op without one, and does a DB error never break
+# coex classification.
 # ---------------------------------------------------------------------------
 
 
-def test_get_rf_environment_empty_initially():
-    state = CampaignState(data_dir=tempfile.mkdtemp())
-    env = state.get_rf_environment()
-    assert env["foreign_devices"] == {}
-    assert env["networks"] == {}
-    assert env["vendors"] == {}
-    assert env["mtype_counts"] == {"join": 0, "data_up": 0, "data_down": 0, "other": 0}
-    assert env["channel_sf_matrix"] == {}
-    assert env["frames_per_min"] == 0.0
-    assert env["frames_per_min_sparkline"] == [0] * 10
-    assert env["own_frames"] == 0
-    assert env["foreign_frames"] == 0
+def _new_db():
+    from app.db import Database
+
+    d = Database(os.path.join(tempfile.mkdtemp(), "test.db"))
+    d.init_schema()
+    return d
 
 
-def test_process_coex_frame_foreign_data_frame_updates_foreign_devices():
+def test_process_coex_frame_without_db_does_not_crash():
+    """No set_db() call — e.g. a unit test that doesn't need persistence.
+    _record_rf_environment_frame must be a silent no-op, not raise."""
     state = CampaignState(data_dir=tempfile.mkdtemp())
+    state.process_join("aabbccdd00000001", "01020304")
+    foreign_phy = bytes([0x40, 0xaa, 0xbb, 0xcc, 0x26, 0x00, 0x01, 0x00])
+    state.process_coex_frame(7, 868100000, -80, foreign_phy, -5.0)  # must not raise
+
+
+def test_process_coex_frame_foreign_data_frame_persisted_to_db():
+    state = CampaignState(data_dir=tempfile.mkdtemp())
+    db = _new_db()
+    state.set_db(db)
     state.process_join("aabbccdd00000001", "01020304")  # our own device -> known_addrs non-empty
 
     # Foreign data frame: DevAddr LE bytes [aa,bb,cc,26] -> BE "26ccbbaa", top byte
@@ -643,62 +654,63 @@ def test_process_coex_frame_foreign_data_frame_updates_foreign_devices():
     foreign_phy = bytes([0x40, 0xaa, 0xbb, 0xcc, 0x26, 0x00, 0x01, 0x00])
     state.process_coex_frame(7, 868100000, -80, foreign_phy, -5.0)
 
-    env = state.get_rf_environment()
-    assert len(env["foreign_devices"]) == 1
-    dev_addr = next(iter(env["foreign_devices"]))
-    assert dev_addr == "26ccbbaa"
-    entry = env["foreign_devices"][dev_addr]
-    assert entry["frames"] == 1
-    assert entry["last_rssi"] == -80
-    assert entry["last_snr"] == -5.0
-    assert entry["last_sf"] == 7
-    assert entry["last_channel"] == 0
-    assert entry["network"] == "The Things Network"
-
-    assert env["networks"] == {"The Things Network": {"devices": 1, "frames": 1}}
-    assert env["channel_sf_matrix"] == {"ch0_sf7": 1}
-    assert env["mtype_counts"]["data_up"] == 1
+    rows = db.list_rf_frames()
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["dev_addr"] == "26ccbbaa"
+    assert row["network"] == "The Things Network"
+    assert row["rssi"] == -80
+    assert row["snr"] == -5.0
+    assert row["sf"] == 7
+    assert row["channel"] == 0
+    assert row["mtype"] == 0x40 >> 5  # data-up MType (2)
 
 
-def test_process_coex_frame_snr_defaults_to_none():
+def test_process_coex_frame_snr_defaults_to_none_persisted():
     """snr is optional — existing callers/tests that predate the RF-
     environment survey must keep working unchanged."""
     state = CampaignState(data_dir=tempfile.mkdtemp())
+    db = _new_db()
+    state.set_db(db)
     state.process_join("aabbccdd00000001", "01020304")
     foreign_phy = bytes([0x40, 0xaa, 0xbb, 0xcc, 0x26, 0x00, 0x01, 0x00])
     state.process_coex_frame(7, 868100000, -80, foreign_phy)  # no snr arg
 
-    env = state.get_rf_environment()
-    dev_addr = next(iter(env["foreign_devices"]))
-    assert env["foreign_devices"][dev_addr]["last_snr"] is None
+    rows = db.list_rf_frames()
+    assert len(rows) == 1
+    assert rows[0]["snr"] is None
 
 
-def test_process_coex_frame_own_data_frame_not_added_to_foreign_devices():
+def test_process_coex_frame_own_data_frame_not_persisted_but_counted():
     state = CampaignState(data_dir=tempfile.mkdtemp())
+    db = _new_db()
+    state.set_db(db)
     state.process_join("aabbccdd00000001", "01020304")
     # Confirmed Data Up with DevAddr 01020304 stored LE: 04 03 02 01 — ours.
     own_phy = bytes([0x80, 0x04, 0x03, 0x02, 0x01, 0x00, 0x01, 0x00])
     state.process_coex_frame(7, 868100000, -70, own_phy)
 
-    env = state.get_rf_environment()
-    assert env["foreign_devices"] == {}
-    assert env["networks"] == {}
+    assert db.list_rf_frames() == []
+    assert db.get_rf_stat("own_frames") == 1
 
 
-def test_process_coex_frame_unclassifiable_data_frame_not_added_to_foreign_devices():
+def test_process_coex_frame_unclassifiable_data_frame_not_persisted():
     """Without ANY known own DevAddr yet, ownership can't be ruled out —
-    conservative: not counted as foreign either (mirrors _coex_unknown_frames)."""
+    conservative: not persisted (mirrors _coex_unknown_frames)."""
     state = CampaignState(data_dir=tempfile.mkdtemp())
+    db = _new_db()
+    state.set_db(db)
     phy = bytes([0x40, 0xaa, 0xbb, 0xcc, 0x26, 0x00, 0x01, 0x00])
     state.process_coex_frame(7, 868100000, -80, phy)
 
-    env = state.get_rf_environment()
-    assert env["foreign_devices"] == {}
-    assert env["mtype_counts"]["data_up"] == 1  # MType tally still happens regardless
+    assert db.list_rf_frames() == []
+    assert db.get_rf_stat("own_frames") == 0
 
 
-def test_process_coex_frame_join_request_updates_vendors():
+def test_process_coex_frame_join_request_persists_vendor():
     state = CampaignState(data_dir=tempfile.mkdtemp())
+    db = _new_db()
+    state.set_db(db)
     join_eui_le = bytes(8)
     dev_eui_be = "a84041aabbccddee"  # OUI a84041 -> Dragino
     dev_eui_le = bytes.fromhex(dev_eui_be)[::-1]
@@ -707,13 +719,19 @@ def test_process_coex_frame_join_request_updates_vendors():
 
     state.process_coex_frame(7, 868100000, -90, phy)
 
-    env = state.get_rf_environment()
-    assert env["mtype_counts"]["join"] == 1
-    assert env["vendors"] == {"a84041": {"name": "Dragino", "joins": 1}}
+    rows = db.list_rf_frames()
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["dev_addr"] is None
+    assert row["mtype"] == 0
+    assert row["join_deveui"] == dev_eui_be
+    assert row["vendor"] == "Dragino"
 
 
-def test_process_coex_frame_own_join_request_excluded_from_vendors():
+def test_process_coex_frame_own_join_request_excluded_from_persistence():
     state = CampaignState(data_dir=tempfile.mkdtemp())
+    db = _new_db()
+    state.set_db(db)
     dev_eui_be = "aabbccdd00000001"
     state.process_join(dev_eui_be, "01020304")  # register as one of OUR devices
 
@@ -723,81 +741,57 @@ def test_process_coex_frame_own_join_request_excluded_from_vendors():
 
     state.process_coex_frame(7, 868100000, -90, phy)
 
-    env = state.get_rf_environment()
-    assert env["vendors"] == {}
-    assert env["mtype_counts"]["join"] == 1  # still counted in the overall tally
+    assert db.list_rf_frames() == []
 
 
 def test_process_coex_frame_malformed_join_request_does_not_crash():
     """A join-request MType with a truncated payload must not raise —
-    parse_join_request returns None, mtype_counts still increments."""
+    parse_join_request returns None, nothing persisted."""
     state = CampaignState(data_dir=tempfile.mkdtemp())
+    db = _new_db()
+    state.set_db(db)
     short_phy = bytes([0x00, 0x01, 0x02])  # MType 0, but far too short to parse
 
     state.process_coex_frame(7, 868100000, -90, short_phy)  # must not raise
 
-    env = state.get_rf_environment()
-    assert env["mtype_counts"]["join"] == 1
-    assert env["vendors"] == {}
+    assert db.list_rf_frames() == []
 
 
-def test_foreign_devices_bounded_evicts_oldest(monkeypatch):
-    from app import state as state_mod
-    monkeypatch.setattr(state_mod, "_MAX_FOREIGN_DEVICES", 3)
-
+def test_record_rf_environment_frame_db_error_does_not_raise(monkeypatch):
+    """A DB failure must never break coex classification in
+    process_coex_frame — best-effort, logged and swallowed."""
     state = CampaignState(data_dir=tempfile.mkdtemp())
-    state.process_join("aabbccdd00000001", "ffffffff")  # own device, distinct from all test DevAddrs
+    db = _new_db()
+    state.set_db(db)
+    state.process_join("aabbccdd00000001", "01020304")
 
-    for i in range(5):
-        phy = bytes([0x40, i, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00])
-        state.process_coex_frame(7, 868100000, -80, phy)
+    def _boom(*a, **kw):
+        raise sqlite3.OperationalError("simulated failure")
 
-    env = state.get_rf_environment()
-    assert len(env["foreign_devices"]) == 3
+    monkeypatch.setattr(db, "record_rf_frame", _boom)
+    foreign_phy = bytes([0x40, 0xaa, 0xbb, 0xcc, 0x26, 0x00, 0x01, 0x00])
+    state.process_coex_frame(7, 868100000, -80, foreign_phy)  # must not raise
 
-
-def test_vendors_bounded_evicts_oldest(monkeypatch):
-    from app import state as state_mod
-    monkeypatch.setattr(state_mod, "_MAX_VENDORS", 2)
-
-    state = CampaignState(data_dir=tempfile.mkdtemp())
-    join_eui_le = bytes(8)
-    for i in range(4):
-        dev_eui_be = f"{i:02x}0000aabbccddee"
-        dev_eui_le = bytes.fromhex(dev_eui_be)[::-1]
-        phy = bytes([0x00]) + join_eui_le + dev_eui_le + bytes([0x00, 0x01]) + bytes(4)
-        state.process_coex_frame(7, 868100000, -90, phy)
-
-    env = state.get_rf_environment()
-    assert len(env["vendors"]) == 2
-
-
-def test_frames_per_min_and_sparkline_reflect_recent_foreign_frames():
-    state = CampaignState(data_dir=tempfile.mkdtemp())
-    state.process_join("aabbccdd00000001", "ffffffff")
-    for i in range(3):
-        phy = bytes([0x40, i, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00])
-        state.process_coex_frame(7, 868100000, -80, phy)
-
-    env = state.get_rf_environment()
-    assert env["frames_per_min"] > 0
-    assert len(env["frames_per_min_sparkline"]) == 10
-    assert sum(env["frames_per_min_sparkline"]) == 3
-    assert env["frames_per_min_sparkline"][-1] == 3  # all just happened -> most-recent bucket
+    dash = state.get_dashboard()
+    assert dash["coex_foreign_frames"] == 1  # in-memory counters unaffected
 
 
 def test_get_rf_environment_own_foreign_totals_match_coex_counters():
-    """own_frames/foreign_frames in the survey snapshot must be the SAME
-    totals already exposed via get_dashboard()'s coex_own_frames/
-    coex_foreign_frames — one source of truth, no drift."""
+    """own_frames in the DB-backed survey snapshot must match
+    get_dashboard()'s coex_own_frames — one source of truth, no drift.
+    (foreign_frames intentionally also counts persisted join-requests, so
+    it is not compared 1:1 against coex_foreign_frames here — see
+    db.Database.get_rf_environment.)"""
     state = CampaignState(data_dir=tempfile.mkdtemp())
+    db = _new_db()
+    state.set_db(db)
     state.process_join("aabbccdd00000001", "01020304")
     own_phy = bytes([0x80, 0x04, 0x03, 0x02, 0x01, 0x00, 0x01, 0x00])
     foreign_phy = bytes([0x40, 0xaa, 0xbb, 0xcc, 0x26, 0x00, 0x01, 0x00])
     state.process_coex_frame(7, 868100000, -70, own_phy)
     state.process_coex_frame(7, 868100000, -80, foreign_phy)
 
-    env = state.get_rf_environment()
+    env = db.get_rf_environment()
     dash = state.get_dashboard()
     assert env["own_frames"] == dash["coex_own_frames"] == 1
     assert env["foreign_frames"] == dash["coex_foreign_frames"] == 1

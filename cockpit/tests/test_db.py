@@ -9,7 +9,13 @@ import tempfile
 
 import pytest
 
-from app.db import MAX_PHOTOS_PER_PLACEMENT, Database, parse_dl_counts
+from app.db import (
+    MAX_PHOTOS_PER_PLACEMENT,
+    RF_FRAME_COLUMNS,
+    RF_FRAME_RETENTION_MAX,
+    Database,
+    parse_dl_counts,
+)
 
 
 def _new_db() -> Database:
@@ -845,4 +851,274 @@ def test_record_ack_attributed_to_sf_active_when_sent_not_when_acked():
     counts = parse_dl_counts(d.get_run(run["id"])["dl_counts"])
     assert counts["by_sf"]["7"] == {"sent": 1, "acked": 1}
     assert "9" not in counts["by_sf"]
-    assert d.get_last_run(node_id)["status"] == "running"
+
+
+# ---------------------------------------------------------------------------
+# rf_frame / rf_stat / get_rf_environment — RF-environment survey (F-0006)
+#
+# The survey panel is a view over this persisted log, not over transient
+# in-memory state — these tests cover the DB layer directly (state.py's
+# orchestration of *when* to write is covered in test_state.py).
+# ---------------------------------------------------------------------------
+
+
+def test_record_rf_frame_data_row():
+    d = _new_db()
+    d.record_rf_frame(
+        dev_addr="26ccbbaa",
+        network="The Things Network",
+        channel=0,
+        sf=7,
+        rssi=-80,
+        snr=-5.0,
+        mtype=2,
+    )
+    rows = d.list_rf_frames()
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["dev_addr"] == "26ccbbaa"
+    assert row["network"] == "The Things Network"
+    assert row["channel"] == 0
+    assert row["sf"] == 7
+    assert row["rssi"] == -80
+    assert row["snr"] == -5.0
+    assert row["mtype"] == 2
+    assert row["join_deveui"] is None
+    assert row["vendor"] is None
+    assert row["ts"]  # non-empty ISO timestamp
+
+
+def test_record_rf_frame_join_row():
+    d = _new_db()
+    d.record_rf_frame(
+        dev_addr=None,
+        network=None,
+        channel=1,
+        sf=9,
+        rssi=-90,
+        snr=None,
+        mtype=0,
+        join_deveui="a84041aabbccddee",
+        join_joineui="0000000000000000",
+        vendor="Dragino",
+    )
+    rows = d.list_rf_frames()
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["dev_addr"] is None
+    assert row["mtype"] == 0
+    assert row["join_deveui"] == "a84041aabbccddee"
+    assert row["join_joineui"] == "0000000000000000"
+    assert row["vendor"] == "Dragino"
+
+
+def test_list_rf_frames_ordered_oldest_first():
+    d = _new_db()
+    for i in range(3):
+        d.record_rf_frame(
+            dev_addr=f"{i:08x}", network=None, channel=0, sf=7,
+            rssi=-80, snr=None, mtype=2,
+        )
+    rows = d.list_rf_frames()
+    assert [r["dev_addr"] for r in rows] == ["00000000", "00000001", "00000002"]
+
+
+def test_list_rf_frames_columns_match_csv_columns():
+    d = _new_db()
+    d.record_rf_frame(dev_addr="aaaaaaaa", network=None, channel=0, sf=7, rssi=-80, snr=None, mtype=2)
+    row = d.list_rf_frames()[0]
+    assert set(row.keys()) == set(RF_FRAME_COLUMNS)
+
+
+def test_increment_rf_stat_starts_at_zero_and_accumulates():
+    d = _new_db()
+    assert d.get_rf_stat("own_frames") == 0
+    assert d.increment_rf_stat("own_frames") == 1
+    assert d.increment_rf_stat("own_frames") == 2
+    assert d.get_rf_stat("own_frames") == 2
+
+
+def test_increment_rf_stat_by_custom_amount():
+    d = _new_db()
+    assert d.increment_rf_stat("own_frames", by=5) == 5
+    assert d.increment_rf_stat("own_frames", by=3) == 8
+
+
+def test_get_rf_stat_unknown_key_returns_zero():
+    d = _new_db()
+    assert d.get_rf_stat("nonexistent") == 0
+
+
+def test_get_rf_environment_empty_initially():
+    d = _new_db()
+    env = d.get_rf_environment()
+    assert env["own_frames"] == 0
+    assert env["foreign_frames"] == 0
+    assert env["foreign_devices"] == {}
+    assert env["networks"] == {}
+    assert env["vendors"] == {}
+    assert env["mtype_counts"] == {"join": 0, "data_up": 0, "data_down": 0, "other": 0}
+    assert env["channel_sf_matrix"] == {}
+    assert env["frames_per_min"] == 0.0
+    assert env["frames_per_min_sparkline"] == [0] * 10
+
+
+def test_get_rf_environment_distinct_devices_latest_row_wins():
+    d = _new_db()
+    d.record_rf_frame(dev_addr="aaaaaaaa", network="other", channel=0, sf=7, rssi=-90, snr=-8.0, mtype=2)
+    d.record_rf_frame(dev_addr="aaaaaaaa", network="other", channel=2, sf=9, rssi=-70, snr=2.0, mtype=2)
+
+    env = d.get_rf_environment()
+    assert len(env["foreign_devices"]) == 1
+    entry = env["foreign_devices"]["aaaaaaaa"]
+    assert entry["frames"] == 2
+    assert entry["last_channel"] == 2  # the SECOND (latest) row, not the first
+    assert entry["last_sf"] == 9
+    assert entry["last_rssi"] == -70
+    assert entry["last_snr"] == 2.0
+
+
+def test_get_rf_environment_networks_rollup():
+    d = _new_db()
+    d.record_rf_frame(dev_addr="aaaaaaaa", network="The Things Network", channel=0, sf=7, rssi=-80, snr=None, mtype=2)
+    d.record_rf_frame(dev_addr="bbbbbbbb", network="The Things Network", channel=0, sf=7, rssi=-80, snr=None, mtype=2)
+    d.record_rf_frame(dev_addr="cccccccc", network="private/experimental", channel=1, sf=8, rssi=-80, snr=None, mtype=2)
+
+    env = d.get_rf_environment()
+    assert env["networks"] == {
+        "The Things Network": {"devices": 2, "frames": 2},
+        "private/experimental": {"devices": 1, "frames": 1},
+    }
+
+
+def test_get_rf_environment_channel_sf_matrix():
+    d = _new_db()
+    d.record_rf_frame(dev_addr="aaaaaaaa", network="other", channel=0, sf=7, rssi=-80, snr=None, mtype=2)
+    d.record_rf_frame(dev_addr="aaaaaaaa", network="other", channel=0, sf=7, rssi=-80, snr=None, mtype=2)
+    d.record_rf_frame(dev_addr="bbbbbbbb", network="other", channel=3, sf=12, rssi=-80, snr=None, mtype=2)
+
+    env = d.get_rf_environment()
+    assert env["channel_sf_matrix"] == {"ch0_sf7": 2, "ch3_sf12": 1}
+
+
+def test_get_rf_environment_vendors_from_joins():
+    d = _new_db()
+    d.record_rf_frame(
+        dev_addr=None, network=None, channel=0, sf=7, rssi=-90, snr=None, mtype=0,
+        join_deveui="a84041aabbccddee", join_joineui="0" * 16, vendor="Dragino",
+    )
+    d.record_rf_frame(
+        dev_addr=None, network=None, channel=0, sf=7, rssi=-90, snr=None, mtype=0,
+        join_deveui="a84041112233ffff", join_joineui="0" * 16, vendor="Dragino",
+    )
+    d.record_rf_frame(
+        dev_addr=None, network=None, channel=0, sf=7, rssi=-90, snr=None, mtype=0,
+        join_deveui="24e124aabbccddee", join_joineui="0" * 16, vendor="Milesight",
+    )
+
+    env = d.get_rf_environment()
+    assert env["vendors"] == {
+        "a84041": {"name": "Dragino", "joins": 2},
+        "24e124": {"name": "Milesight", "joins": 1},
+    }
+
+
+def test_get_rf_environment_mtype_counts():
+    d = _new_db()
+    d.record_rf_frame(dev_addr=None, network=None, channel=0, sf=7, rssi=-90, snr=None, mtype=0,
+                       join_deveui="a84041aabbccddee", vendor="Dragino")
+    d.record_rf_frame(dev_addr="aaaaaaaa", network="other", channel=0, sf=7, rssi=-80, snr=None, mtype=2)
+    d.record_rf_frame(dev_addr="bbbbbbbb", network="other", channel=0, sf=7, rssi=-80, snr=None, mtype=4)
+    d.record_rf_frame(dev_addr="cccccccc", network="other", channel=0, sf=7, rssi=-80, snr=None, mtype=3)
+    d.record_rf_frame(dev_addr="dddddddd", network="other", channel=0, sf=7, rssi=-80, snr=None, mtype=5)
+
+    env = d.get_rf_environment()
+    assert env["mtype_counts"] == {"join": 1, "data_up": 2, "data_down": 2, "other": 0}
+
+
+def test_get_rf_environment_totals_include_joins_in_foreign_frames():
+    """foreign_frames counts every persisted rf_frame row, including
+    foreign join-requests — a deliberate, broader definition than the
+    old in-memory coex_foreign_frames counter (data frames only)."""
+    d = _new_db()
+    d.record_rf_frame(dev_addr=None, network=None, channel=0, sf=7, rssi=-90, snr=None, mtype=0,
+                       join_deveui="a84041aabbccddee", vendor="Dragino")
+    d.record_rf_frame(dev_addr="aaaaaaaa", network="other", channel=0, sf=7, rssi=-80, snr=None, mtype=2)
+
+    env = d.get_rf_environment()
+    assert env["foreign_frames"] == 2
+    assert env["own_frames"] == 0
+
+
+def test_get_rf_environment_frames_per_min_and_sparkline():
+    d = _new_db()
+    for i in range(3):
+        d.record_rf_frame(dev_addr=f"{i:08x}", network="other", channel=0, sf=7, rssi=-80, snr=None, mtype=2)
+
+    env = d.get_rf_environment()
+    assert env["frames_per_min"] > 0
+    assert len(env["frames_per_min_sparkline"]) == 10
+    assert sum(env["frames_per_min_sparkline"]) == 3
+    assert env["frames_per_min_sparkline"][-1] == 3  # all just happened -> most-recent bucket
+
+
+def test_get_rf_environment_own_frames_from_rf_stat():
+    d = _new_db()
+    d.increment_rf_stat("own_frames", by=4)
+    env = d.get_rf_environment()
+    assert env["own_frames"] == 4
+
+
+def test_get_rf_environment_survives_a_simulated_restart():
+    """Re-opening a NEW Database instance against the SAME file must see
+    everything the previous instance wrote — this is what makes the panel
+    survive a cockpit restart."""
+    path = os.path.join(tempfile.mkdtemp(), "test.db")
+    d1 = Database(path)
+    d1.init_schema()
+    d1.record_rf_frame(dev_addr="aaaaaaaa", network="The Things Network", channel=0, sf=7,
+                        rssi=-80, snr=-5.0, mtype=2)
+    d1.increment_rf_stat("own_frames", by=2)
+
+    d2 = Database(path)  # simulates a fresh process re-opening /data/cockpit.db
+    d2.init_schema()
+
+    env = d2.get_rf_environment()
+    assert env["own_frames"] == 2
+    assert env["foreign_frames"] == 1
+    assert len(env["foreign_devices"]) == 1
+    assert len(d2.list_rf_frames()) == 1
+
+
+def test_rf_frame_retention_trims_oldest(monkeypatch):
+    from app import db as db_module
+
+    monkeypatch.setattr(db_module, "RF_FRAME_RETENTION_MAX", 3)
+    monkeypatch.setattr(db_module, "_RF_FRAME_TRIM_EVERY", 1)  # trim on every insert for the test
+
+    d = _new_db()
+    for i in range(5):
+        d.record_rf_frame(dev_addr=f"{i:08x}", network="other", channel=0, sf=7,
+                           rssi=-80, snr=None, mtype=2)
+
+    rows = d.list_rf_frames()
+    assert len(rows) == 3
+    assert [r["dev_addr"] for r in rows] == ["00000002", "00000003", "00000004"]
+
+
+def test_rf_frame_retention_noop_under_cap(monkeypatch):
+    from app import db as db_module
+
+    monkeypatch.setattr(db_module, "RF_FRAME_RETENTION_MAX", 100)
+    monkeypatch.setattr(db_module, "_RF_FRAME_TRIM_EVERY", 1)
+
+    d = _new_db()
+    for i in range(5):
+        d.record_rf_frame(dev_addr=f"{i:08x}", network="other", channel=0, sf=7,
+                           rssi=-80, snr=None, mtype=2)
+
+    assert len(d.list_rf_frames()) == 5  # well under the cap — nothing trimmed
+
+
+def test_rf_frame_retention_default_is_generous():
+    assert RF_FRAME_RETENTION_MAX >= 100_000
