@@ -4,11 +4,13 @@ No external package imports at module level — importable without grpc/fastapi 
 All public methods are thread-safe (called from MQTT ingest thread and asyncio handlers).
 """
 import asyncio
+import collections
 import csv
 import dataclasses
 import datetime
 import logging
 import os
+import statistics
 import threading
 from typing import Optional
 
@@ -20,6 +22,11 @@ logger = logging.getLogger(__name__)
 # considered stable.  Below this threshold the event carries status="measuring"
 # to signal that the rate estimate is not yet reliable.
 _COEX_MIN_WINDOW_S: int = 60
+
+# How many recent uplink timestamps to retain per device for the median-
+# based interval_seconds estimate (7 timestamps -> up to 6 gaps, "median of
+# the last ~6 uplink gaps").
+_UPLINK_HISTORY_LEN: int = 7
 
 # ---------------------------------------------------------------------------
 # CSV schema
@@ -76,6 +83,14 @@ class DeviceMetrics:
     received: int = 0
     acked: int = 0
     downlinks_sent: int = 0
+    last_uplink_at: Optional[str] = None  # ISO of the most recent uplink
+    last_downlink_at: Optional[str] = None  # ISO of the last txack/ack (F-0006 "Trust & Sichtbarkeit")
+    # Bounded history of recent uplink timestamps (ISO strings, oldest
+    # first) — feeds _median_interval_seconds, robust to a single missed
+    # uplink skewing a simple last-two-gap measurement.
+    uplink_times: collections.deque = dataclasses.field(
+        default_factory=lambda: collections.deque(maxlen=_UPLINK_HISTORY_LEN)
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -94,6 +109,30 @@ def _safe_put(queue: asyncio.Queue, event: dict) -> None:
         queue.put_nowait(event)
     except asyncio.QueueFull:
         pass  # still full after eviction — discard the new event silently
+
+
+def _median_interval_seconds(uplink_times) -> Optional[float]:
+    """Measured send cadence = median of the consecutive gaps between the
+    retained recent uplink timestamps (seconds).
+
+    Lets the UI show the device's *actual* interval (e.g. confirm the 5-min
+    Vicki downlink took effect), not just the commanded one — using the
+    median instead of just the last two timestamps makes this robust to a
+    single missed/late packet (which would otherwise make a steady 5-min
+    device briefly read as "15 min"). None until at least two uplinks have
+    been seen.
+    """
+    if len(uplink_times) < 2:
+        return None
+    try:
+        parsed = [datetime.datetime.fromisoformat(t) for t in uplink_times]
+    except (ValueError, TypeError):
+        return None
+    gaps = [(b - a).total_seconds() for a, b in zip(parsed, parsed[1:])]
+    gaps = [g for g in gaps if g > 0]
+    if not gaps:
+        return None
+    return statistics.median(gaps)
 
 
 # ---------------------------------------------------------------------------
@@ -172,11 +211,18 @@ class CampaignState:
         # Known DevAddrs for coex own/foreign classification  {dev_eui: dev_addr_hex}
         self._dev_addrs: dict[str, str] = {}
 
-        # Coex scan state
-        self._coex_active: bool = False
+        # Coex scan state — always-on (F-0006 "Trust & Sichtbarkeit"): the
+        # gateway physically receives every LoRa frame in range regardless
+        # of any UI toggle, so classification runs unconditionally.
+        # toggle_coex/is_coex_active are kept for backward-compat API shape
+        # only; they no longer gate process_coex_frame.
+        self._coex_active: bool = True
         self._coex_start: Optional[datetime.datetime] = None
         # {(channel, sf): frame_count}
         self._coex_frames: dict[tuple, int] = {}
+        self._coex_own_frames: int = 0
+        self._coex_foreign_frames: int = 0
+        self._coex_unknown_frames: int = 0
 
         # SSE subscriber queues and the asyncio loop they belong to
         self._subscribers: list[asyncio.Queue] = []
@@ -232,6 +278,10 @@ class CampaignState:
             self._phase = phase
         self._broadcast({"type": "state", "phase": phase})
 
+    def get_phase(self) -> str:
+        with self._lock:
+            return self._phase
+
     # ------------------------------------------------------------------
     # CSV recording
     # ------------------------------------------------------------------
@@ -283,6 +333,13 @@ class CampaignState:
             dm.sf = metrics.get("sf")
             dm.f_cnt = metrics.get("f_cnt")
             dm.received += 1
+            _now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat(
+                timespec="seconds"
+            )
+            dm.last_uplink_at = _now_iso
+            dm.uplink_times.append(_now_iso)
+            _last_at = dm.last_uplink_at
+            _interval_s = _median_interval_seconds(dm.uplink_times)
 
             pos_id = self._point.pos_id if self._point else ""
             self._pos_counts[pos_id] = self._pos_counts.get(pos_id, 0) + 1
@@ -314,6 +371,8 @@ class CampaignState:
                 "pos_id": pos_id,
                 "pos_received": received_count,
                 "pdr": pdr,
+                "last_uplink_at": _last_at,
+                "interval_seconds": _interval_s,
             }
         )
 
@@ -353,6 +412,38 @@ class CampaignState:
             dm = self._devices.setdefault(dev_eui, DeviceMetrics())
             dm.downlinks_sent += 1
 
+    def record_downlink_txack(self, dev_eui: str) -> None:
+        """Record that ChirpStack transmitted a queued downlink over the air
+        (event/txack) or the device acknowledged one (event/ack) — the
+        Class-A-accurate "was this actually sent" signal surfaced by the
+        cockpit's Geräte-Status block (F-0006 "Trust & Sichtbarkeit").
+        """
+        with self._lock:
+            dm = self._devices.setdefault(dev_eui, DeviceMetrics())
+            dm.last_downlink_at = datetime.datetime.now(
+                datetime.timezone.utc
+            ).isoformat(timespec="seconds")
+
+    def get_device_uplink_stats(self, dev_eui: str) -> dict:
+        """last_uplink_at / interval_seconds / last_downlink_at for one
+        device — a dedicated cheap lookup for GET /api/device/{id}/config-
+        status, kept separate from get_dashboard() so that endpoint stays
+        light (it must not build the full dashboard on every call).
+        """
+        with self._lock:
+            dm = self._devices.get(dev_eui)
+            if dm is None:
+                return {
+                    "last_uplink_at": None,
+                    "interval_seconds": None,
+                    "last_downlink_at": None,
+                }
+            return {
+                "last_uplink_at": dm.last_uplink_at,
+                "interval_seconds": _median_interval_seconds(dm.uplink_times),
+                "last_downlink_at": dm.last_downlink_at,
+            }
+
     # ------------------------------------------------------------------
     # Coexistence scan
     # ------------------------------------------------------------------
@@ -370,13 +461,15 @@ class CampaignState:
     def process_coex_frame(
         self, sf: int, freq_hz: int, rssi: int, phy_payload: bytes
     ) -> None:
-        """Decode a gateway UplinkFrame for coexistence analysis and broadcast event."""
+        """Decode a gateway UplinkFrame for coexistence analysis and broadcast
+        event. Always-on (F-0006 "Trust & Sichtbarkeit"): the gateway
+        physically receives every LoRa frame in range regardless of any UI
+        toggle, so this runs unconditionally — there is no start/stop gate
+        here anymore."""
         channel = freq_to_channel(freq_hz)
         key = (channel, sf)
 
         with self._lock:
-            if not self._coex_active:
-                return
             if self._coex_start is None:
                 self._coex_start = datetime.datetime.now(datetime.timezone.utc)
             self._coex_frames[key] = self._coex_frames.get(key, 0) + 1
@@ -394,6 +487,14 @@ class CampaignState:
             dev_addr = parse_devaddr(phy_payload)
             if dev_addr and known_addrs:
                 is_own = dev_addr in known_addrs
+
+        with self._lock:
+            if is_own is True:
+                self._coex_own_frames += 1
+            elif is_own is False:
+                self._coex_foreign_frames += 1
+            else:
+                self._coex_unknown_frames += 1
 
         # CAF verdict requires a minimum observation window so that early
         # bursts (e.g. the first frame 1 second into the scan) don't
@@ -457,6 +558,8 @@ class CampaignState:
                     "received": dm.received,
                     "acked": dm.acked,
                     "downlinks_sent": dm.downlinks_sent,
+                    "last_uplink_at": dm.last_uplink_at,
+                    "interval_seconds": _median_interval_seconds(dm.uplink_times),
                 }
                 for dev, dm in self._devices.items()
             }
@@ -469,6 +572,9 @@ class CampaignState:
                 "devices": devices,
                 "pos_counts": dict(self._pos_counts),
                 "coex_active": self._coex_active,
+                "coex_own_frames": self._coex_own_frames,
+                "coex_foreign_frames": self._coex_foreign_frames,
+                "coex_unknown_frames": self._coex_unknown_frames,
                 "coex_frames": {
                     f"ch{ch}_sf{sf}": cnt
                     for (ch, sf), cnt in self._coex_frames.items()
@@ -489,6 +595,15 @@ class CampaignState:
                 self._subscribers.remove(queue)
             except ValueError:
                 pass
+
+    def broadcast_event(self, event: dict) -> None:
+        """Push an arbitrary event to all SSE subscribers.
+
+        Used by callers outside CampaignState (e.g. the F-0006 node/placement/
+        run endpoints in main.py, backed by db.py) that need to notify the
+        frontend of a change without duplicating the subscriber/loop plumbing.
+        """
+        self._broadcast(event)
 
     def _broadcast(self, event: dict) -> None:
         """Push event to all SSE subscriber queues (thread-safe).

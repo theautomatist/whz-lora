@@ -11,27 +11,61 @@ Routes:
   GET  /api/state              current dashboard snapshot (JSON)
   POST /api/downlink           enqueue a confirmed downlink
   POST /api/antenna            toggle antenna type tag
-  POST /api/coex               enable/disable coexistence scan
+  POST /api/coex               no-op (kept for API compat) — "Funkumgebung" is
+                                always-on; see /api/state's coex_* fields
   POST /api/phase              switch all devices to a fixed-SF or ADR device profile
-  GET  /api/events             SSE stream of live events (uplink/join/ack/nack/coex/state)
+  GET  /api/events             SSE stream of live events (uplink/join/ack/nack/coex/state/nodes)
+
+  F-0006 Feldmess-Workflow (Phase A) — device-centric, no GPS:
+  GET  /api/nodes              list nodes (devices + gateway) with placement + active run
+  POST /api/placement          close current placement, open a new one (no run)
+  POST /api/photo/{placement_id}   attach a photo (multipart, max 3 per placement)
+  GET  /api/photo/{photo_id}   serve a photo
+  POST /api/run/start          start a run (requires device + gateway placements)
+  POST /api/run/stop           stop a device's active run
+  POST /api/relocate           close run, new placement, start new run — one call
+  POST /api/gateway/move       move the gateway (409 while any run is active)
+  POST /api/gateway/move/force move the gateway, aborting active runs
+  GET  /api/runs               run history for a device (?node_id=)
+  GET  /api/run/{id}/csv       download a run's CSV file
+  GET  /api/run/{id}/series    per-run RSSI/SNR/SF time series for the "Verlauf" line chart
+
+  F-0006 Phase B — timed per-device SF-sweep on top of /api/run/start:
+  optional duration_seconds/sf_schedule/interval_minutes switch the device
+  through SF7 -> SF9 -> SF12 (default 24 h, 8 h each) on a 5-min send
+  interval; a background task (started in the lifespan) advances/finishes
+  sweeps every ~60 s. See scheduler.py for the pure decision logic.
+
+  F-0006 "Trust & Sichtbarkeit" — always-on coexistence view (see
+  ingest.py/state.py; no HTTP surface beyond the existing GET /api/state
+  coex_* fields) + per-device config visibility:
+  GET  /api/device/{node_id}/config-status   live uplink/downlink-queue status for one device
+  POST /api/device/{node_id}/set-interval    manually enqueue the Vicki send-interval downlink
 """
 import asyncio
+import base64
+import csv
+import datetime
 import json
 import logging
+import math
+import mimetypes
 import os
 import secrets
 from contextlib import asynccontextmanager
 from typing import Optional
 
 import grpc
-from fastapi import Depends, FastAPI, HTTPException, status
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile, status
+from fastapi.responses import FileResponse, Response, StreamingResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, field_validator
 
 from . import chirpstack as cs
 from . import config
+from . import scheduler
+from .db import MAX_PHOTOS_PER_PLACEMENT, Database
 from .ingest import MQTTIngest
 from .state import CampaignState
 
@@ -50,6 +84,9 @@ _grpc_channel: Optional[grpc.Channel] = None
 _grpc_token: Optional[str] = None
 _tenant_id: Optional[str] = None
 _app_id: Optional[str] = None
+_db: Optional[Database] = None
+_gateway_node_id: Optional[int] = None
+_sweep_task: Optional[asyncio.Task] = None
 
 # ---------------------------------------------------------------------------
 # Lifespan (replaces deprecated on_event)
@@ -58,7 +95,7 @@ _app_id: Optional[str] = None
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
-    global _grpc_channel, _grpc_token, _tenant_id, _app_id, _ingest
+    global _grpc_channel, _grpc_token, _tenant_id, _app_id, _ingest, _db, _gateway_node_id, _sweep_task
 
     campaign.set_loop(asyncio.get_running_loop())
 
@@ -68,6 +105,22 @@ async def _lifespan(app: FastAPI):
             "COCKPIT_PASSWORD is the default placeholder 'change-me' — "
             "set a real password in .env before exposing this service on any network."
         )
+
+    # F-0006 persistence — local SQLite, no network dependency, so this
+    # never needs a retry loop like the ChirpStack gRPC connect below.
+    _db = Database(config.DB_PATH)
+    _db.init_schema()
+    gw_node_id, gw_created = _db.upsert_node(
+        "gateway", config.GATEWAY_NAME, config.GATEWAY_EUI
+    )
+    _gateway_node_id = gw_node_id
+    logger.info(
+        "Node sync: gateway %s (%s) -> node #%d (%s)",
+        config.GATEWAY_NAME,
+        config.GATEWAY_EUI,
+        gw_node_id,
+        "created" if gw_created else "found",
+    )
 
     # Connect to ChirpStack gRPC with retries to tolerate slow stack start-up
     for attempt in range(10):
@@ -96,13 +149,15 @@ async def _lifespan(app: FastAPI):
             "ChirpStack gRPC not reachable after 10 attempts — cockpit degraded"
         )
 
-    # Ensure all three device profiles exist (idempotent; resilient — a missing
-    # ADR plugin just logs a warning and does not crash the cockpit).
+    # Ensure all four device profiles exist (idempotent; resilient — a missing
+    # ADR plugin just logs a warning and does not crash the cockpit). SF7 was
+    # added in Phase B for the automatic SF-sweep (SF7 -> SF9 -> SF12).
     if _grpc_channel and _tenant_id:
         _PROFILE_SPECS = [
             (config.PROFILE_NAME, "default"),
             (config.PROFILE_SF9,  "fixed_dr3"),
             (config.PROFILE_SF12, "fixed_dr0"),
+            (config.PROFILE_SF7,  "fixed_dr5"),
         ]
         for prof_name, adr_id in _PROFILE_SPECS:
             try:
@@ -138,20 +193,108 @@ async def _lifespan(app: FastAPI):
         except Exception as e:
             logger.warning("Could not pre-fetch DevAddrs: %s", e)
 
+    # Node sync — idempotently upsert every ChirpStack device as a `node`
+    # row (kind='device') so the Feldmess-Workflow can reference it. The
+    # gateway node was already ensured above (it does not depend on gRPC).
+    if _grpc_channel and _app_id:
+        try:
+            for d in cs.list_devices(_grpc_channel, _grpc_token, _app_id):
+                node_id, created = _db.upsert_node("device", d["name"], d["dev_eui"])
+                logger.info(
+                    "Node sync: device %s (%s) -> node #%d (%s)",
+                    d["name"],
+                    d["dev_eui"],
+                    node_id,
+                    "created" if created else "found",
+                )
+        except Exception as e:
+            logger.warning("Node sync (devices) failed: %s", e)
+
     # Start MQTT ingest
     if _app_id:
-        _ingest = MQTTIngest(campaign, _app_id)
+        _ingest = MQTTIngest(campaign, _app_id, _db)
         _ingest.start()
     else:
         logger.warning("MQTT ingest not started — no app_id available")
 
+    # F-0006 Phase B — background task advancing/finishing per-device
+    # SF-sweeps every ~60 s. Cancelled cleanly on shutdown below.
+    _sweep_task = asyncio.create_task(_sf_sweep_loop())
+
     yield  # application is running
 
     # Shutdown
+    if _sweep_task:
+        _sweep_task.cancel()
+        try:
+            await _sweep_task
+        except asyncio.CancelledError:
+            pass
     if _ingest:
         _ingest.stop()
     if _grpc_channel:
         _grpc_channel.close()
+    if _db:
+        _db.close()
+
+
+# ---------------------------------------------------------------------------
+# F-0006 Phase B — background SF-sweep scheduler
+#
+# Polls every ~60 s (scheduler.POLL_INTERVAL_SECONDS); each run is wrapped
+# in its own try/except so one failure doesn't stop the others from being
+# checked. The pure decision (scheduler.evaluate_run_schedule) is unit-
+# tested directly — this loop is just DB/gRPC/SSE glue around it.
+# ---------------------------------------------------------------------------
+
+
+async def _sf_sweep_loop() -> None:
+    while True:
+        try:
+            await asyncio.sleep(scheduler.POLL_INTERVAL_SECONDS)
+        except asyncio.CancelledError:
+            raise
+        try:
+            _sf_sweep_tick()
+        except Exception:
+            logger.exception("SF-sweep scheduler tick failed")
+
+
+def _sf_sweep_tick() -> None:
+    if _db is None:
+        return
+    for run in _db.list_running_runs():
+        try:
+            _process_run_sweep(run)
+        except Exception as e:
+            logger.warning("SF-sweep: run #%s failed: %s", run.get("id"), e)
+
+
+def _process_run_sweep(run: dict) -> None:
+    schedule = scheduler.parse_schedule(run.get("sf_schedule"))
+    if not schedule:
+        return  # Phase A fixed run — no sweep, nothing to do
+
+    now = datetime.datetime.now(datetime.timezone.utc)
+    started_at = scheduler.parse_iso(run["started_at"])
+    segment_started_at = scheduler.parse_iso(run.get("segment_started_at")) or started_at
+    segment_index = run.get("segment_index") or 0
+
+    decision = scheduler.evaluate_run_schedule(
+        now, started_at, segment_started_at, segment_index, schedule, run.get("planned_seconds")
+    )
+
+    if decision["advance"]:
+        next_index = decision["next_index"]
+        next_sf = schedule[next_index]["sf"]
+        node = _db.get_node(run["device_node_id"])
+        if node:
+            _switch_device_profile_best_effort(node["eui"], next_sf)
+        _db.advance_run_segment(run["id"], next_index, now.isoformat(timespec="seconds"))
+        campaign.broadcast_event({"type": "nodes"})
+    elif decision["done"]:
+        _db.stop_run(run["id"], status="done", reason="schedule-complete")
+        campaign.broadcast_event({"type": "nodes"})
 
 
 # ---------------------------------------------------------------------------
@@ -160,6 +303,35 @@ async def _lifespan(app: FastAPI):
 
 app = FastAPI(title="Feldtest-Cockpit", version="0.1.0", lifespan=_lifespan)
 _security = HTTPBasic()
+
+
+@app.middleware("http")
+async def _basic_auth_middleware(request: Request, call_next):
+    """Challenge EVERY request with HTTP Basic (except /healthz) so a browser is
+    prompted for credentials on page load and then sends them with the /static
+    and /api requests too — a bare `fetch()` never triggers the auth dialog on a
+    401, which otherwise leaves the SPA stuck 'loading' once the page (served
+    unauthenticated) can't reach the API. Also closes the previously
+    unauthenticated static-UI gap."""
+    if request.url.path == "/healthz":
+        return await call_next(request)
+    header = request.headers.get("authorization", "")
+    authorized = False
+    if header.startswith("Basic "):
+        try:
+            user, _, pw = base64.b64decode(header[6:]).decode("utf-8").partition(":")
+            authorized = (
+                secrets.compare_digest(user, config.COCKPIT_USER)
+                and secrets.compare_digest(pw, config.COCKPIT_PASSWORD)
+            )
+        except Exception:
+            authorized = False
+    if not authorized:
+        return Response(
+            status_code=401,
+            headers={"WWW-Authenticate": 'Basic realm="Feldtest-Cockpit"'},
+        )
+    return await call_next(request)
 
 
 # ---------------------------------------------------------------------------
@@ -200,6 +372,16 @@ def _grpc() -> tuple:
             detail="ChirpStack gRPC not available; check logs.",
         )
     return _grpc_channel, _grpc_token, _tenant_id, _app_id
+
+
+def _dbh() -> Database:
+    """Return the shared Database instance or raise 503."""
+    if _db is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database not available; check logs.",
+        )
+    return _db
 
 
 # ---------------------------------------------------------------------------
@@ -271,6 +453,91 @@ class PhaseRequest(BaseModel):
     def _check_phase(cls, v: str) -> str:
         if v not in ("sf9", "sf12", "adr"):
             raise ValueError("phase must be 'sf9', 'sf12', or 'adr'")
+        return v
+
+
+# ---------------------------------------------------------------------------
+# F-0006 Feldmess-Workflow — request models
+# ---------------------------------------------------------------------------
+
+
+class PlacementRequest(BaseModel):
+    node_id: int
+    floor: str = ""
+    room: str = ""
+    description: str = ""
+    note: str = ""
+    antenna: str = ""
+
+
+class SFSegment(BaseModel):
+    """One leg of a Phase B SF-sweep, e.g. {"sf": 7, "seconds": 28800}."""
+
+    sf: int
+    seconds: int
+
+    @field_validator("sf")
+    @classmethod
+    def _check_sf(cls, v: int) -> int:
+        if v not in (7, 9, 12):
+            raise ValueError("sf must be 7, 9, or 12")
+        return v
+
+    @field_validator("seconds")
+    @classmethod
+    def _check_seconds(cls, v: int) -> int:
+        if v <= 0:
+            raise ValueError("seconds must be positive")
+        return v
+
+
+class RunStartRequest(BaseModel):
+    device_node_id: int
+    # Phase B — all optional; omitting all three keeps the exact Phase A
+    # behaviour (a plain fixed run, no SF-sweep, no gRPC side effects).
+    duration_seconds: Optional[int] = None
+    sf_schedule: Optional[list[SFSegment]] = None
+    interval_minutes: Optional[int] = None
+
+    @field_validator("interval_minutes")
+    @classmethod
+    def _check_interval(cls, v: Optional[int]) -> Optional[int]:
+        if v is not None and not (1 <= v <= 255):
+            raise ValueError("interval_minutes must be between 1 and 255")
+        return v
+
+
+class RunStopRequest(BaseModel):
+    device_node_id: int
+    reason: Optional[str] = None
+
+
+class RelocateRequest(BaseModel):
+    device_node_id: int
+    floor: str = ""
+    room: str = ""
+    description: str = ""
+    note: str = ""
+    antenna: str = ""
+
+
+class GatewayMoveRequest(BaseModel):
+    floor: str = ""
+    room: str = ""
+    description: str = ""
+    note: str = ""
+
+
+class SetIntervalRequest(BaseModel):
+    """F-0006 "Trust & Sichtbarkeit" — POST /api/device/{node_id}/set-interval."""
+
+    minutes: int
+
+    @field_validator("minutes")
+    @classmethod
+    def _check_minutes(cls, v: int) -> int:
+        if not 1 <= v <= 255:
+            raise ValueError("minutes must be between 1 and 255")
         return v
 
 
@@ -412,8 +679,14 @@ def enqueue_downlink(req: DownlinkRequest):
 
 @app.post("/api/coex", dependencies=[Depends(_require_auth)])
 async def toggle_coex(req: CoexRequest):
-    campaign.toggle_coex(req.on)
-    return {"coex": req.on}
+    """No-op — kept for API backward-compatibility only.
+
+    "Funkumgebung" (F-0006 "Trust & Sichtbarkeit") is always-on: the gateway
+    physically receives every LoRa frame in range regardless of any toggle,
+    so this endpoint no longer gates anything. GET /api/state always carries
+    live coex_frames/coex_own_frames/coex_foreign_frames counts.
+    """
+    return {"coex": True}
 
 
 # ---------------------------------------------------------------------------
@@ -492,6 +765,578 @@ def set_phase(req: PhaseRequest):
         )
     campaign.set_phase(req.phase)
     return {"phase": req.phase, "switched": switched, "failed": failed}
+
+
+# ---------------------------------------------------------------------------
+# F-0006 Feldmess-Workflow (Phase A) — nodes, placements, photos, runs
+#
+# Device-centric field-measurement workflow layered on top of the panels
+# above. No GPS: a "placement" is floor/room/description, not coordinates.
+# Persistence lives in db.py (SQLite); this section is HTTP glue only.
+# ---------------------------------------------------------------------------
+
+
+def _run_entry(run: dict) -> dict:
+    """Shape a run row for the API: base fields + Phase B sweep summary
+    (planned_seconds/elapsed_seconds/current_sf/segment_index/progress/
+    sf_schedule/done) via scheduler.run_summary_fields — works for both
+    sweep and Phase A fixed runs."""
+    entry = {
+        "id": run["id"],
+        "status": run["status"],
+        "packets": run["packets"],
+        "started_at": run["started_at"],
+        # F-0006 "Trust & Sichtbarkeit" — the frontend needs the run's target
+        # send interval to judge the device's measured cadence against it.
+        "interval_minutes": run.get("interval_minutes"),
+    }
+    entry.update(scheduler.run_summary_fields(run))
+    return entry
+
+
+@app.get("/api/nodes", dependencies=[Depends(_require_auth)])
+async def list_nodes():
+    """List every node (devices + the gateway) with its current placement
+    (including attached photo_ids) and, for devices, the active run (if
+    any) plus the most recent run regardless of status (last_run) — the
+    latter lets the frontend show a "fertig" badge right after a sweep
+    completes, since it is no longer "active" at that point."""
+    d = _dbh()
+    out = []
+    for n in d.list_nodes():
+        placement = d.get_active_placement(n["id"])
+        if placement is not None:
+            placement = dict(placement)
+            placement["photo_ids"] = [p["id"] for p in d.list_photos(placement["id"])]
+        entry = {
+            "id": n["id"],
+            "kind": n["kind"],
+            "name": n["name"],
+            "eui": n["eui"],
+            "placement": placement,
+        }
+        if n["kind"] == "device":
+            active = d.get_active_run(n["id"])
+            entry["active_run"] = _run_entry(active) if active else None
+            last = d.get_last_run(n["id"])
+            entry["last_run"] = _run_entry(last) if last else None
+        out.append(entry)
+    return {"nodes": out}
+
+
+@app.post("/api/placement", dependencies=[Depends(_require_auth)])
+async def create_placement(req: PlacementRequest):
+    """Close the node's current active placement (if any) and open a new one.
+
+    Does NOT start a run — call POST /api/run/start (or /api/relocate, which
+    combines both) for that.
+    """
+    d = _dbh()
+    node = d.get_node(req.node_id)
+    if node is None:
+        raise HTTPException(status_code=404, detail="node not found")
+    placement_id = d.create_placement(
+        req.node_id, req.floor, req.room, req.description, req.note, req.antenna
+    )
+    campaign.broadcast_event({"type": "nodes"})
+    return {"placement_id": placement_id}
+
+
+@app.post("/api/photo/{placement_id}", dependencies=[Depends(_require_auth)])
+async def upload_photo(placement_id: int, file: UploadFile = File(...)):
+    """Attach a photo to a placement. Max MAX_PHOTOS_PER_PLACEMENT (409 above that)."""
+    d = _dbh()
+    if d.get_placement(placement_id) is None:
+        raise HTTPException(status_code=404, detail="placement not found")
+
+    ext = os.path.splitext(file.filename or "")[1].lower() or ".jpg"
+    dir_path = os.path.join(config.PHOTOS_DIR, str(placement_id))
+    os.makedirs(dir_path, exist_ok=True)
+    n = d.count_photos(placement_id) + 1
+    filename = f"{n}{ext}"
+    dest = os.path.join(dir_path, filename)
+
+    content = await file.read()
+    with open(dest, "wb") as f:
+        f.write(content)
+
+    try:
+        photo_id = d.add_photo(placement_id, filename)
+    except ValueError:
+        os.remove(dest)
+        raise HTTPException(
+            status_code=409,
+            detail=f"placement already has the maximum of "
+            f"{MAX_PHOTOS_PER_PLACEMENT} photos",
+        )
+
+    campaign.broadcast_event({"type": "nodes"})
+    return {"photo_id": photo_id, "count": d.count_photos(placement_id)}
+
+
+@app.get("/api/photo/{photo_id}", dependencies=[Depends(_require_auth)])
+async def get_photo(photo_id: int):
+    d = _dbh()
+    photo = d.get_photo(photo_id)
+    if photo is None:
+        raise HTTPException(status_code=404, detail="photo not found")
+    path = os.path.join(config.PHOTOS_DIR, str(photo["placement_id"]), photo["filename"])
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="photo file missing on disk")
+    media_type, _ = mimetypes.guess_type(path)
+    return FileResponse(path, media_type=media_type or "application/octet-stream")
+
+
+def _resolve_run_placements(
+    d: Database, device_node_id: int, gateway_node_id: Optional[int]
+) -> tuple[Optional[dict], Optional[dict], list[str]]:
+    """Return (device_placement, gateway_placement, missing).
+
+    *missing* lists human-readable reasons a run cannot start right now —
+    empty when both placements are active. Pure w.r.t. HTTP, so it is
+    unit-testable without a running FastAPI app (mirrors
+    _apply_phase_to_devices above).
+    """
+    device_placement = d.get_active_placement(device_node_id)
+    gateway_placement = (
+        d.get_active_placement(gateway_node_id) if gateway_node_id else None
+    )
+    missing: list[str] = []
+    if device_placement is None:
+        missing.append("device has no active placement")
+    if gateway_placement is None:
+        missing.append("gateway has no active placement")
+    return device_placement, gateway_placement, missing
+
+
+def _resolve_schedule(
+    req: RunStartRequest,
+) -> tuple[Optional[list], Optional[int], Optional[int]]:
+    """Pure: derive (sf_schedule, planned_seconds, interval_minutes) from a
+    RunStartRequest. Unit-testable without HTTP/DB/gRPC.
+
+    Returns (None, None, None) — no sweep — unless the caller supplied at
+    least one of duration_seconds/sf_schedule/interval_minutes; a bare
+    {device_node_id} request therefore behaves exactly like Phase A, with
+    no ChirpStack side effects at all (keeps every existing test passing).
+
+    Defaults applied once a sweep IS requested: duration_seconds=86400
+    (24 h), sf_schedule=SF7/SF9/SF12 each duration_seconds/3,
+    interval_minutes=5.
+    """
+    sweep_requested = (
+        req.duration_seconds is not None
+        or bool(req.sf_schedule)
+        or req.interval_minutes is not None
+    )
+    if not sweep_requested:
+        return None, None, None
+
+    duration_seconds = (
+        req.duration_seconds
+        if req.duration_seconds is not None
+        else scheduler.DEFAULT_DURATION_SECONDS
+    )
+    if req.sf_schedule:
+        sf_schedule = [{"sf": seg.sf, "seconds": seg.seconds} for seg in req.sf_schedule]
+        planned_seconds = (
+            req.duration_seconds
+            if req.duration_seconds is not None
+            else sum(seg["seconds"] for seg in sf_schedule)
+        )
+    else:
+        sf_schedule = scheduler.default_sf_schedule(duration_seconds)
+        planned_seconds = duration_seconds
+
+    interval_minutes = (
+        req.interval_minutes
+        if req.interval_minutes is not None
+        else scheduler.DEFAULT_INTERVAL_MINUTES
+    )
+    return sf_schedule, planned_seconds, interval_minutes
+
+
+def _switch_device_profile_best_effort(dev_eui: str, sf: int) -> None:
+    """Best-effort SF-profile switch — logs and returns on failure instead
+    of raising: the DB-side run/segment state has already been committed
+    and should not be rolled back over a transient ChirpStack hiccup
+    (mirrors the resilience pattern used for profile provisioning in the
+    lifespan above)."""
+    if not (_grpc_channel and _grpc_token and _tenant_id):
+        logger.warning(
+            "SF-sweep: ChirpStack gRPC not available — cannot switch %s to SF%s",
+            dev_eui, sf,
+        )
+        return
+    profile_name = config.SF_PROFILES.get(sf)
+    if not profile_name:
+        logger.warning("SF-sweep: no profile mapped for SF%s", sf)
+        return
+    try:
+        profile_id = cs.find_profile_id_by_name(
+            _grpc_channel, _grpc_token, _tenant_id, profile_name
+        )
+        cs.set_device_profile(_grpc_channel, _grpc_token, dev_eui, profile_id)
+    except (ValueError, grpc.RpcError) as e:
+        logger.warning(
+            "SF-sweep: could not switch %s to SF%s (%s): %s", dev_eui, sf, profile_name, e
+        )
+
+
+def _apply_sweep_start_side_effects(dev_eui: str, first_sf: int, interval_minutes: int) -> None:
+    """On run start with a sweep: switch to the first segment's SF profile
+    and enqueue the Vicki send-interval downlink to put the device "im
+    Raster". Both best-effort — see _switch_device_profile_best_effort.
+
+    0x02 = Vicki SetSendPeriod; e.g. interval_minutes=5 -> data_hex="0205".
+    Calls cs.enqueue_downlink directly (bypassing POST /api/downlink), so
+    campaign.record_downlink_sent is never invoked — equivalent to
+    count=False, keeping this keep-alive-style command out of the DL-PDR
+    denominator.
+    """
+    _switch_device_profile_best_effort(dev_eui, first_sf)
+    if not (_grpc_channel and _grpc_token):
+        return
+    try:
+        cs.enqueue_downlink(_grpc_channel, _grpc_token, dev_eui, 1, f"02{interval_minutes:02x}")
+    except grpc.RpcError as e:
+        logger.warning("SF-sweep: could not enqueue interval downlink for %s: %s", dev_eui, e)
+
+
+@app.post("/api/run/start", dependencies=[Depends(_require_auth)])
+def start_run(req: RunStartRequest):
+    """Start a run for a device. Requires an active placement for both the
+    device and the gateway; else 409 with a clear message.
+
+    Phase B: passing duration_seconds/sf_schedule/interval_minutes starts a
+    timed SF-sweep instead of a plain fixed run — see _resolve_schedule for
+    the defaulting rules. The response is the raw run row merged with its
+    scheduler.run_summary_fields (progress=0 at the very start)."""
+    d = _dbh()
+    node = d.get_node(req.device_node_id)
+    if node is None or node["kind"] != "device":
+        raise HTTPException(status_code=404, detail="device node not found")
+    if d.get_active_run(req.device_node_id):
+        raise HTTPException(
+            status_code=409, detail="a run is already active for this device"
+        )
+
+    device_placement, gateway_placement, missing = _resolve_run_placements(
+        d, req.device_node_id, _gateway_node_id
+    )
+    if missing:
+        raise HTTPException(status_code=409, detail="; ".join(missing))
+
+    sf_schedule, planned_seconds, interval_minutes = _resolve_schedule(req)
+
+    run = d.start_run(
+        req.device_node_id,
+        device_placement["id"],
+        gateway_placement["id"],
+        campaign.get_phase(),
+        config.DATA_DIR,
+        node["eui"],
+        planned_seconds=planned_seconds,
+        sf_schedule=sf_schedule,
+        interval_minutes=interval_minutes,
+    )
+
+    if sf_schedule:
+        _apply_sweep_start_side_effects(node["eui"], sf_schedule[0]["sf"], interval_minutes)
+
+    campaign.broadcast_event({"type": "nodes"})
+    run = dict(run)
+    run.update(scheduler.run_summary_fields(run))
+    return run
+
+
+@app.post("/api/run/stop", dependencies=[Depends(_require_auth)])
+async def stop_run(req: RunStopRequest):
+    d = _dbh()
+    run_id = d.stop_active_run_for_device(
+        req.device_node_id, status="done", reason=req.reason
+    )
+    if run_id is None:
+        raise HTTPException(status_code=404, detail="no active run for this device")
+    campaign.broadcast_event({"type": "nodes"})
+    return {"run_id": run_id, "status": "done"}
+
+
+@app.post("/api/relocate", dependencies=[Depends(_require_auth)])
+def relocate(req: RelocateRequest):
+    """Core action: close any active run, create a new placement, start a
+    new run — atomically from the caller's point of view (one API call)."""
+    d = _dbh()
+    node = d.get_node(req.device_node_id)
+    if node is None or node["kind"] != "device":
+        raise HTTPException(status_code=404, detail="device node not found")
+    gateway_placement = (
+        d.get_active_placement(_gateway_node_id) if _gateway_node_id else None
+    )
+    if gateway_placement is None:
+        raise HTTPException(
+            status_code=409, detail="gateway has no active placement — set one first"
+        )
+
+    d.stop_active_run_for_device(req.device_node_id, status="done", reason="relocated")
+    placement_id = d.create_placement(
+        req.device_node_id, req.floor, req.room, req.description, req.note, req.antenna
+    )
+    run = d.start_run(
+        req.device_node_id,
+        placement_id,
+        gateway_placement["id"],
+        campaign.get_phase(),
+        config.DATA_DIR,
+        node["eui"],
+    )
+    campaign.broadcast_event({"type": "nodes"})
+    return {"placement_id": placement_id, "run_id": run["id"]}
+
+
+def _open_runs_payload(running: list[dict]) -> list[dict]:
+    return [
+        {
+            "device_node_id": r["device_node_id"],
+            "name": r["device_name"],
+            "run_id": r["id"],
+            "started_at": r["started_at"],
+            "packets": r["packets"],
+        }
+        for r in running
+    ]
+
+
+@app.post("/api/gateway/move", dependencies=[Depends(_require_auth)])
+async def gateway_move(req: GatewayMoveRequest):
+    """Move the gateway — GUARDED: refuses (409) while any device run is
+    still 'running', listing the open runs so the operator can stop them."""
+    d = _dbh()
+    if _gateway_node_id is None:
+        raise HTTPException(status_code=503, detail="gateway node not provisioned yet")
+
+    running = d.list_running_runs()
+    if running:
+        raise HTTPException(
+            status_code=409,
+            detail={"open_runs": _open_runs_payload(running)},
+        )
+    placement_id = d.create_placement(
+        _gateway_node_id, req.floor, req.room, req.description, req.note, ""
+    )
+    campaign.broadcast_event({"type": "nodes"})
+    return {"placement_id": placement_id}
+
+
+@app.post("/api/gateway/move/force", dependencies=[Depends(_require_auth)])
+async def gateway_move_force(req: GatewayMoveRequest):
+    """Acknowledge path for gateway/move: abort all running device runs
+    (status='aborted', reason='gateway-move'; their CSV data is kept), then
+    move the gateway."""
+    d = _dbh()
+    if _gateway_node_id is None:
+        raise HTTPException(status_code=503, detail="gateway node not provisioned yet")
+
+    d.abort_running_runs(reason="gateway-move")
+    placement_id = d.create_placement(
+        _gateway_node_id, req.floor, req.room, req.description, req.note, ""
+    )
+    campaign.broadcast_event({"type": "nodes"})
+    return {"placement_id": placement_id}
+
+
+@app.get("/api/runs", dependencies=[Depends(_require_auth)])
+async def list_runs(node_id: int):
+    """Run history for a device, newest first. floor/room/description are
+    the device's placement at the time of the run (joined from db.py).
+    Each entry also carries the Phase B sweep summary (planned_seconds/
+    elapsed_seconds/current_sf/segment_index/progress/sf_schedule/done) —
+    frozen at ended_at for finished runs, live for a running one."""
+    d = _dbh()
+    runs = d.list_runs_for_node(node_id)
+    out = []
+    for r in runs:
+        entry = {
+            "id": r["id"],
+            "status": r["status"],
+            "phase": r["phase"],
+            "started_at": r["started_at"],
+            "ended_at": r["ended_at"],
+            "reason": r["reason"],
+            "packets": r["packets"],
+            "csv_path": r["csv_path"],
+            "floor": r["d_floor"],
+            "room": r["d_room"],
+            "description": r["d_description"],
+            "gateway_description": r["g_description"],
+            # kept for backward compatibility with any existing caller
+            "device_placement": {
+                "floor": r["d_floor"],
+                "room": r["d_room"],
+                "description": r["d_description"],
+            },
+        }
+        entry.update(scheduler.run_summary_fields(r))
+        out.append(entry)
+    return {"runs": out}
+
+
+@app.get("/api/run/{run_id}/csv", dependencies=[Depends(_require_auth)])
+async def download_run_csv(run_id: int):
+    d = _dbh()
+    run = d.get_run(run_id)
+    if run is None or not run["csv_path"] or not os.path.exists(run["csv_path"]):
+        raise HTTPException(status_code=404, detail="run CSV not found")
+    return FileResponse(
+        run["csv_path"], media_type="text/csv", filename=os.path.basename(run["csv_path"])
+    )
+
+
+# ---------------------------------------------------------------------------
+# "Verlauf" line chart — per-run RSSI/SNR/SF time series
+#
+# Parses the run's CSV file directly (that's where record_uplink_for_run
+# writes per-uplink metrics; the sqlite `run` row only holds the summary/
+# packet count) — pure w.r.t. HTTP/DB, so unit-testable without a running
+# FastAPI app or a real run (mirrors _resolve_schedule above).
+# ---------------------------------------------------------------------------
+
+_RUN_SERIES_MAX_POINTS = 600  # downsample cap — keeps the SVG chart light
+
+
+def _to_number(value, cast):
+    """cast(value), or None for empty/invalid — CSV cells are '' when a
+    metric was missing at write time (see db.py's record_uplink_for_run)."""
+    if value in (None, ""):
+        return None
+    try:
+        return cast(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _parse_run_series(
+    csv_path: Optional[str], started_at: Optional[str], max_points: int = _RUN_SERIES_MAX_POINTS
+) -> dict:
+    """Return {"total": int, "points": [{"t","rssi","snr","sf","f_cnt"}, ...]}.
+
+    total is the RAW row count (before downsampling); points is capped to
+    *max_points* by keeping every Nth row when the CSV is larger. A missing/
+    empty CSV — or a run with no started_at (defensive) — is not an error:
+    it just yields no points, so the caller can always return HTTP 200.
+    """
+    started = scheduler.parse_iso(started_at)
+    if not csv_path or not os.path.exists(csv_path) or started is None:
+        return {"total": 0, "points": []}
+
+    with open(csv_path, newline="", encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+    total = len(rows)
+
+    if total > max_points:
+        step = math.ceil(total / max_points)
+        rows = rows[::step]
+
+    points = []
+    for row in rows:
+        ts = scheduler.parse_iso(row.get("timestamp_utc"))
+        if ts is None:
+            continue
+        points.append({
+            "t": (ts - started).total_seconds(),
+            "rssi": _to_number(row.get("rssi_dbm"), float),
+            "snr": _to_number(row.get("snr_db"), float),
+            "sf": _to_number(row.get("sf"), int),
+            "f_cnt": _to_number(row.get("f_cnt"), int),
+        })
+    return {"total": total, "points": points}
+
+
+@app.get("/api/run/{run_id}/series", dependencies=[Depends(_require_auth)])
+async def run_series(run_id: int):
+    """Time series for the "Verlauf" line chart — RSSI/SNR/SF/f_cnt vs.
+    seconds-since-start. A run with no packets yet (or whose CSV file is
+    missing) is NOT an error — returns points: [] with HTTP 200 so the
+    frontend can show its own empty state."""
+    d = _dbh()
+    run = d.get_run(run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="run not found")
+    series = _parse_run_series(run["csv_path"], run["started_at"])
+    return {
+        "run_id": run["id"],
+        "started_at": run["started_at"],
+        "planned_seconds": run.get("planned_seconds"),
+        "sf_schedule": scheduler.parse_schedule(run.get("sf_schedule")),
+        "total": series["total"],
+        "points": series["points"],
+    }
+
+
+# ---------------------------------------------------------------------------
+# F-0006 "Trust & Sichtbarkeit" — device config visibility
+#
+# LoRaWAN Class A only delivers a queued downlink right after the device's
+# own next uplink — a silent device means nothing has reached it yet. These
+# two endpoints let the operator see whether a config downlink actually
+# landed (or is still waiting) and manually nudge the send interval without
+# starting a run. Deliberately NOT embedded in GET /api/nodes (that endpoint
+# must stay light); called only when a device is selected in the UI.
+# ---------------------------------------------------------------------------
+
+
+@app.get(
+    "/api/device/{node_id}/config-status", dependencies=[Depends(_require_auth)]
+)
+def device_config_status(node_id: int):
+    """last_uplink_at/interval_seconds/last_downlink_at (from CampaignState)
+    + the device's live ChirpStack downlink queue. gRPC is best-effort here
+    — an unavailable channel degrades to an empty queue rather than failing
+    the whole call, since the uplink-side status is still useful on its own.
+    """
+    d = _dbh()
+    node = d.get_node(node_id)
+    if node is None or node["kind"] != "device":
+        raise HTTPException(status_code=404, detail="device node not found")
+
+    stats = campaign.get_device_uplink_stats(node["eui"])
+    queued: list[dict] = []
+    if _grpc_channel and _grpc_token:
+        try:
+            queued = cs.get_device_queue(_grpc_channel, _grpc_token, node["eui"])
+        except grpc.RpcError as e:
+            logger.warning(
+                "config-status: GetQueue failed for %s: %s", node["eui"], e.details()
+            )
+    return {
+        "last_uplink_at": stats["last_uplink_at"],
+        "interval_seconds": stats["interval_seconds"],
+        "queued": queued,
+        "last_downlink_at": stats["last_downlink_at"],
+    }
+
+
+@app.post(
+    "/api/device/{node_id}/set-interval", dependencies=[Depends(_require_auth)]
+)
+def set_device_interval(node_id: int, req: SetIntervalRequest):
+    """Manually enqueue the Vicki send-interval downlink (0x02 SetSendPeriod)
+    for one device, independent of any run — e.g. to nudge a device that
+    drifted back to 5 min. Reuses the same "02"+minutes payload format as
+    the automatic sweep-start side effect (_apply_sweep_start_side_effects)
+    and, like it, does not call campaign.record_downlink_sent — a keep-
+    alive-style config command, not a measurement round-trip for DL-PDR.
+    """
+    d = _dbh()
+    node = d.get_node(node_id)
+    if node is None or node["kind"] != "device":
+        raise HTTPException(status_code=404, detail="device node not found")
+    channel, token, _, _ = _grpc()
+    try:
+        cs.enqueue_downlink(channel, token, node["eui"], 1, f"02{req.minutes:02x}")
+    except grpc.RpcError as e:
+        raise HTTPException(status_code=502, detail=e.details())
+    return {"status": "enqueued", "dev_eui": node["eui"], "minutes": req.minutes}
 
 
 # ---------------------------------------------------------------------------

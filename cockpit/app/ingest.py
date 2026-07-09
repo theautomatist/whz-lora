@@ -1,8 +1,10 @@
 """ingest.py — MQTT subscriber that feeds CampaignState.
 
 Two subscription groups:
-  application/<app_id>/device/+/event/+  — JSON events (up / join / ack)
-  eu868/gateway/+/event/up               — protobuf UplinkFrame (coex scan)
+  application/<app_id>/device/+/event/+  — JSON events (up / join / ack / txack)
+  eu868/gateway/+/event/up               — protobuf UplinkFrame (always-on
+                                            "Funkumgebung" coex classification,
+                                            F-0006 "Trust & Sichtbarkeit")
 
 Runs paho-mqtt loop_forever in a daemon thread; reconnects automatically on
 disconnect (paho default behaviour when loop_forever is used).
@@ -16,6 +18,7 @@ import paho.mqtt.client as mqtt
 from chirpstack_api.gw import gw_pb2
 
 from . import config
+from .db import Database
 from .state import CampaignState
 
 logger = logging.getLogger(__name__)
@@ -58,9 +61,15 @@ def _parse_uplink_event(evt: dict) -> dict:
 class MQTTIngest:
     """Subscribes to application and gateway MQTT topics and updates state."""
 
-    def __init__(self, state: CampaignState, app_id: str) -> None:
+    def __init__(
+        self,
+        state: CampaignState,
+        app_id: str,
+        db: Optional[Database] = None,
+    ) -> None:
         self._state = state
         self._app_id = app_id
+        self._db = db  # F-0006 per-run CSV recording; None disables it (tests)
         self._client: Optional[mqtt.Client] = None
         self._thread: Optional[threading.Thread] = None
         self._app_topic = f"application/{app_id}/device/+/event/+"
@@ -145,6 +154,13 @@ class MQTTIngest:
         if event_type == "up":
             metrics = _parse_uplink_event(evt)
             self._state.process_uplink(metrics)
+            if self._db is not None:
+                try:
+                    self._db.record_uplink_for_run(dev_eui, metrics)
+                except Exception as e:
+                    logger.warning(
+                        "record_uplink_for_run failed for %s: %s", dev_eui, e
+                    )
         elif event_type == "join":
             dev_addr = evt.get("devAddr", "")
             self._state.process_join(dev_eui, dev_addr)
@@ -152,15 +168,27 @@ class MQTTIngest:
             # FIX: only count as ACK when the device actually acknowledged the
             # downlink. A confirmed downlink that timed out also triggers an
             # event/ack message with acknowledged=false — treat that as NACK.
+            # Either way, ChirpStack has resolved the downlink attempt, so
+            # record it as the device's last-downlink activity (F-0006
+            # "Trust & Sichtbarkeit" — Geräte-Status).
+            self._state.record_downlink_txack(dev_eui)
             if evt.get("acknowledged"):
                 self._state.process_ack(dev_eui)
             else:
                 self._state.broadcast_nack(dev_eui)
+        elif event_type == "txack":
+            # ChirpStack confirms the downlink was actually transmitted over
+            # the air (independent of confirmed/unconfirmed) — the earliest
+            # "gesendet" signal for the Geräte-Status block.
+            self._state.record_downlink_txack(dev_eui)
 
     def _handle_gateway_up(self, payload: bytes) -> None:
-        """Decode a gateway UplinkFrame protobuf and forward to coex scan."""
-        if not self._state.is_coex_active():
-            return
+        """Decode a gateway UplinkFrame protobuf and forward to coex scan.
+
+        Always-on (F-0006 "Trust & Sichtbarkeit"): every gateway frame is
+        classified regardless of any UI toggle — there is no start/stop gate
+        here anymore.
+        """
         try:
             frame = gw_pb2.UplinkFrame.FromString(payload)
         except Exception as e:
@@ -170,7 +198,12 @@ class MQTTIngest:
         tx = frame.tx_info
         sf = tx.modulation.lora.spreading_factor
         freq = tx.frequency
-        rssi = frame.rx_info[0].rssi if frame.rx_info else 0
+        # NOTE: rx_info is a *singular* message field in chirpstack-api
+        # 4.18.0 (not repeated) — HasField, not indexing, is the correct
+        # presence check. (Fixed here: the previous frame.rx_info[0] would
+        # have raised TypeError on every real gateway uplink once this path
+        # started running unconditionally.)
+        rssi = frame.rx_info.rssi if frame.HasField("rx_info") else 0
         phy = bytes(frame.phy_payload)
 
         if sf and freq:

@@ -28,9 +28,28 @@ COCKPIT_PASSWORD: str = os.environ.get("COCKPIT_PASSWORD", "change-me")
 # Data directory for CSV recordings (mounted volume in compose)
 DATA_DIR: str = os.environ.get("DATA_DIR", "/data")
 
+# F-0006 Feldmess-Workflow persistence (SQLite db + photo uploads), both
+# inside the same mounted /data volume — reboot-safe.
+DB_PATH: str = os.environ.get("DB_PATH", os.path.join(DATA_DIR, "cockpit.db"))
+PHOTOS_DIR: str = os.environ.get("PHOTOS_DIR", os.path.join(DATA_DIR, "photos"))
+
 # Well-known ChirpStack entities that must already exist
 TENANT_NAME: str = "whz-lora"
 APP_NAME: str = "whz-feldtest"
 PROFILE_NAME: str = "WHZ-Feldtest-EU868"   # normal ADR (default)
 PROFILE_SF9: str  = "WHZ-Feldtest-SF9"     # fixed DR3 = SF9  (adr_algorithm_id: fixed_dr3)
 PROFILE_SF12: str = "WHZ-Feldtest-SF12"    # fixed DR0 = SF12 (adr_algorithm_id: fixed_dr0)
+PROFILE_SF7: str  = "WHZ-Feldtest-SF7"     # fixed DR5 = SF7  (adr_algorithm_id: fixed_dr5)
+
+# F-0006 Phase B — SF -> ChirpStack device-profile name, used by the
+# per-device SF-sweep (run/start + the background scheduler).
+SF_PROFILES: dict[int, str] = {
+    7:  PROFILE_SF7,
+    9:  PROFILE_SF9,
+    12: PROFILE_SF12,
+}
+
+# Fixed gateway node — the single Kerlink iFemtoCell Evolution (bring-up
+# confirmed against this EUI; see docs/user/kerlink-ifemtocell-bring-up.md).
+GATEWAY_NAME: str = "whz-kerlink-ifevo"
+GATEWAY_EUI: str = "7076ff0064071a3d"

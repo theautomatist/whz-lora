@@ -418,3 +418,19 @@ def enqueue_downlink(
         timeout=_GRPC_TIMEOUT,
     )
     logger.debug("Downlink enqueued: dev=%s fport=%d data=%s", dev_eui, f_port, data_hex)
+
+
+def get_device_queue(channel: grpc.Channel, token: str, dev_eui: str) -> list[dict]:
+    """Return a device's current downlink queue as
+    [{"f_port": int, "data_hex": str}, ...] — used by the config-status
+    endpoint (F-0006 "Trust & Sichtbarkeit") to show whether a queued config
+    downlink has already left the network, or is still waiting for the
+    device's next Class A receive window.
+    """
+    stub = device_pb2_grpc.DeviceServiceStub(channel)
+    resp = stub.GetQueue(
+        device_pb2.GetDeviceQueueItemsRequest(dev_eui=dev_eui),
+        metadata=_grpc_meta(token),
+        timeout=_GRPC_TIMEOUT,
+    )
+    return [{"f_port": item.f_port, "data_hex": item.data.hex()} for item in resp.result]
