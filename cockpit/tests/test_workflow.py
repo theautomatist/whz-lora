@@ -1392,3 +1392,30 @@ def test_start_run_passes_downlink_test_through_to_db(workflow):
 
     run = main.start_run(main.RunStartRequest(device_node_id=node_id, downlink_test=False))
     assert d.get_run(run["id"])["downlink_test"] == 0
+
+
+# ---------------------------------------------------------------------------
+# GET /api/rf-environment — full spectrum-survey snapshot (F-0006)
+# ---------------------------------------------------------------------------
+
+
+def test_rf_environment_endpoint_returns_snapshot_shape(fresh_campaign):
+    result = _run(main.rf_environment())
+    assert set(result.keys()) == {
+        "own_frames", "foreign_frames", "unknown_frames",
+        "foreign_devices", "networks", "vendors", "mtype_counts",
+        "channel_sf_matrix", "frames_per_min", "frames_per_min_sparkline",
+    }
+    assert result["foreign_devices"] == {}
+    assert result["mtype_counts"] == {"join": 0, "data_up": 0, "data_down": 0, "other": 0}
+
+
+def test_rf_environment_endpoint_reflects_foreign_traffic(fresh_campaign):
+    fresh_campaign.process_join("aabbccdd00000001", "01020304")
+    foreign_phy = bytes([0x40, 0xaa, 0xbb, 0xcc, 0x26, 0x00, 0x01, 0x00])
+    fresh_campaign.process_coex_frame(7, 868100000, -80, foreign_phy, -5.0)
+
+    result = _run(main.rf_environment())
+    assert len(result["foreign_devices"]) == 1
+    assert result["networks"] == {"The Things Network": {"devices": 1, "frames": 1}}
+    assert result["foreign_frames"] == 1

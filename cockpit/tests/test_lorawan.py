@@ -5,11 +5,15 @@ Runs without any external packages (only stdlib + the local lorawan module).
 import pytest
 from app.lorawan import (
     caf,
+    classify_network,
     freq_to_channel,
     lora_airtime,
+    mtype_name,
     parse_devaddr,
+    parse_join_request,
     parse_mhdr,
     traffic_light,
+    vendor_for_oui,
 )
 
 # ---------------------------------------------------------------------------
@@ -173,3 +177,115 @@ def test_freq_to_channel_optional():
 
 def test_freq_to_channel_unknown():
     assert freq_to_channel(900000000) == -1
+
+
+# ---------------------------------------------------------------------------
+# mtype_name — RF-environment survey (F-0006)
+# ---------------------------------------------------------------------------
+
+
+def test_mtype_name_known_values():
+    assert mtype_name(0) == "join_request"
+    assert mtype_name(1) == "join_accept"
+    assert mtype_name(2) == "unconfirmed_data_up"
+    assert mtype_name(3) == "unconfirmed_data_down"
+    assert mtype_name(4) == "confirmed_data_up"
+    assert mtype_name(5) == "confirmed_data_down"
+    assert mtype_name(6) == "rejoin_request"
+    assert mtype_name(7) == "proprietary"
+
+
+def test_mtype_name_unknown():
+    assert mtype_name(-1) == "unknown"
+    assert mtype_name(99) == "unknown"
+
+
+# ---------------------------------------------------------------------------
+# classify_network — RF-environment survey (F-0006)
+# ---------------------------------------------------------------------------
+
+
+def test_classify_network_ttn():
+    assert classify_network("26000000")["label"] == "The Things Network"
+    assert classify_network("27abcdef")["label"] == "The Things Network"
+
+
+def test_classify_network_private():
+    assert classify_network("00112233")["label"] == "private/experimental"
+    assert classify_network("01aabbcc")["label"] == "private/experimental"
+
+
+def test_classify_network_other():
+    assert classify_network("05aabbcc")["label"] == "other"
+
+
+def test_classify_network_reports_top_byte():
+    result = classify_network("26aabbcc")
+    assert result["top_byte"] == 0x26
+
+
+def test_classify_network_malformed_never_raises():
+    assert classify_network(None) == {"label": "unknown", "top_byte": None}
+    assert classify_network("") == {"label": "unknown", "top_byte": None}
+    assert classify_network("z") == {"label": "unknown", "top_byte": None}
+    assert classify_network("zz") == {"label": "unknown", "top_byte": None}
+
+
+# ---------------------------------------------------------------------------
+# parse_join_request — RF-environment survey (F-0006)
+# ---------------------------------------------------------------------------
+
+
+def test_parse_join_request_basic():
+    # MHDR(1) | JoinEUI(8 LE) | DevEUI(8 LE) | DevNonce(2) | MIC(4) = 23 bytes
+    join_eui_be = "0102030405060708"
+    dev_eui_be = "a84041aabbccddee"
+    join_eui_le = bytes.fromhex(join_eui_be)[::-1]
+    dev_eui_le = bytes.fromhex(dev_eui_be)[::-1]
+    phy = bytes([0x00]) + join_eui_le + dev_eui_le + bytes([0x00, 0x01]) + bytes(4)
+    assert len(phy) == 23
+
+    result = parse_join_request(phy)
+    assert result == {"dev_eui": dev_eui_be, "join_eui": join_eui_be}
+
+
+def test_parse_join_request_too_short():
+    assert parse_join_request(bytes(22)) is None
+
+
+def test_parse_join_request_empty():
+    assert parse_join_request(b"") is None
+
+
+def test_parse_join_request_exactly_23_bytes_required():
+    ok = bytes(23)
+    assert parse_join_request(ok) is not None
+    assert parse_join_request(ok[:-1]) is None
+
+
+# ---------------------------------------------------------------------------
+# vendor_for_oui — RF-environment survey (F-0006)
+# ---------------------------------------------------------------------------
+
+
+def test_vendor_for_oui_known():
+    assert vendor_for_oui("a84041") == {"name": "Dragino", "oui": "a84041"}
+    assert vendor_for_oui("24e124") == {"name": "Milesight", "oui": "24e124"}
+
+
+def test_vendor_for_oui_case_insensitive():
+    assert vendor_for_oui("A84041") == {"name": "Dragino", "oui": "a84041"}
+
+
+def test_vendor_for_oui_shared_block():
+    result = vendor_for_oui("70b3d5")
+    assert result["name"] == "LoRa Alliance shared (70B3D5)"
+
+
+def test_vendor_for_oui_unknown_falls_back_to_raw_hex():
+    assert vendor_for_oui("aabbcc") == {"name": "OUI aabbcc", "oui": "aabbcc"}
+
+
+def test_vendor_for_oui_empty_never_raises():
+    assert vendor_for_oui("") == {"name": "unknown", "oui": ""}
+    assert vendor_for_oui(None) == {"name": "unknown", "oui": ""}

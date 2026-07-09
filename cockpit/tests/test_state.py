@@ -613,3 +613,191 @@ def test_process_uplink_uplink_times_capped_at_history_length():
         state.process_uplink(SAMPLE_UPLINK)
     dm = state._devices[eui]
     assert len(dm.uplink_times) == 7
+
+
+# ---------------------------------------------------------------------------
+# RF-environment survey (F-0006) — get_rf_environment() / _record_rf_environment_frame
+# ---------------------------------------------------------------------------
+
+
+def test_get_rf_environment_empty_initially():
+    state = CampaignState(data_dir=tempfile.mkdtemp())
+    env = state.get_rf_environment()
+    assert env["foreign_devices"] == {}
+    assert env["networks"] == {}
+    assert env["vendors"] == {}
+    assert env["mtype_counts"] == {"join": 0, "data_up": 0, "data_down": 0, "other": 0}
+    assert env["channel_sf_matrix"] == {}
+    assert env["frames_per_min"] == 0.0
+    assert env["frames_per_min_sparkline"] == [0] * 10
+    assert env["own_frames"] == 0
+    assert env["foreign_frames"] == 0
+
+
+def test_process_coex_frame_foreign_data_frame_updates_foreign_devices():
+    state = CampaignState(data_dir=tempfile.mkdtemp())
+    state.process_join("aabbccdd00000001", "01020304")  # our own device -> known_addrs non-empty
+
+    # Foreign data frame: DevAddr LE bytes [aa,bb,cc,26] -> BE "26ccbbaa", top byte
+    # 0x26 -> The Things Network. Different from our own DevAddr 01020304.
+    foreign_phy = bytes([0x40, 0xaa, 0xbb, 0xcc, 0x26, 0x00, 0x01, 0x00])
+    state.process_coex_frame(7, 868100000, -80, foreign_phy, -5.0)
+
+    env = state.get_rf_environment()
+    assert len(env["foreign_devices"]) == 1
+    dev_addr = next(iter(env["foreign_devices"]))
+    assert dev_addr == "26ccbbaa"
+    entry = env["foreign_devices"][dev_addr]
+    assert entry["frames"] == 1
+    assert entry["last_rssi"] == -80
+    assert entry["last_snr"] == -5.0
+    assert entry["last_sf"] == 7
+    assert entry["last_channel"] == 0
+    assert entry["network"] == "The Things Network"
+
+    assert env["networks"] == {"The Things Network": {"devices": 1, "frames": 1}}
+    assert env["channel_sf_matrix"] == {"ch0_sf7": 1}
+    assert env["mtype_counts"]["data_up"] == 1
+
+
+def test_process_coex_frame_snr_defaults_to_none():
+    """snr is optional — existing callers/tests that predate the RF-
+    environment survey must keep working unchanged."""
+    state = CampaignState(data_dir=tempfile.mkdtemp())
+    state.process_join("aabbccdd00000001", "01020304")
+    foreign_phy = bytes([0x40, 0xaa, 0xbb, 0xcc, 0x26, 0x00, 0x01, 0x00])
+    state.process_coex_frame(7, 868100000, -80, foreign_phy)  # no snr arg
+
+    env = state.get_rf_environment()
+    dev_addr = next(iter(env["foreign_devices"]))
+    assert env["foreign_devices"][dev_addr]["last_snr"] is None
+
+
+def test_process_coex_frame_own_data_frame_not_added_to_foreign_devices():
+    state = CampaignState(data_dir=tempfile.mkdtemp())
+    state.process_join("aabbccdd00000001", "01020304")
+    # Confirmed Data Up with DevAddr 01020304 stored LE: 04 03 02 01 — ours.
+    own_phy = bytes([0x80, 0x04, 0x03, 0x02, 0x01, 0x00, 0x01, 0x00])
+    state.process_coex_frame(7, 868100000, -70, own_phy)
+
+    env = state.get_rf_environment()
+    assert env["foreign_devices"] == {}
+    assert env["networks"] == {}
+
+
+def test_process_coex_frame_unclassifiable_data_frame_not_added_to_foreign_devices():
+    """Without ANY known own DevAddr yet, ownership can't be ruled out —
+    conservative: not counted as foreign either (mirrors _coex_unknown_frames)."""
+    state = CampaignState(data_dir=tempfile.mkdtemp())
+    phy = bytes([0x40, 0xaa, 0xbb, 0xcc, 0x26, 0x00, 0x01, 0x00])
+    state.process_coex_frame(7, 868100000, -80, phy)
+
+    env = state.get_rf_environment()
+    assert env["foreign_devices"] == {}
+    assert env["mtype_counts"]["data_up"] == 1  # MType tally still happens regardless
+
+
+def test_process_coex_frame_join_request_updates_vendors():
+    state = CampaignState(data_dir=tempfile.mkdtemp())
+    join_eui_le = bytes(8)
+    dev_eui_be = "a84041aabbccddee"  # OUI a84041 -> Dragino
+    dev_eui_le = bytes.fromhex(dev_eui_be)[::-1]
+    phy = bytes([0x00]) + join_eui_le + dev_eui_le + bytes([0x00, 0x01]) + bytes(4)
+    assert len(phy) == 23
+
+    state.process_coex_frame(7, 868100000, -90, phy)
+
+    env = state.get_rf_environment()
+    assert env["mtype_counts"]["join"] == 1
+    assert env["vendors"] == {"a84041": {"name": "Dragino", "joins": 1}}
+
+
+def test_process_coex_frame_own_join_request_excluded_from_vendors():
+    state = CampaignState(data_dir=tempfile.mkdtemp())
+    dev_eui_be = "aabbccdd00000001"
+    state.process_join(dev_eui_be, "01020304")  # register as one of OUR devices
+
+    join_eui_le = bytes(8)
+    dev_eui_le = bytes.fromhex(dev_eui_be)[::-1]
+    phy = bytes([0x00]) + join_eui_le + dev_eui_le + bytes([0x00, 0x01]) + bytes(4)
+
+    state.process_coex_frame(7, 868100000, -90, phy)
+
+    env = state.get_rf_environment()
+    assert env["vendors"] == {}
+    assert env["mtype_counts"]["join"] == 1  # still counted in the overall tally
+
+
+def test_process_coex_frame_malformed_join_request_does_not_crash():
+    """A join-request MType with a truncated payload must not raise —
+    parse_join_request returns None, mtype_counts still increments."""
+    state = CampaignState(data_dir=tempfile.mkdtemp())
+    short_phy = bytes([0x00, 0x01, 0x02])  # MType 0, but far too short to parse
+
+    state.process_coex_frame(7, 868100000, -90, short_phy)  # must not raise
+
+    env = state.get_rf_environment()
+    assert env["mtype_counts"]["join"] == 1
+    assert env["vendors"] == {}
+
+
+def test_foreign_devices_bounded_evicts_oldest(monkeypatch):
+    from app import state as state_mod
+    monkeypatch.setattr(state_mod, "_MAX_FOREIGN_DEVICES", 3)
+
+    state = CampaignState(data_dir=tempfile.mkdtemp())
+    state.process_join("aabbccdd00000001", "ffffffff")  # own device, distinct from all test DevAddrs
+
+    for i in range(5):
+        phy = bytes([0x40, i, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00])
+        state.process_coex_frame(7, 868100000, -80, phy)
+
+    env = state.get_rf_environment()
+    assert len(env["foreign_devices"]) == 3
+
+
+def test_vendors_bounded_evicts_oldest(monkeypatch):
+    from app import state as state_mod
+    monkeypatch.setattr(state_mod, "_MAX_VENDORS", 2)
+
+    state = CampaignState(data_dir=tempfile.mkdtemp())
+    join_eui_le = bytes(8)
+    for i in range(4):
+        dev_eui_be = f"{i:02x}0000aabbccddee"
+        dev_eui_le = bytes.fromhex(dev_eui_be)[::-1]
+        phy = bytes([0x00]) + join_eui_le + dev_eui_le + bytes([0x00, 0x01]) + bytes(4)
+        state.process_coex_frame(7, 868100000, -90, phy)
+
+    env = state.get_rf_environment()
+    assert len(env["vendors"]) == 2
+
+
+def test_frames_per_min_and_sparkline_reflect_recent_foreign_frames():
+    state = CampaignState(data_dir=tempfile.mkdtemp())
+    state.process_join("aabbccdd00000001", "ffffffff")
+    for i in range(3):
+        phy = bytes([0x40, i, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00])
+        state.process_coex_frame(7, 868100000, -80, phy)
+
+    env = state.get_rf_environment()
+    assert env["frames_per_min"] > 0
+    assert len(env["frames_per_min_sparkline"]) == 10
+    assert sum(env["frames_per_min_sparkline"]) == 3
+    assert env["frames_per_min_sparkline"][-1] == 3  # all just happened -> most-recent bucket
+
+
+def test_get_rf_environment_own_foreign_totals_match_coex_counters():
+    """own_frames/foreign_frames in the survey snapshot must be the SAME
+    totals already exposed via get_dashboard()'s coex_own_frames/
+    coex_foreign_frames — one source of truth, no drift."""
+    state = CampaignState(data_dir=tempfile.mkdtemp())
+    state.process_join("aabbccdd00000001", "01020304")
+    own_phy = bytes([0x80, 0x04, 0x03, 0x02, 0x01, 0x00, 0x01, 0x00])
+    foreign_phy = bytes([0x40, 0xaa, 0xbb, 0xcc, 0x26, 0x00, 0x01, 0x00])
+    state.process_coex_frame(7, 868100000, -70, own_phy)
+    state.process_coex_frame(7, 868100000, -80, foreign_phy)
+
+    env = state.get_rf_environment()
+    dash = state.get_dashboard()
+    assert env["own_frames"] == dash["coex_own_frames"] == 1
+    assert env["foreign_frames"] == dash["coex_foreign_frames"] == 1

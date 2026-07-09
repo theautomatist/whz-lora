@@ -135,12 +135,13 @@ def test_gateway_up_processes_frame_without_coex_toggle():
     frame.tx_info.frequency = 868100000
     frame.tx_info.modulation.lora.spreading_factor = 7
     frame.rx_info.rssi = -70
+    frame.rx_info.snr = 7.5
     frame.phy_payload = bytes([0x40, 0x01, 0x02, 0x03, 0x04, 0x00, 0x01, 0x00])
 
     ingest._handle_gateway_up(frame.SerializeToString())
 
     state.process_coex_frame.assert_called_once_with(
-        7, 868100000, -70, frame.phy_payload
+        7, 868100000, -70, frame.phy_payload, 7.5
     )
     state.is_coex_active.assert_not_called()
 
@@ -159,7 +160,7 @@ def test_gateway_up_without_rx_info_defaults_rssi_zero():
     ingest._handle_gateway_up(frame.SerializeToString())
 
     state.process_coex_frame.assert_called_once_with(
-        7, 868100000, 0, frame.phy_payload
+        7, 868100000, 0, frame.phy_payload, 0.0
     )
 
 
