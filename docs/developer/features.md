@@ -194,3 +194,40 @@ records what was removed and why. The entry format is defined in
 - Linked directives / ADRs: Issue #10, PR #11
 - History: 2026-07-02 added (proposed); 2026-07-03 active — first wave +
   Phasen-/festes-SF-Schalter (PR #11)
+
+### F-0006 — Feldmess-Workflow
+
+- Status: proposed
+- Summary: Gerätezentrierter Feldmess-Workflow im Cockpit: Geräte und Gateway
+  per Handy platzieren und umsetzen (Relocate), je Platzierung Fotos + Notizen,
+  pro Gerät ein Messprotokoll (Run) mit Historie, ein Dashboard über
+  laufende/fertige Runs und ein Riegel beim Gateway-Umzug. Persistiert in
+  SQLite (reboot-fest). Baut auf F-0005 auf.
+- Problem solved: Der Parameter-Formular-Ansatz von F-0005 bildet den realen
+  Ablauf (Gerät anbinden, positionieren, Reichweite/Signalqualität prüfen,
+  umsetzen) nicht ab und ist vor Ort unpraktisch.
+- User-facing behavior: Operator wählt am Handy das Gerät (Dropdown), trägt den
+  Standort (Etage/Raum/Beschreibung/Notiz) + bis zu 3 Fotos ein, startet/stoppt
+  den Run bzw. „Relocate" (schließt das alte Protokoll, öffnet ein neues am
+  neuen Standort), sieht je Gerät Live-Signal + gesammelte Pakete und setzt das
+  Gateway nur um, wenn alle Geräte-Runs beendet/quittiert sind.
+- Acceptance criteria:
+  - Datenmodell in SQLite (nodes/placements/photos/runs) unter `/data`
+    (reboot-fest); Fotos unter `/data/photos`.
+  - Platzierung/Relocate: neues Placement beendet das alte; Relocate schließt
+    den laufenden Run und öffnet einen neuen.
+  - Foto-Upload je Placement, max. 3.
+  - Run-Start verlangt aktives Geräte- und Gateway-Placement; je Run eine CSV
+    mit Placement-/Gateway-Metadaten; Aufzeichnung per-Run (mehrere gleichzeitig).
+  - Gateway-Umzug blockiert, solange ein Geräte-Run läuft (409 + offene Runs);
+    „force/quittieren" beendet sie (Daten bleiben) und erlaubt den Umzug.
+  - Dashboard je Gerät: Standort, Run-Status, Pakete, RSSI/SNR/SF/PDR live.
+  - Kein GPS (bewusst weggelassen).
+- Dependencies: F-0001, F-0002, F-0003, F-0004, F-0005 (Cockpit-Plumbing)
+- Interfaces & data: HTTP/8000 (neue `/api/nodes|placement|photo|run|relocate|
+  gateway/move`); SQLite `/data/cockpit.db`; Fotos `/data/photos`; CSV je Run;
+  ChirpStack-gRPC + MQTT wie F-0005.
+- Realised by: n/a (Single-Repo)
+- Linked directives / ADRs: <Issue folgt>
+- History: 2026-07-08 added (proposed) — Phase A (Backend/Datenmodell) im Bau;
+  Phase B (zeitgesteuerte Runs + Auto-SF-Sweep) geplant.
