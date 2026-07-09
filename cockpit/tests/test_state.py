@@ -2,6 +2,7 @@
 
 Runs without grpc or fastapi — only stdlib + local pure modules are imported.
 """
+import datetime
 import tempfile
 import os
 import pytest
@@ -11,6 +12,7 @@ from app.state import (
     CampaignState,
     DeviceMetrics,
     PointMeta,
+    _median_interval_seconds,
     build_csv_row,
 )
 
@@ -409,3 +411,205 @@ def test_process_join_stores_devaddr():
     phy = bytes([0x80, 0x04, 0x03, 0x02, 0x01, 0x00, 0x01, 0x00])
     # process_coex_frame must not raise (regardless of timing verdict)
     state.process_coex_frame(7, 868100000, -70, phy)
+
+
+# ---------------------------------------------------------------------------
+# F-0006 "Trust & Sichtbarkeit" — always-on "Funkumgebung" (coex, Task 1)
+# ---------------------------------------------------------------------------
+
+
+def test_process_coex_frame_without_toggle_still_counts():
+    """No toggle_coex(True) call needed anymore — the gateway receives every
+    frame in range regardless of any UI toggle, so classification always
+    runs."""
+    state = CampaignState(data_dir=tempfile.mkdtemp())
+    phy = bytes([0x40, 0x01, 0x02, 0x03, 0x04, 0x00, 0x01, 0x00])
+    state.process_coex_frame(7, 868100000, -70, phy)
+    dash = state.get_dashboard()
+    assert dash["coex_frames"] == {"ch0_sf7": 1}
+
+
+def test_coex_active_defaults_true():
+    """Reflects the new always-on reality; toggle_coex/is_coex_active are
+    kept for API backward-compat but no longer gate anything."""
+    state = CampaignState(data_dir=tempfile.mkdtemp())
+    assert state.get_dashboard()["coex_active"] is True
+    assert state.is_coex_active() is True
+
+
+def test_coex_own_foreign_counts():
+    state = CampaignState(data_dir=tempfile.mkdtemp())
+    state.process_join("aabbccdd00000001", "01020304")
+
+    # Own frame: Confirmed Data Up, DevAddr 01020304 stored LE (04 03 02 01)
+    own_phy = bytes([0x80, 0x04, 0x03, 0x02, 0x01, 0x00, 0x01, 0x00])
+    state.process_coex_frame(7, 868100000, -70, own_phy)
+
+    # Foreign frame: a different DevAddr
+    foreign_phy = bytes([0x80, 0xFF, 0xEE, 0xDD, 0xCC, 0x00, 0x01, 0x00])
+    state.process_coex_frame(7, 868100000, -70, foreign_phy)
+
+    dash = state.get_dashboard()
+    assert dash["coex_own_frames"] == 1
+    assert dash["coex_foreign_frames"] == 1
+    assert dash["coex_unknown_frames"] == 0
+
+
+def test_coex_unknown_frames_when_no_known_devaddrs():
+    """Without any prior process_join call, ownership cannot be classified
+    — the frame must count as unknown, not silently dropped."""
+    state = CampaignState(data_dir=tempfile.mkdtemp())
+    phy = bytes([0x80, 0x04, 0x03, 0x02, 0x01, 0x00, 0x01, 0x00])
+    state.process_coex_frame(7, 868100000, -70, phy)
+    dash = state.get_dashboard()
+    assert dash["coex_unknown_frames"] == 1
+    assert dash["coex_own_frames"] == 0
+    assert dash["coex_foreign_frames"] == 0
+
+
+# ---------------------------------------------------------------------------
+# F-0006 "Trust & Sichtbarkeit" — device config visibility (Task 2)
+# ---------------------------------------------------------------------------
+
+
+def test_get_device_uplink_stats_unknown_device_returns_nones():
+    state = CampaignState(data_dir=tempfile.mkdtemp())
+    stats = state.get_device_uplink_stats("0000000000000000")
+    assert stats == {
+        "last_uplink_at": None,
+        "interval_seconds": None,
+        "last_downlink_at": None,
+    }
+
+
+def test_get_device_uplink_stats_reflects_last_uplink():
+    state = CampaignState(data_dir=tempfile.mkdtemp())
+    state.process_uplink(SAMPLE_UPLINK)
+    stats = state.get_device_uplink_stats(SAMPLE_UPLINK["dev_eui"])
+    assert stats["last_uplink_at"] is not None
+    assert stats["interval_seconds"] is None  # only one uplink so far
+
+
+def test_record_downlink_txack_sets_last_downlink_at():
+    state = CampaignState(data_dir=tempfile.mkdtemp())
+    eui = "aabb000000000009"
+    assert state.get_device_uplink_stats(eui)["last_downlink_at"] is None
+
+    state.record_downlink_txack(eui)
+
+    stats = state.get_device_uplink_stats(eui)
+    assert stats["last_downlink_at"] is not None
+    assert "T" in stats["last_downlink_at"]
+
+
+def test_record_downlink_txack_does_not_touch_uplink_stats():
+    """A downlink-only event must not fabricate an uplink for a device that
+    has never sent one."""
+    state = CampaignState(data_dir=tempfile.mkdtemp())
+    eui = "aabb00000000000a"
+    state.record_downlink_txack(eui)
+    stats = state.get_device_uplink_stats(eui)
+    assert stats["last_uplink_at"] is None
+    assert stats["last_downlink_at"] is not None
+
+
+# ---------------------------------------------------------------------------
+# _median_interval_seconds — median-of-recent-gaps "Sendeintervall (gemessen)"
+# (replaces the old last-two-uplinks-only measurement, which a single missed
+# packet could skew, e.g. a steady 5-min device briefly reading as "15 min")
+# ---------------------------------------------------------------------------
+
+
+def _iso_at(base: datetime.datetime, offset_seconds: float) -> str:
+    return (base + datetime.timedelta(seconds=offset_seconds)).isoformat()
+
+
+def test_median_interval_seconds_none_below_two_timestamps():
+    assert _median_interval_seconds([]) is None
+    assert _median_interval_seconds(["2026-01-01T00:00:00+00:00"]) is None
+
+
+def test_median_interval_seconds_two_points_is_the_single_gap():
+    times = ["2026-01-01T00:00:00+00:00", "2026-01-01T00:05:00+00:00"]
+    assert _median_interval_seconds(times) == 300.0
+
+
+def test_median_interval_seconds_median_over_several_gaps():
+    """Six steady 300 s gaps -> median is 300 s."""
+    base = datetime.datetime(2026, 1, 1, tzinfo=datetime.timezone.utc)
+    times = [_iso_at(base, 300 * i) for i in range(7)]
+    assert _median_interval_seconds(times) == 300.0
+
+
+def test_median_interval_seconds_robust_to_one_outlier_gap():
+    """One missed packet doubles a single gap (600 s instead of 300 s) among
+    five steady 300 s gaps — the median must stay at 300 s, unlike a plain
+    last-two-gap measurement which would read the outlier directly."""
+    base = datetime.datetime(2026, 1, 1, tzinfo=datetime.timezone.utc)
+    offsets = [0, 300, 600, 1200, 1500, 1800, 2100]  # gaps: 300,300,600,300,300,300
+    times = [_iso_at(base, o) for o in offsets]
+    assert _median_interval_seconds(times) == 300.0
+
+
+def test_median_interval_seconds_even_gap_count_averages_middle_two():
+    """4 timestamps -> 3 gaps (odd count) is covered above; use 5 timestamps
+    -> 4 gaps (even count) to exercise the "average the middle two" branch."""
+    base = datetime.datetime(2026, 1, 1, tzinfo=datetime.timezone.utc)
+    offsets = [0, 100, 300, 700, 1500]  # gaps: 100, 200, 400, 800 -> median (200+400)/2=300
+    times = [_iso_at(base, o) for o in offsets]
+    assert _median_interval_seconds(times) == 300.0
+
+
+def test_median_interval_seconds_ignores_non_positive_gaps():
+    """Defensive: an out-of-order/duplicate timestamp (gap <= 0) must not
+    crash or be counted — matches the old _interval_seconds' gap > 0 guard."""
+    base = datetime.datetime(2026, 1, 1, tzinfo=datetime.timezone.utc)
+    times = [_iso_at(base, 0), _iso_at(base, 0), _iso_at(base, 300)]
+    assert _median_interval_seconds(times) == 300.0
+
+
+# ---------------------------------------------------------------------------
+# process_uplink / get_dashboard / get_device_uplink_stats integration
+# ---------------------------------------------------------------------------
+
+
+def test_process_uplink_interval_seconds_none_after_first_uplink():
+    state = CampaignState(data_dir=tempfile.mkdtemp())
+    state.process_uplink(SAMPLE_UPLINK)
+    dev = state.get_dashboard()["devices"][SAMPLE_UPLINK["dev_eui"]]
+    assert dev["interval_seconds"] is None
+
+
+def test_process_uplink_interval_seconds_reflects_deque_median():
+    """Integration: get_dashboard()/get_device_uplink_stats() must compute
+    interval_seconds from the SAME retained uplink_times deque that
+    process_uplink populates. Seeded with controlled timestamps directly —
+    two real-time process_uplink() calls in a fast test run can land within
+    the same wall-clock second, which _median_interval_seconds correctly
+    treats as a zero gap and ignores (see test_..._ignores_non_positive_gaps
+    above), so asserting on real-time gaps here would be flaky."""
+    state = CampaignState(data_dir=tempfile.mkdtemp())
+    eui = SAMPLE_UPLINK["dev_eui"]
+    state.process_uplink(SAMPLE_UPLINK)  # creates the DeviceMetrics record
+
+    base = datetime.datetime(2026, 1, 1, tzinfo=datetime.timezone.utc)
+    dm = state._devices[eui]
+    dm.uplink_times.clear()
+    dm.uplink_times.extend(_iso_at(base, 300 * i) for i in range(3))
+
+    dev = state.get_dashboard()["devices"][eui]
+    assert dev["interval_seconds"] == 300.0
+
+    stats = state.get_device_uplink_stats(eui)
+    assert stats["interval_seconds"] == 300.0
+
+
+def test_process_uplink_uplink_times_capped_at_history_length():
+    """The retained timestamp history must stay bounded (maxlen) even after
+    many more uplinks than that — "a small bounded history"."""
+    state = CampaignState(data_dir=tempfile.mkdtemp())
+    eui = SAMPLE_UPLINK["dev_eui"]
+    for _ in range(10):
+        state.process_uplink(SAMPLE_UPLINK)
+    dm = state._devices[eui]
+    assert len(dm.uplink_times) == 7

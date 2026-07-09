@@ -80,3 +80,55 @@ def test_set_device_profile_preserves_other_fields():
     assert d.application_id == "app-xyz"            # preserved
     assert d.join_eui == "0102030405060708"          # preserved
     assert d.dev_eui == "aaaa000000000001"           # preserved
+
+
+# ---------------------------------------------------------------------------
+# get_device_queue — F-0006 "Trust & Sichtbarkeit" (Task 2)
+# ---------------------------------------------------------------------------
+
+
+def test_get_device_queue_returns_list():
+    item1 = MagicMock()
+    item1.f_port = 1
+    item1.data = b"\x02\x05"
+    item2 = MagicMock()
+    item2.f_port = 1
+    item2.data = b"\x04"
+
+    resp = MagicMock()
+    resp.result = [item1, item2]
+    stub = MagicMock()
+    stub.GetQueue.return_value = resp
+
+    with patch("app.chirpstack.device_pb2_grpc.DeviceServiceStub", return_value=stub):
+        result = cs.get_device_queue(MagicMock(), "tok", "0102030405060708")
+
+    assert result == [
+        {"f_port": 1, "data_hex": "0205"},
+        {"f_port": 1, "data_hex": "04"},
+    ]
+
+
+def test_get_device_queue_empty():
+    resp = MagicMock()
+    resp.result = []
+    stub = MagicMock()
+    stub.GetQueue.return_value = resp
+
+    with patch("app.chirpstack.device_pb2_grpc.DeviceServiceStub", return_value=stub):
+        result = cs.get_device_queue(MagicMock(), "tok", "0102030405060708")
+
+    assert result == []
+
+
+def test_get_device_queue_uses_dev_eui_in_request():
+    resp = MagicMock()
+    resp.result = []
+    stub = MagicMock()
+    stub.GetQueue.return_value = resp
+
+    with patch("app.chirpstack.device_pb2_grpc.DeviceServiceStub", return_value=stub):
+        cs.get_device_queue(MagicMock(), "tok", "aaaa000000000001")
+
+    req = stub.GetQueue.call_args[0][0]
+    assert req.dev_eui == "aaaa000000000001"
