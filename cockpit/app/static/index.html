@@ -11,11 +11,13 @@
 <!-- ===== STICKY HEADER ===== -->
 <header id="app-header">
   <span id="app-title">WHZ LoRa Field Test</span>
-  <!-- F-0007 top-level view switch — swaps #main (Live, unchanged) for
-       #history-view (browse past measurements). See switchView() in app.js. -->
+  <!-- Top-level view switch — swaps #main (Live, unchanged) for #history-view
+       (F-0007, browse past measurements) or #map-view (F-0008, drag markers
+       onto an uploaded map). See switchView() in app.js. -->
   <div id="view-switch">
     <button type="button" class="vsw-btn active" id="vsw-live" onclick="switchView('live')">Live</button>
     <button type="button" class="vsw-btn" id="vsw-history" onclick="switchView('history')">History</button>
+    <button type="button" class="vsw-btn" id="vsw-map" onclick="switchView('map')">Map</button>
   </div>
   <div id="status-pills">
     <span class="pill" id="pill-node">—</span>
@@ -424,6 +426,54 @@
 
 </div><!-- #history-view -->
 
+<!-- ===== MAP / PLACEMENT EDITOR (F-0008, PoC) — drag node markers onto an
+     uploaded map image; hidden unless the header switch is on "Map". A
+     placeholder: the first map is an isometric building view whose
+     perspective distorts real coordinates — x/y are image-relative
+     fractions, not real-world positions. See switchView()/loadMapView() in
+     app.js. ===== -->
+<div id="map-view" style="display:none">
+  <section class="card full" id="card-map">
+    <div class="card-title">
+      <span class="ti">⌖</span>
+      <span>Map</span>
+    </div>
+
+    <!-- No map uploaded yet -->
+    <div id="map-empty">
+      <p class="hint">No map uploaded yet. Any image works — the isometric building view for now, a real floor plan later.</p>
+      <div class="brow">
+        <input type="file" id="map-upload-input" accept="image/*" style="display:none" onchange="onMapImageSelected(event)">
+        <button type="button" class="btn btn-p" onclick="document.getElementById('map-upload-input').click()">Upload map image</button>
+      </div>
+      <div class="msg" id="map-upload-msg"></div>
+    </div>
+
+    <!-- A map is current -->
+    <div id="map-with-image" style="display:none">
+      <p class="hint">Placeholder map — marker positions are relative to the image, not real-world coordinates.</p>
+
+      <div id="map-stage">
+        <img id="map-image" src="" alt="Map">
+        <div id="map-markers"></div>
+      </div>
+
+      <div class="between" style="margin-top:10px">
+        <span class="hint" id="map-name"></span>
+        <div class="brow" style="margin:0">
+          <input type="file" id="map-replace-input" accept="image/*" style="display:none" onchange="onMapImageSelected(event)">
+          <button type="button" class="btn btn-g" onclick="document.getElementById('map-replace-input').click()">Replace map</button>
+        </div>
+      </div>
+
+      <div class="rf-sec">
+        <div class="rf-sec-title">Not on the map yet</div>
+        <div id="map-unplaced-list"><p class="hint">All nodes are placed.</p></div>
+      </div>
+    </div>
+  </section>
+</div><!-- #map-view -->
+
 <!-- ===== PLACE / RELOCATE SHEET (device + gateway) ===== -->
 <div id="place-ov" class="sheet-ov" onclick="closeSheetBackdrop(event)">
   <div class="sheet-panel">
@@ -594,7 +644,12 @@
 
       <div class="h-sec">
         <h3>History</h3>
-        <p>The <strong>Live | History</strong> switch at the top swaps this whole view for a browsable log of every measurement — filterable by device, newest first, with the PDR summary right in the list. Tap a row for the full detail: the device's location/photos/PDR-per-SF/RSSI chart/CSV on the left, and the gateway's position <em>during that run</em> on the right — useful once the gateway has moved since.</p>
+        <p>The <strong>Live | History | Map</strong> switch at the top swaps this whole view for a browsable log of every measurement — filterable by device, newest first, with the PDR summary right in the list. Tap a row for the full detail: the device's location/photos/PDR-per-SF/RSSI chart/CSV on the left, and the gateway's position <em>during that run</em> on the right — useful once the gateway has moved since.</p>
+      </div>
+
+      <div class="h-sec">
+        <h3>Map (placeholder)</h3>
+        <p>Upload any image — the first will likely be an isometric building view — then drag the gateway and device markers onto it. Positions are just fractions of the image, <strong>not real-world coordinates</strong>: this is an early proof-of-concept for the editor itself, not a precise site map yet. A tap on an unplaced node drops it at the center; drag it into place afterward.</p>
       </div>
 
     </div><!-- .h-body -->

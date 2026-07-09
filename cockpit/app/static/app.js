@@ -1641,15 +1641,21 @@ function switchView(view) {
   _currentView = view;
   const liveBtn = document.getElementById('vsw-live');
   const histBtn = document.getElementById('vsw-history');
+  const mapBtn = document.getElementById('vsw-map');
   if (liveBtn) liveBtn.classList.toggle('active', view === 'live');
   if (histBtn) histBtn.classList.toggle('active', view === 'history');
+  if (mapBtn) mapBtn.classList.toggle('active', view === 'map');
   const mainEl = document.getElementById('main');
   const histEl = document.getElementById('history-view');
+  const mapEl = document.getElementById('map-view');
   if (mainEl) mainEl.style.display = view === 'live' ? '' : 'none';
   if (histEl) histEl.style.display = view === 'history' ? '' : 'none';
+  if (mapEl) mapEl.style.display = view === 'map' ? '' : 'none';
   if (view === 'history') {
     closeHistoryDetail(); // always land on the list, never a stale detail
     loadHistoryList();
+  } else if (view === 'map') {
+    loadMapView();
   }
 }
 
@@ -1794,6 +1800,208 @@ function renderHistoryDetail(detail, stats, series) {
     <div><strong>Started:</strong> ${fmtTime(run.started_at)}</div>
     <div><strong>Ended:</strong> ${run.ended_at ? fmtTime(run.ended_at) : '—'}</div>
     <div><strong>Packets:</strong> ${run.packets}</div>`;
+}
+
+// ---------------------------------------------------------------------------
+// F-0008 Map / Placement Editor (PoC) — drag node markers onto an uploaded
+// map image. Explicitly a placeholder: the first map is an isometric
+// building view whose perspective distorts real coordinates, so x/y are
+// fractions (0..1) of the image, not real-world positions — this is about
+// the editor UX + persistence, not accurate positioning yet.
+// ---------------------------------------------------------------------------
+
+let _mapFloorplan = null; // {id, name, image_url} | null
+let _mapMarkers = [];     // [{node_id, name, kind, x, y}]
+
+async function loadMapView() {
+  try {
+    const data = await apiJSON('/api/floorplan');
+    _mapFloorplan = data.floorplan;
+    _mapMarkers = data.markers || [];
+    renderMapView();
+  } catch (e) {
+    toast(`Error loading map: ${e.message}`);
+  }
+}
+
+function renderMapView() {
+  const emptyEl = document.getElementById('map-empty');
+  const withEl = document.getElementById('map-with-image');
+  if (!emptyEl || !withEl) return;
+
+  if (!_mapFloorplan) {
+    emptyEl.style.display = '';
+    withEl.style.display = 'none';
+    return;
+  }
+  emptyEl.style.display = 'none';
+  withEl.style.display = '';
+
+  const img = document.getElementById('map-image');
+  if (img) img.src = _mapFloorplan.image_url;
+  const nameEl = document.getElementById('map-name');
+  if (nameEl) nameEl.textContent = _mapFloorplan.name;
+
+  renderMapMarkers();
+  renderMapUnplacedList();
+  initMapDrag();
+}
+
+/** Upload (empty state) or replace (with a map already) — same handler,
+ * both file inputs feed it. */
+async function onMapImageSelected(e) {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = ''; // allow re-selecting the same file again
+  if (!file) return;
+
+  const msg = document.getElementById('map-upload-msg');
+  if (msg) setMsg(msg, 'Uploading…');
+  try {
+    const fd = new FormData();
+    fd.append('file', file, file.name || 'map.jpg');
+    const res = await fetch('/api/floorplan', { method: 'POST', body: fd });
+    if (res.status === 401) { toast('Not authenticated.'); return; }
+    if (!res.ok) throw new Error(await extractDetail(res));
+    if (msg) setMsg(msg, '');
+    toast('Map uploaded.');
+    await loadMapView();
+  } catch (err) {
+    toast(`Upload failed: ${err.message}`);
+    if (msg) setMsg(msg, `Error: ${err.message}`, 'err');
+  }
+}
+
+/** Gateway vs. device markers are visually distinct (dot color + icon);
+ * both carry the node name label and a small remove ("x") action. Absolute
+ * positions (left/top %) come straight from x/y (fractions of the image). */
+function renderMapMarkers() {
+  const el = document.getElementById('map-markers');
+  if (!el) return;
+  el.innerHTML = _mapMarkers.map(m => `
+    <div class="map-marker map-marker-${esc(m.kind)}" data-node-id="${m.node_id}"
+         style="left:${(m.x * 100).toFixed(2)}%;top:${(m.y * 100).toFixed(2)}%">
+      <button type="button" class="map-marker-remove" onclick="removeMapMarker(${m.node_id})" title="Remove from map">×</button>
+      <div class="map-marker-dot">${m.kind === 'gateway' ? '⌂' : '●'}</div>
+      <div class="map-marker-label">${esc(m.name)}</div>
+    </div>`).join('');
+}
+
+/** Nodes with no marker yet on the current floorplan — tap one to place it
+ * at the map's center (a drag then fine-tunes the position). */
+function renderMapUnplacedList() {
+  const el = document.getElementById('map-unplaced-list');
+  if (!el) return;
+  const placedIds = new Set(_mapMarkers.map(m => m.node_id));
+  const unplaced = _nodes.filter(n => !placedIds.has(n.id));
+  if (!unplaced.length) { el.innerHTML = '<p class="hint">All nodes are placed.</p>'; return; }
+  el.innerHTML = unplaced.map(n => `
+    <button type="button" class="map-unplaced-chip" onclick="addNodeToMap(${n.id})">
+      <span class="map-unplaced-dot ${n.kind === 'gateway' ? 'gw' : ''}"></span>${esc(n.name)}
+    </button>`).join('');
+}
+
+async function addNodeToMap(nodeId) {
+  const ok = await saveMarkerPosition(nodeId, 0.5, 0.5); // "place at center"
+  if (ok) {
+    renderMapMarkers();
+    renderMapUnplacedList();
+  }
+}
+
+async function removeMapMarker(nodeId) {
+  try {
+    await apiJSON(`/api/marker/${nodeId}`, { method: 'DELETE' });
+    _mapMarkers = _mapMarkers.filter(m => m.node_id !== nodeId);
+    renderMapMarkers();
+    renderMapUnplacedList();
+  } catch (e) {
+    toast(`Error: ${e.message}`);
+  }
+}
+
+/** PUT /api/marker + keep the in-memory _mapMarkers cache in sync (creating
+ * the entry on a brand-new placement). Returns true on success so callers
+ * can decide whether to re-render or snap back. */
+async function saveMarkerPosition(nodeId, x, y) {
+  try {
+    await apiJSON('/api/marker', {
+      method: 'PUT',
+      body: JSON.stringify({ node_id: nodeId, x, y }),
+    });
+    const existing = _mapMarkers.find(m => m.node_id === nodeId);
+    if (existing) {
+      existing.x = x;
+      existing.y = y;
+    } else {
+      const node = _nodesById[nodeId];
+      _mapMarkers.push({ node_id: nodeId, name: node ? node.name : '', kind: node ? node.kind : 'device', x, y });
+    }
+    return true;
+  } catch (e) {
+    toast(`Could not save position: ${e.message}`);
+    return false;
+  }
+}
+
+/** Mouse + touch drag via the unified Pointer Events API, delegated on the
+ * stable #map-markers container (so it keeps working across re-renders —
+ * markers are replaced wholesale on every renderMapMarkers() call). Only
+ * ever wired once (subsequent loadMapView() calls reuse it). touch-action:
+ * none (CSS) on the stage/markers keeps a drag from also scrolling the
+ * page on a phone. */
+let _mapDragInitialized = false;
+
+function initMapDrag() {
+  if (_mapDragInitialized) return;
+  const markersEl = document.getElementById('map-markers');
+  const stageEl = document.getElementById('map-stage');
+  if (!markersEl || !stageEl) return;
+  _mapDragInitialized = true;
+
+  let dragEl = null;
+  let dragNodeId = null;
+  let pendingXY = null;
+
+  markersEl.addEventListener('pointerdown', (e) => {
+    if (e.target.closest('.map-marker-remove')) return; // let its own click fire, don't drag
+    const marker = e.target.closest('.map-marker');
+    if (!marker) return;
+    dragEl = marker;
+    dragNodeId = parseInt(marker.dataset.nodeId, 10);
+    pendingXY = null;
+    marker.classList.add('dragging');
+    marker.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+
+  markersEl.addEventListener('pointermove', (e) => {
+    if (!dragEl) return;
+    const rect = stageEl.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    const x = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    const y = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
+    dragEl.style.left = `${(x * 100).toFixed(2)}%`;
+    dragEl.style.top = `${(y * 100).toFixed(2)}%`;
+    pendingXY = { x, y };
+  });
+
+  function endDrag() {
+    if (!dragEl) return;
+    dragEl.classList.remove('dragging');
+    const nodeId = dragNodeId;
+    const xy = pendingXY;
+    dragEl = null;
+    dragNodeId = null;
+    pendingXY = null;
+    if (xy) {
+      saveMarkerPosition(nodeId, xy.x, xy.y).then(ok => {
+        if (!ok) renderMapMarkers(); // snap back to the last known-good position
+      });
+    }
+  }
+
+  markersEl.addEventListener('pointerup', endDrag);
+  markersEl.addEventListener('pointercancel', endDrag);
 }
 
 // ---------------------------------------------------------------------------
