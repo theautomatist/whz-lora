@@ -442,6 +442,84 @@ def test_list_runs_empty_for_unknown_node(workflow):
 
 
 # ---------------------------------------------------------------------------
+# GET /api/runs (no node_id) + GET /api/run/{id}/detail — F-0007 History view
+# ---------------------------------------------------------------------------
+
+
+def test_list_runs_without_node_id_returns_every_run(workflow):
+    d, gw_id = workflow
+    d.create_placement(gw_id, "EG", "flur", "site office", "", "")
+    n1, _ = d.upsert_node("device", "d1", "aaaa000000000001")
+    d.create_placement(n1, "3OG", "R301", "", "", "3dbi")
+    run1 = main.start_run(main.RunStartRequest(device_node_id=n1))
+    n2, _ = d.upsert_node("device", "d2", "bbbb000000000002")
+    d.create_placement(n2, "1OG", "R2", "", "", "3dbi")
+    run2 = main.start_run(main.RunStartRequest(device_node_id=n2))
+
+    data = _run(main.list_runs())
+    assert {r["id"] for r in data["runs"]} == {run1["id"], run2["id"]}
+    # newest first
+    assert data["runs"][0]["id"] == run2["id"]
+
+    r = next(r for r in data["runs"] if r["id"] == run1["id"])
+    assert r["run_id"] == run1["id"]
+    assert r["device"] == {"name": "d1", "eui": "aaaa000000000001"}
+    assert r["gateway_placement"] == {"floor": "EG", "room": "flur", "description": "site office"}
+    assert r["overall"]["received"] == 0  # no uplinks recorded yet
+    assert r["status"] == "running"
+
+
+def test_run_detail_returns_run_device_gateway_and_placements(workflow):
+    d, gw_id = workflow
+    d.create_placement(gw_id, "EG", "flur", "site office", "note-gw", "")
+    node_id, _ = d.upsert_node("device", "d1", "aaaa000000000001")
+    d.create_placement(node_id, "3OG", "R301", "am Fenster", "note-dev", "3dbi")
+    run = main.start_run(main.RunStartRequest(device_node_id=node_id))
+
+    result = _run(main.run_detail(run["id"]))
+
+    assert result["run"]["id"] == run["id"]
+    assert result["run"]["status"] == "running"
+    assert "ended_at" in result["run"]
+    assert result["device"] == {"name": "d1", "eui": "aaaa000000000001"}
+    assert result["gateway"]["eui"] == d.get_node(gw_id)["eui"]
+
+    dp = result["device_placement"]
+    assert dp["floor"] == "3OG"
+    assert dp["room"] == "R301"
+    assert dp["description"] == "am Fenster"
+    assert dp["note"] == "note-dev"
+    assert dp["antenna"] == "3dbi"
+    assert dp["photo_ids"] == []
+
+    gp = result["gateway_placement"]
+    assert gp["floor"] == "EG"
+    assert gp["room"] == "flur"
+    assert gp["description"] == "site office"
+    assert gp["note"] == "note-gw"
+    assert "antenna" not in gp  # gateway has no antenna concept
+
+
+def test_run_detail_includes_photo_ids(workflow):
+    d, gw_id = workflow
+    gp_id = d.create_placement(gw_id, "EG", "flur", "", "", "")
+    node_id, _ = d.upsert_node("device", "d1", "aaaa000000000001")
+    dp_id = d.create_placement(node_id, "3OG", "R301", "", "", "3dbi")
+    d.add_photo(dp_id, "photo1.jpg")
+    run = main.start_run(main.RunStartRequest(device_node_id=node_id))
+
+    result = _run(main.run_detail(run["id"]))
+    assert len(result["device_placement"]["photo_ids"]) == 1
+    assert result["gateway_placement"]["photo_ids"] == []
+
+
+def test_run_detail_404_for_unknown_run(workflow):
+    with pytest.raises(HTTPException) as exc_info:
+        _run(main.run_detail(999))
+    assert exc_info.value.status_code == 404
+
+
+# ---------------------------------------------------------------------------
 # Phase B — _resolve_schedule: pure run-start schedule defaulting
 # ---------------------------------------------------------------------------
 

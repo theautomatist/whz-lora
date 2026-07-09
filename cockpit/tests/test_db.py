@@ -347,11 +347,12 @@ def test_abort_running_runs_empty_is_noop():
 
 
 # ---------------------------------------------------------------------------
-# run history — list_runs_for_node joins placement + gateway description
+# run history — list_runs joins placement + device/gateway metadata;
+# node_id=None (F-0007 History view) returns every device's runs
 # ---------------------------------------------------------------------------
 
 
-def test_list_runs_for_node_includes_placement_metadata():
+def test_list_runs_includes_placement_metadata():
     d = _new_db()
     node_id, _ = d.upsert_node("device", "d1", "aaaa000000000001")
     gw_id, _ = d.upsert_node("gateway", "gw", "7076ff0064071a3d")
@@ -360,17 +361,21 @@ def test_list_runs_for_node_includes_placement_metadata():
     data_dir = tempfile.mkdtemp()
     run = d.start_run(node_id, dp, gp, "sf9", data_dir, "aaaa000000000001")
 
-    runs = d.list_runs_for_node(node_id)
+    runs = d.list_runs(node_id)
     assert len(runs) == 1
     r = runs[0]
     assert r["id"] == run["id"]
+    assert r["device_name"] == "d1"
+    assert r["device_eui"] == "aaaa000000000001"
     assert r["d_floor"] == "3OG"
     assert r["d_room"] == "R301"
     assert r["d_description"] == "desk"
+    assert r["g_floor"] == "EG"
+    assert r["g_room"] == "flur"
     assert r["g_description"] == "hallway spot"
 
 
-def test_list_runs_for_node_newest_first():
+def test_list_runs_newest_first():
     d = _new_db()
     node_id, _ = d.upsert_node("device", "d1", "aaaa000000000001")
     gw_id, _ = d.upsert_node("gateway", "gw", "7076ff0064071a3d")
@@ -384,9 +389,35 @@ def test_list_runs_for_node_newest_first():
     dp2 = d.create_placement(node_id, "1OG", "R2", "", "", "3dbi")
     run2 = d.start_run(node_id, dp2, gp, "sf9", data_dir, "aaaa000000000001")
 
-    runs = d.list_runs_for_node(node_id)
+    runs = d.list_runs(node_id)
     assert runs[0]["id"] == run2["id"]
     assert runs[1]["id"] == run1["id"]
+
+
+def test_list_runs_without_node_id_returns_every_device():
+    d = _new_db()
+    gw_id, _ = d.upsert_node("gateway", "gw", "7076ff0064071a3d")
+    gp = d.create_placement(gw_id, "EG", "flur", "", "", "")
+    data_dir = tempfile.mkdtemp()
+
+    n1, _ = d.upsert_node("device", "d1", "aaaa000000000001")
+    dp1 = d.create_placement(n1, "EG", "R1", "", "", "3dbi")
+    run1 = d.start_run(n1, dp1, gp, "sf9", data_dir, "aaaa000000000001")
+
+    n2, _ = d.upsert_node("device", "d2", "bbbb000000000002")
+    dp2 = d.create_placement(n2, "1OG", "R2", "", "", "3dbi")
+    run2 = d.start_run(n2, dp2, gp, "sf9", data_dir, "bbbb000000000002")
+
+    runs = d.list_runs()
+    assert {r["id"] for r in runs} == {run1["id"], run2["id"]}
+    # newest first regardless of device
+    assert runs[0]["id"] == run2["id"]
+    assert runs[1]["id"] == run1["id"]
+
+
+def test_list_runs_without_node_id_empty_when_no_runs():
+    d = _new_db()
+    assert d.list_runs() == []
 
 
 # ---------------------------------------------------------------------------
