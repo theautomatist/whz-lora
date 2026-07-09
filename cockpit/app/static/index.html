@@ -204,11 +204,15 @@
     </details>
   </section>
 
-  <!-- RF environment — always-on, passive (Trust & visibility); secondary, collapsed by default -->
+  <!-- RF Environment — full spectrum survey of the foreign LoRaWAN traffic
+       the gateway overhears (always-on, passive); secondary, collapsed by
+       default. Live via SSE 'coex' events, throttled re-fetch of
+       /api/rf-environment — see loadRfEnvironment()/scheduleRfEnvironmentRefresh(). -->
   <details class="card coll-card" id="card-coex">
-    <summary class="card-title"><span class="ti">◎</span> RF environment</summary>
+    <summary class="card-title"><span class="ti">◎</span> RF Environment</summary>
     <div class="card-body">
-      <p class="hint" style="margin-bottom:10px">The gateway overhears every LoRaWAN frame in range. CAF = foreign airtime fraction. At least 60 s needed for valid values per channel/SF.</p>
+      <p class="hint" style="margin-bottom:10px">This is what the gateway overhears in range — sparse if the area is RF-quiet. CAF = foreign airtime fraction.</p>
+
       <div class="coex-totals">
         <div class="coex-total-box own">
           <span class="coex-total-num" id="coex-own-count">0</span>
@@ -216,18 +220,42 @@
         </div>
         <div class="coex-total-box foreign">
           <span class="coex-total-num" id="coex-foreign-count">0</span>
-          <span class="coex-total-lbl">foreign networks</span>
+          <span class="coex-total-lbl">foreign frames</span>
         </div>
       </div>
-      <div class="coex-wrap">
-        <table class="coex-tbl">
-          <thead>
-            <tr><th>Channel</th><th>SF</th><th>Frames</th><th>CAF</th><th>Status</th></tr>
-          </thead>
-          <tbody id="coex-body">
-            <tr><td colspan="5" style="color:var(--muted);text-align:center;padding:10px">No data.</td></tr>
-          </tbody>
-        </table>
+
+      <div class="rf-sec">
+        <div class="rf-sec-title">Channel × SF heatmap (foreign frames)</div>
+        <div id="rf-heatmap"><p class="hint">No data yet.</p></div>
+        <div class="rf-heat-legend">
+          <span>low</span>
+          <div class="rf-heat-legend-bar"></div>
+          <span>high</span>
+        </div>
+      </div>
+
+      <div class="rf-sec">
+        <div class="rf-sec-title">Band busyness</div>
+        <div class="rf-busy-row">
+          <div class="rf-busy-rate"><span id="rf-frames-per-min">0</span><small>frames/min</small></div>
+          <svg id="rf-sparkline" class="rf-sparkline" viewBox="0 0 100 24" preserveAspectRatio="none" aria-hidden="true"></svg>
+        </div>
+        <div id="rf-mtype-breakdown" class="rf-mtype"></div>
+      </div>
+
+      <div class="rf-sec">
+        <div class="rf-sec-title">Networks</div>
+        <div id="rf-networks"><p class="hint">No data yet.</p></div>
+      </div>
+
+      <div class="rf-sec">
+        <div class="rf-sec-title">Foreign devices <span id="rf-device-count" class="rf-sec-count"></span></div>
+        <div id="rf-devices" class="rf-devices-list"><p class="hint">No data yet.</p></div>
+      </div>
+
+      <div class="rf-sec">
+        <div class="rf-sec-title">Vendors nearby <span class="hint">(from joins, best-effort)</span></div>
+        <div id="rf-vendors"><p class="hint">No data yet.</p></div>
       </div>
     </div>
   </details>
@@ -447,7 +475,7 @@
           <li><strong>Campaign status</strong> — overall progress as a ring; never at 0%, grows with every device placed/started/finished.</li>
           <li><strong>Overview</strong> — one card per device + gateway: location, run status, packets, live values, SF-sweep bar. Tapping selects it and opens the detail panel below.</li>
           <li><strong>Selected device / gateway</strong> — live signal visible immediately, location, photos, run status, sweep progress, PDR per SF, device status (last packet, measured send interval, config downlink); Place/Relocate, start/stop run, move gateway. The selector at the top right is an alternative to tapping the card.</li>
-          <li><strong>RF environment</strong> (collapsible) — always running passively, no start/stop needed; shows our vs. foreign frames and CAF per channel/SF.</li>
+          <li><strong>RF Environment</strong> (collapsible) — always running passively, no start/stop needed; a spectrum survey of what the gateway overhears: a channel × SF heatmap of foreign traffic, detected networks (TTN/private/other), a scrollable foreign-device list, nearby vendors (from joins, best-effort), and band busyness (frames/min + MType breakdown).</li>
           <li><strong>Device registration</strong> (collapsible) — register new OTAA devices in ChirpStack; also holds the bulk Vicki commands (set interval / read version) for all registered devices.</li>
         </ul>
       </div>

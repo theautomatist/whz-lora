@@ -245,7 +245,7 @@ body {
 .hero-sub { font-size: .80rem; color: var(--muted); line-height: 1.5; }
 
 /* =================================================================
-   COLLAPSIBLE CARD (secondary panels: Phase, Koex, Downlink, Geräte-Reg)
+   COLLAPSIBLE CARD (secondary panels: RF Environment, Device registration)
    <details class="card coll-card"><summary class="card-title">…</summary>
    <div class="card-body">…</div></details>  — collapsed by default.
    ================================================================= */
@@ -271,7 +271,7 @@ body {
 .coll-card .card-body { padding: 0 18px 18px; }
 
 /* =================================================================
-   NODE SELECT — compact, folded into the "Ausgewähltes …" card title
+   NODE SELECT — compact, folded into the "Selected …" card title
    ================================================================= */
 
 .node-select {
@@ -360,7 +360,7 @@ body {
   display: flex; align-items: center; justify-content: center;
 }
 
-/* Mini photo strip on Übersicht cards (endowment/IKEA — "your collection") */
+/* Mini photo strip on Overview cards (endowment/IKEA — "your collection") */
 .photo-strip { display: flex; gap: 4px; margin-top: 6px; }
 .photo-strip img {
   width: 26px; height: 26px; border-radius: 6px; object-fit: cover;
@@ -454,7 +454,7 @@ details[open].coll > summary::before { transform: rotate(90deg); }
 .abtn:active { transform: scale(.97); }
 
 /* =================================================================
-   DASHBOARD — NODE CARDS (Übersicht)
+   DASHBOARD — NODE CARDS (Overview)
    ================================================================= */
 
 #node-grid {
@@ -639,7 +639,7 @@ details[open].coll > summary::before { transform: rotate(90deg); }
 }
 
 /* =================================================================
-   GERÄTE-STATUS — "arbeitet die Konfiguration?" (Trust & Sichtbarkeit)
+   DEVICE STATUS — "is the configuration working?" (Trust & visibility)
    ================================================================= */
 
 .dstatus {
@@ -667,7 +667,10 @@ details[open].coll > summary::before { transform: rotate(90deg); }
 .dstatus-hint { font-size: .72rem; color: var(--muted); margin-top: 10px; line-height: 1.5; }
 
 /* =================================================================
-   FUNKUMGEBUNG — always-on totals (own vs. foreign frames)
+   RF ENVIRONMENT — always-on own/foreign totals + the spectrum-survey
+   sections below (heatmap, band busyness, networks, devices, vendors).
+   Flat/clean throughout — a single accent color at varying opacity for
+   the heatmap, thin flat bars elsewhere, no gradients/glow.
    ================================================================= */
 
 .coex-totals { display: flex; gap: 10px; margin: 2px 0 4px; }
@@ -686,25 +689,74 @@ details[open].coll > summary::before { transform: rotate(90deg); }
 }
 .coex-total-box.own .coex-total-num { color: var(--accent-light); }
 
-/* =================================================================
-   COEX TABLE
-   ================================================================= */
-
-.coex-wrap { overflow-x: auto; margin-top: 10px; }
-.coex-tbl { width: 100%; border-collapse: collapse; font-size: .82rem; }
-.coex-tbl th {
-  text-align: left; padding: 5px 8px;
-  background: var(--bg-elev2); border-bottom: 1px solid var(--line);
-  font-size: .67rem; font-weight: 700; text-transform: uppercase;
-  letter-spacing: .07em; color: var(--muted);
+.rf-sec { margin-top: 16px; }
+.rf-sec:first-of-type { margin-top: 4px; }
+.rf-sec-title {
+  font-size: .68rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .07em; color: var(--muted); margin-bottom: 8px;
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
 }
-.coex-tbl td { padding: 6px 8px; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
-.coex-tbl tr:last-child td { border-bottom: none; }
+.rf-sec-count { color: var(--accent-light); font-weight: 800; text-transform: none; letter-spacing: normal; }
 
-.tl-green     { color: var(--good); font-weight: 700; }
-.tl-yellow    { color: var(--warn); font-weight: 700; }
-.tl-red       { color: var(--bad);  font-weight: 700; }
-.tl-measuring { color: var(--muted);  font-style: italic; }
+/* Channel x SF heatmap */
+.rf-heat-grid { display: grid; grid-template-columns: 32px repeat(6, 1fr); gap: 2px; }
+.rf-heat-hdr {
+  font-size: .62rem; font-weight: 700; color: var(--muted);
+  text-align: center; padding: 3px 0;
+}
+.rf-heat-rowhdr { text-align: right; padding-right: 4px; }
+.rf-heat-cell {
+  aspect-ratio: 1; min-height: 22px;
+  border: 1px solid var(--line); border-radius: 4px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: .62rem; font-weight: 700; color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.rf-heat-legend { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: .64rem; color: var(--muted); }
+.rf-heat-legend-bar {
+  flex: 1; height: 8px; border-radius: 4px; border: 1px solid var(--line);
+  background: linear-gradient(90deg, rgba(34,211,238,.08), rgba(34,211,238,.9));
+}
+
+/* Band busyness */
+.rf-busy-row { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+.rf-busy-rate { display: flex; align-items: baseline; gap: 4px; flex-shrink: 0; }
+.rf-busy-rate span { font-size: 1.3rem; font-weight: 800; color: var(--text); font-variant-numeric: tabular-nums; }
+.rf-busy-rate small { font-size: .66rem; color: var(--muted); }
+.rf-sparkline { flex: 1; height: 24px; }
+.rf-spark-bar { fill: var(--accent1); }
+
+.rf-mtype { display: flex; gap: 6px; flex-wrap: wrap; }
+.rf-mtype-chip {
+  font-size: .68rem; font-weight: 700; color: var(--muted);
+  background: var(--bg-elev); border: 1px solid var(--line);
+  border-radius: 999px; padding: 3px 9px;
+}
+
+/* Networks */
+.rf-net-row { margin-bottom: 8px; }
+.rf-net-hdr { display: flex; justify-content: space-between; gap: 8px; font-size: .74rem; margin-bottom: 3px; }
+.rf-net-label { font-weight: 700; color: var(--text); }
+.rf-net-count { color: var(--muted); font-variant-numeric: tabular-nums; }
+.rf-net-bar-track { height: 6px; border-radius: 3px; background: var(--bg-elev3); overflow: hidden; }
+.rf-net-bar-fill { height: 100%; background: var(--accent1); border-radius: 3px; }
+
+/* Foreign devices */
+.rf-devices-list { max-height: 220px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+.rf-dev-row {
+  display: grid; grid-template-columns: 1fr auto auto auto auto; gap: 8px;
+  align-items: center; font-size: .72rem; padding: 5px 0;
+  border-bottom: 1px solid var(--line);
+}
+.rf-dev-row:last-child { border-bottom: none; }
+.rf-dev-net { color: var(--muted); font-size: .66rem; }
+
+/* Vendors */
+.rf-vendor-row {
+  display: flex; justify-content: space-between; gap: 8px;
+  font-size: .74rem; padding: 4px 0; border-bottom: 1px solid var(--line);
+}
+.rf-vendor-row:last-child { border-bottom: none; }
 
 /* =================================================================
    GENERIC TABLE (device list, run history)
