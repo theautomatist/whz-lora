@@ -139,10 +139,6 @@ body {
   transition: color var(--t-fast), border-color var(--t-fast), background var(--t-fast), box-shadow var(--t-fast);
 }
 
-/* phase pill */
-#pill-phase.sf9  { color: var(--sf9-color);  border-color: var(--sf9-color);  background: var(--sf9-dim); }
-#pill-phase.sf12 { color: var(--sf12-color); border-color: var(--sf12-color); background: var(--sf12-dim); }
-
 /* run pill (header + selected panel) */
 .pill.on { color: var(--bad); border-color: var(--bad); background: rgba(248,113,113,.12); }
 
@@ -372,48 +368,7 @@ body {
 }
 
 /* =================================================================
-   PHASE CARD
-   ================================================================= */
-
-#phase-big {
-  font-size: 1.55rem; font-weight: 800;
-  margin-bottom: 14px; transition: color var(--t-med);
-  color: var(--adr-color);
-}
-#phase-big.sf9  { color: var(--sf9-color);  }
-#phase-big.sf12 { color: var(--sf12-color); }
-#phase-big.adr  { color: var(--adr-color);  }
-
-.phase-grid {
-  display: grid; grid-template-columns: repeat(3, 1fr);
-  gap: 8px; margin-bottom: 10px;
-}
-@media (max-width: 480px) {
-  .phase-grid { grid-template-columns: 1fr; }
-}
-
-.pbtn {
-  display: flex; flex-direction: column;
-  align-items: center; justify-content: center;
-  gap: 5px; padding: 12px 8px;
-  border: 2px solid var(--line); border-radius: var(--radius-sm);
-  background: var(--bg-elev2); cursor: pointer; min-height: 74px;
-  text-align: center; transition: border-color var(--t-fast), background var(--t-fast), transform var(--t-fast);
-}
-.pbtn .lbl { font-size: 0.84rem; font-weight: 700; color: var(--text); transition: color var(--t-fast); }
-.pbtn .sub { font-size: 0.67rem; color: var(--muted); line-height: 1.35; }
-.pbtn:hover:not([data-a]) { border-color: var(--muted); }
-.pbtn:active { transform: scale(.97); }
-
-.pbtn[data-a="sf9"]  { border-color: var(--sf9-color);  background: var(--sf9-dim);  }
-.pbtn[data-a="sf9"]  .lbl { color: var(--sf9-color); }
-.pbtn[data-a="sf12"] { border-color: var(--sf12-color); background: var(--sf12-dim); }
-.pbtn[data-a="sf12"] .lbl { color: var(--sf12-color); }
-.pbtn[data-a="adr"]  { border-color: var(--accent1);    background: var(--accent-dim); }
-.pbtn[data-a="adr"]  .lbl { color: var(--accent-light); }
-
-/* =================================================================
-   COLLAPSIBLE (details/summary) — nested (e.g. Vicki, Verlauf, Anpassen)
+   COLLAPSIBLE (details/summary) — nested (e.g. Vicki, History, Customize)
    ================================================================= */
 
 .coll { border-top: 1px solid var(--line); margin-top: 12px; }

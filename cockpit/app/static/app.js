@@ -1,5 +1,5 @@
-/* app.js — Feldtest-Cockpit frontend (vanilla JS, kein Framework)
-   F-0006 Feldmess-Workflow — device-centric, no GPS.
+/* app.js — Field-Test Cockpit frontend (vanilla JS, no framework)
+   F-0006 field-measurement workflow — device-centric, no GPS.
    Visual/UX layer applies 6 psychology principles (smart defaults,
    goal-gradient, reciprocity, endowment/IKEA, loss aversion, contrast/
    anchoring) on top of the unchanged backend contracts. */
@@ -11,7 +11,7 @@
 
 const _devMetrics = {};   // { dev_eui: { rssi, snr, sf, f_cnt, pdr, acked, downlinks_sent, dl_pdr, lastUplinkAt, intervalSeconds } }
 const _coexData   = {};   // { "ch<n>_sf<n>": { channel, sf, frames, caf, tl } }
-let _coexOwn     = 0;      // running total of frames classified as ours (Funkumgebung, always-on)
+let _coexOwn     = 0;      // running total of frames classified as ours (RF environment, always-on)
 let _coexForeign = 0;      // running total of frames classified as foreign networks
 let _currentDevices = []; // last /api/devices (ChirpStack) result — used by Vicki bulk
 
@@ -20,7 +20,7 @@ let _nodesById  = {};
 let _selectedNodeId = null;
 let _prevDone   = {};     // { nodeId: bool } — tracks last_run.status==='done' to fire the celebration once
 
-let _devConfigStatus = null; // { nodeId, last_uplink_at, interval_seconds, queued, last_downlink_at } — Geräte-Status (Trust & Sichtbarkeit), fetched only for the selected device
+let _devConfigStatus = null; // { nodeId, last_uplink_at, interval_seconds, queued, last_downlink_at } — Device status (Trust & visibility), fetched only for the selected device
 
 let _sheetMode    = null; // 'device' | 'gateway'
 let _sheetAntenna = '3dbi';
@@ -39,13 +39,13 @@ function toast(msg, ms = 2500) {
 }
 
 // ---------------------------------------------------------------------------
-// API-Helfer
+// API helpers
 // ---------------------------------------------------------------------------
 
 async function apiFetch(path, opts = {}) {
   const defaults = { headers: { 'Content-Type': 'application/json' } };
   const res = await fetch(path, Object.assign(defaults, opts));
-  if (res.status === 401) { toast('Nicht authentifiziert — Browser-Dialog verwenden.'); throw new Error('401'); }
+  if (res.status === 401) { toast('Not authenticated — use the browser dialog.'); throw new Error('401'); }
   return res;
 }
 
@@ -75,13 +75,13 @@ async function uploadPhoto(placementId, file) {
   const fd = new FormData();
   fd.append('file', file, file.name || 'photo.jpg');
   const res = await fetch(`/api/photo/${placementId}`, { method: 'POST', body: fd });
-  if (res.status === 401) { toast('Nicht authentifiziert.'); throw new Error('401'); }
+  if (res.status === 401) { toast('Not authenticated.'); throw new Error('401'); }
   if (!res.ok) throw new Error(await extractDetail(res));
   return res.json();
 }
 
 // ---------------------------------------------------------------------------
-// Kampagnen-Status (Hero) — goal-gradient, never zero (principle 2)
+// Campaign status (Hero) — goal-gradient, never zero (principle 2)
 // ---------------------------------------------------------------------------
 
 const HERO_RING_R    = 52;
@@ -129,14 +129,14 @@ function renderHero() {
   pctEl.textContent = `${Math.round(progress * 100)}%`;
   ringFill.style.strokeDashoffset = `${HERO_RING_CIRC * (1 - progress)}`;
 
-  const parts = [gatewayPlaced ? 'Gateway steht ✓' : 'Gateway noch nicht platziert'];
-  if (deviceCount > 0) parts.push(`${doneCount}/${deviceCount} Geräte vermessen`);
-  if (runningCount > 0) parts.push(`${runningCount} ${runningCount === 1 ? 'läuft' : 'laufen'}`);
+  const parts = [gatewayPlaced ? 'Gateway placed ✓' : 'Gateway not placed yet'];
+  if (deviceCount > 0) parts.push(`${doneCount}/${deviceCount} devices measured`);
+  if (runningCount > 0) parts.push(`${runningCount} running`);
   subEl.textContent = parts.join(' · ');
 }
 
 // ---------------------------------------------------------------------------
-// Node-Auswahl + Übersicht (GET /api/nodes)
+// Node selection + Overview (GET /api/nodes)
 // ---------------------------------------------------------------------------
 
 async function loadNodes() {
@@ -156,16 +156,16 @@ async function loadNodes() {
     renderNodeSelect();
     renderSelectedNode();
     renderNodeDashboard();
-    refreshDeviceStatus(); // fire-and-forget — Geräte-Status (Trust & Sichtbarkeit)
+    refreshDeviceStatus(); // fire-and-forget — Device status (Trust & visibility)
   } catch (e) {
-    toast(`Fehler beim Laden der Geräte: ${e.message}`);
+    toast(`Error loading devices: ${e.message}`);
   }
 }
 
 function renderNodeSelect() {
   const sel = document.getElementById('node-select');
   if (!_nodes.length) {
-    sel.innerHTML = '<option value="">— keine Geräte —</option>';
+    sel.innerHTML = '<option value="">— no devices —</option>';
     return;
   }
   sel.innerHTML = _nodes.map(n =>
@@ -180,15 +180,15 @@ function onNodeSelect() {
   if (!isNaN(id)) selectNode(id);
 }
 
-/** Select a node. When *scroll* is true (card tap in the Übersicht), the
- * "Ausgewähltes Gerät / Gateway" detail panel is scrolled into view. */
+/** Select a node. When *scroll* is true (card tap in the Overview), the
+ * "Selected device / gateway" detail panel is scrolled into view. */
 function selectNode(id, scroll = false) {
   _selectedNodeId = id;
   const sel = document.getElementById('node-select');
   if (sel) sel.value = String(id);
   renderSelectedNode();
   renderNodeDashboard();
-  refreshDeviceStatus(); // fire-and-forget — Geräte-Status (Trust & Sichtbarkeit)
+  refreshDeviceStatus(); // fire-and-forget — Device status (Trust & visibility)
   if (scroll) {
     const panel = document.getElementById('card-selected');
     if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -199,25 +199,25 @@ function selectNode(id, scroll = false) {
 // Reciprocity — live signal shown immediately on selection (principle 3)
 // ---------------------------------------------------------------------------
 
-/** sehr gut / gut / grenzwertig / schlecht — same thresholds as rssiClass,
+/** excellent / good / marginal / poor — same thresholds as rssiClass,
  * labelled so the number is never shown "bare" (contrast/anchoring). */
 function rssiQualityLabel(v) {
   if (v == null) return { cls: '', label: '—' };
-  if (v > -80)  return { cls: 'm-good', label: 'sehr gut' };
-  if (v > -110) return { cls: 'm-ok',   label: 'gut' };
-  if (v > -120) return { cls: 'm-warn', label: 'grenzwertig' };
-  return { cls: 'm-bad', label: 'schlecht' };
+  if (v > -80)  return { cls: 'm-good', label: 'excellent' };
+  if (v > -110) return { cls: 'm-ok',   label: 'good' };
+  if (v > -120) return { cls: 'm-warn', label: 'marginal' };
+  return { cls: 'm-bad', label: 'poor' };
 }
 
 function fmtAgo(ms) {
   if (ms == null) return '';
   const s = Math.max(0, Math.floor(ms / 1000));
-  if (s < 5) return 'gerade eben';
-  if (s < 60) return `vor ${s} s`;
+  if (s < 5) return 'just now';
+  if (s < 60) return `${s} s ago`;
   const m = Math.floor(s / 60);
-  if (m < 60) return `vor ${m} min`;
+  if (m < 60) return `${m} min ago`;
   const h = Math.floor(m / 60);
-  return `vor ${h} h`;
+  return `${h} h ago`;
 }
 
 /** ≥60 -> "~N min" (rounded), else "~N s"; null -> "—". Shows the actual
@@ -239,18 +239,18 @@ function ageFromUplinkAt(lastUplinkAt) {
   return fmtAgo(Date.now() - new Date(lastUplinkAt).getTime());
 }
 
-/** "Letztes Paket: vor 12 s · Sendeintervall: ~5 min" — small muted
- * metadata line shown on each Übersicht card (the selected-device panel
- * shows the same two facts, more prominently, in the Geräte-Status block
+/** "Last packet: 12 s ago · Send interval: ~5 min" — small muted
+ * metadata line shown on each Overview card (the selected-device panel
+ * shows the same two facts, more prominently, in the Device status block
  * instead — not repeated here). */
 function metaLineText(m) {
   const age = m ? ageFromUplinkAt(m.lastUplinkAt) : '—';
   const interval = m ? fmtInterval(m.intervalSeconds) : '—';
-  return `Letztes Paket: ${age} · Sendeintervall: ${interval}`;
+  return `Last packet: ${age} · Send interval: ${interval}`;
 }
 
-/** Big RSSI number + quality label only — "Letztes Paket"/"Sendeintervall"
- * live exclusively in the Geräte-Status block below (no duplication). */
+/** Big RSSI number + quality label only — "Last packet"/"Send interval"
+ * live exclusively in the Device status block below (no duplication). */
 function renderSignalHero(node) {
   const wrap = document.getElementById('signal-hero');
   if (!wrap) return;
@@ -271,8 +271,8 @@ function renderSignalHero(node) {
 
 let _signalAgeTimer = null;
 
-/** Cheap 1 s ticker — updates every visible Übersicht card's "vor Xs" meta
- * line and the Geräte-Status block's age text, no re-render (plain
+/** Cheap 1 s ticker — updates every visible Overview card's "Xs ago" meta
+ * line and the Device status block's age text, no re-render (plain
  * textContent updates / renderDeviceStatusBlock is itself cheap). */
 function startSignalAgeTicker() {
   if (_signalAgeTimer) return;
@@ -283,12 +283,12 @@ function startSignalAgeTicker() {
       const el = document.getElementById(`nc-meta-${n.id}`);
       if (el && m) el.textContent = metaLineText(m);
     }
-    renderDeviceStatusBlock(); // cheap re-render of "vor X" text, no fetch
+    renderDeviceStatusBlock(); // cheap re-render of "Xs ago" text, no fetch
   }, 1000);
 }
 
 // ---------------------------------------------------------------------------
-// Ausgewähltes Gerät / Gateway
+// Selected device / gateway
 // ---------------------------------------------------------------------------
 
 function renderSelectedNode() {
@@ -311,10 +311,10 @@ function renderSelectedNode() {
   renderSignalHero(node);
 
   if (!node) {
-    nameEl.textContent = 'Keine Geräte verfügbar';
+    nameEl.textContent = 'No devices available';
     euiEl.textContent = '';
     runPill.style.display = 'none';
-    placeInfo.innerHTML = '<div class="place-empty">Zuerst ein Gerät in ChirpStack registrieren (unten) und das Cockpit neu starten.</div>';
+    placeInfo.innerHTML = '<div class="place-empty">First register a device in ChirpStack (below) and restart the cockpit.</div>';
     photosEl.innerHTML = '';
     metricsEl.style.display = 'none';
     progressEl.style.display = 'none';
@@ -341,11 +341,11 @@ function renderSelectedNode() {
     ? `<div class="place-loc">${esc(p.floor || '—')} · ${esc(p.room || '—')}</div>
        <div class="place-desc">${esc(p.description || '—')}</div>
        ${p.note ? `<div class="place-note">${esc(p.note)}</div>` : ''}`
-    : `<div class="place-empty">Noch nicht platziert.</div>`;
+    : `<div class="place-empty">Not placed yet.</div>`;
 
-  // Photos of the current placement — "deine Sammlung" (endowment)
+  // Photos of the current placement — "your collection" (endowment)
   photosEl.innerHTML = (p && p.photo_ids && p.photo_ids.length)
-    ? p.photo_ids.map(id => `<div class="pthumb view"><img src="/api/photo/${id}" alt="Foto" loading="lazy"></div>`).join('')
+    ? p.photo_ids.map(id => `<div class="pthumb view"><img src="/api/photo/${id}" alt="Photo" loading="lazy"></div>`).join('')
     : '';
 
   if (isDevice) {
@@ -355,13 +355,13 @@ function renderSelectedNode() {
 
     runPill.style.display = '';
     if (run) {
-      runPill.textContent = `● Läuft — ${run.packets} Pakete`;
+      runPill.textContent = `● Running — ${run.packets} packets`;
       runPill.className = 'pill on';
     } else if (justDone) {
-      runPill.textContent = 'fertig ✓';
+      runPill.textContent = 'done ✓';
       runPill.className = 'pill';
     } else {
-      runPill.textContent = 'Kein Run';
+      runPill.textContent = 'No run';
       runPill.className = 'pill';
     }
 
@@ -369,13 +369,13 @@ function renderSelectedNode() {
     metricsEl.innerHTML = selMetricsHtml(_devMetrics[node.eui] || {});
 
     // Sweep timeline only while a run is actually active — a finished run's
-    // progress is already conveyed by the "fertig ✓" pill above and its own
-    // chart in Verlauf below, not repeated here.
+    // progress is already conveyed by the "done ✓" pill above and its own
+    // chart in History below, not repeated here.
     const progressHtml = run ? runProgressHtml(run, { compact: false }) : '';
     progressEl.style.display = progressHtml ? '' : 'none';
     progressEl.innerHTML = progressHtml;
 
-    btnPlace.textContent = 'Platzieren / Umsetzen';
+    btnPlace.textContent = 'Place / Relocate';
     btnPlace.style.display = '';
     btnGwMove.style.display = 'none';
     runStartBlock.style.display = run ? 'none' : '';
@@ -411,7 +411,7 @@ function updateHeaderPills(node) {
   if (node.kind === 'device') {
     const running = !!(node.active_run && node.active_run.status === 'running');
     runPill.style.display = '';
-    runPill.textContent = running ? '● Läuft' : 'Kein Run';
+    runPill.textContent = running ? '● Running' : 'No run';
     runPill.className = 'pill' + (running ? ' on' : '');
   } else {
     runPill.style.display = 'none';
@@ -420,7 +420,7 @@ function updateHeaderPills(node) {
 
 /** Compact, muted single line under the signal hero — SNR/SF only; the big
  * number in #signal-hero is the one and only place RSSI is shown, and PDR
- * now lives in the "PDR pro SF" headline block (per-SF, not this single
+ * now lives in the "PDR per SF" headline block (per-SF, not this single
  * always-empty legacy figure — see renderPdrSfBlock). */
 function selMetricsHtml(m) {
   return `
@@ -444,7 +444,7 @@ function updateSelectedMetrics(eui) {
 }
 
 // ---------------------------------------------------------------------------
-// Geräte-Status — "arbeitet die Konfiguration?" (Trust & Sichtbarkeit)
+// Device status — "is the configuration working?" (Trust & visibility)
 //
 // LoRaWAN Class A only delivers a queued downlink right after the device's
 // own next uplink — a silent device means nothing has reached it yet. This
@@ -459,7 +459,7 @@ function targetIntervalMinutes(node) {
   return (run && run.interval_minutes) ? run.interval_minutes : 5;
 }
 
-/** Duration without the "vor "/"seit " prefix, e.g. "12 s", "4 h". */
+/** Duration without the "ago"/"silent for" wrapper, e.g. "12 s", "4 h". */
 function fmtDuration(ms) {
   if (ms == null) return '';
   const s = Math.max(0, Math.floor(ms / 1000));
@@ -473,17 +473,17 @@ function fmtDuration(ms) {
 /** Most prominent/colored line in the block: never sent, silent, or fine. */
 function deviceStatusLastPacket(m, node) {
   if (!m || !m.lastUplinkAt) {
-    return { text: 'wartet auf erstes Paket ⚠', cls: 'm-warn' };
+    return { text: 'waiting for first packet ⚠', cls: 'm-warn' };
   }
   const ageMs = Date.now() - new Date(m.lastUplinkAt).getTime();
   const targetSeconds = targetIntervalMinutes(node) * 60;
   if (ageMs > targetSeconds * 2000) {
-    return { text: `seit ${fmtDuration(ageMs)} still ⚠`, cls: 'm-bad' };
+    return { text: `silent for ${fmtDuration(ageMs)} ⚠`, cls: 'm-bad' };
   }
   return { text: fmtAgo(ageMs), cls: 'm-good' };
 }
 
-/** "~5 min ✓ (Ziel erreicht)" vs. "~4 h ⚠ (noch Standard)" — tolerance of
+/** "~5 min ✓ (target reached)" vs. "~4 h ⚠ (still default)" — tolerance of
  * ±20 % (min. ±1 min) around the target counts as "reached". */
 function deviceStatusInterval(m, node) {
   if (!m || m.intervalSeconds == null) return { text: '—', cls: '' };
@@ -491,12 +491,12 @@ function deviceStatusInterval(m, node) {
   const measuredMin = m.intervalSeconds / 60;
   const tolerance = Math.max(1, target * 0.2);
   const reached = Math.abs(measuredMin - target) <= tolerance;
-  const text = `${fmtInterval(m.intervalSeconds)} ${reached ? '✓ (Ziel erreicht)' : '⚠ (noch Standard)'}`;
+  const text = `${fmtInterval(m.intervalSeconds)} ${reached ? '✓ (target reached)' : '⚠ (still default)'}`;
   return { text, cls: reached ? 'm-good' : 'm-warn' };
 }
 
-/** "5-min-Befehl in Queue" (still waiting for the device's next uplink) vs.
- * "gesendet ✓ vor X" (txack/ack seen) vs. "—" (no config downlink involved). */
+/** "5-min command queued" (still waiting for the device's next uplink) vs.
+ * "sent ✓ 12 s ago" (txack/ack seen) vs. "—" (no config downlink involved). */
 function deviceStatusConfigDl(status) {
   if (!status) return { text: '—', cls: '' };
   const queuedInterval = (status.queued || []).find(
@@ -504,16 +504,16 @@ function deviceStatusConfigDl(status) {
   );
   if (queuedInterval) {
     const minutes = parseInt(queuedInterval.data_hex.slice(2, 4), 16);
-    return { text: `${minutes}-min-Befehl in Queue`, cls: 'm-warn' };
+    return { text: `${minutes}-min command queued`, cls: 'm-warn' };
   }
   if (status.last_downlink_at) {
-    return { text: `gesendet ✓ ${ageFromUplinkAt(status.last_downlink_at)}`, cls: 'm-good' };
+    return { text: `sent ✓ ${ageFromUplinkAt(status.last_downlink_at)}`, cls: 'm-good' };
   }
   return { text: '—', cls: '' };
 }
 
 /** Re-render the block from the currently cached _devMetrics/_devConfigStatus
- * — cheap, called every second by the signal-age ticker for smooth "vor X"
+ * — cheap, called every second by the signal-age ticker for smooth "Xs ago"
  * text, with no network call. */
 function renderDeviceStatusBlock() {
   const block = document.getElementById('dev-status-block');
@@ -563,10 +563,10 @@ async function setDeviceInterval5() {
       method: 'POST',
       body: JSON.stringify({ minutes: 5 }),
     });
-    toast('5-Minuten-Befehl eingereiht — wirkt beim nächsten Uplink des Geräts.');
+    toast("5-minute command queued — takes effect on the device's next uplink.");
     await refreshDeviceStatus();
   } catch (e) {
-    toast(`Fehler: ${e.message}`);
+    toast(`Error: ${e.message}`);
   }
 }
 
@@ -574,20 +574,20 @@ async function wakeDeviceTest() {
   const node = _nodesById[_selectedNodeId];
   if (!node || node.kind !== 'device') return;
   try {
-    // 0x04 = HW/SW-Version lesen (bestätigt) — reuses the existing loopback.
+    // 0x04 = read HW/SW version (confirmed) — reuses the existing loopback.
     await apiJSON('/api/downlink', {
       method: 'POST',
       body: JSON.stringify({ dev_eui: node.eui, f_port: 1, data_hex: '04', count: true }),
     });
-    toast('Test-Downlink eingereiht — Gerät antwortet beim nächsten Uplink.');
+    toast('Test downlink queued — device replies on its next uplink.');
     await refreshDeviceStatus();
   } catch (e) {
-    toast(`Fehler: ${e.message}`);
+    toast(`Error: ${e.message}`);
   }
 }
 
 // ---------------------------------------------------------------------------
-// Run-Fortschritt — smooth client-side ticking between SSE events, snapped
+// Run progress — smooth client-side ticking between SSE events, snapped
 // back to server truth (segment_index/current_sf/done) whenever a fresh
 // /api/nodes payload arrives (loadNodes(), triggered by the 'nodes' SSE
 // event or the 30 s ticker).
@@ -627,16 +627,16 @@ function liveRunProgress(run) {
 }
 
 /** Whole-hours "elapsed of total" — anchors the part against the whole
- * plan (contrast/anchoring), e.g. "14 h von 24 h" instead of a bare
- * "noch 10 h" that hides how big the plan actually is. */
+ * plan (contrast/anchoring), e.g. "14 h of 24 h" instead of a bare
+ * "10 h left" that hides how big the plan actually is. */
 function fmtHoursOfTotal(elapsedSeconds, totalSeconds) {
   const eh = Math.floor(Math.max(0, elapsedSeconds) / 3600);
   const th = Math.max(1, Math.round(totalSeconds / 3600));
-  return `${eh} h von ${th} h`;
+  return `${eh} h of ${th} h`;
 }
 
 /** Glowing segmented SF-sweep timeline (wow factor) + an anchored label:
- * "SF9 · 2 von 3 SF-Stufen · 14 h von 24 h". Returns '' for a run with no
+ * "SF9 · 2 of 3 SF stages · 14 h of 24 h". Returns '' for a run with no
  * schedule (Phase A fixed run) — caller decides what to show instead. */
 function runProgressHtml(run, opts = {}) {
   if (!run || !run.planned_seconds || !run.sf_schedule || !run.sf_schedule.length) return '';
@@ -646,7 +646,7 @@ function runProgressHtml(run, opts = {}) {
   const idx = live.segmentIndex ?? 0;
   const total = run.sf_schedule.length;
   const sfLabel = live.currentSf != null ? `SF${live.currentSf}` : '—';
-  const stepsLabel = `${Math.min(idx + 1, total)} von ${total} SF-Stufen`;
+  const stepsLabel = `${Math.min(idx + 1, total)} of ${total} SF stages`;
   const timeLabel = fmtHoursOfTotal(live.elapsedSeconds || 0, run.planned_seconds);
 
   const segs = run.sf_schedule.map((seg, i) => {
@@ -668,7 +668,7 @@ function runProgressHtml(run, opts = {}) {
   }).join('');
 
   const label = run.done
-    ? `<strong>fertig ✓</strong> · ${esc(stepsLabel)} · ${esc(timeLabel)}`
+    ? `<strong>done ✓</strong> · ${esc(stepsLabel)} · ${esc(timeLabel)}`
     : `<strong>${esc(sfLabel)}</strong> · ${esc(stepsLabel)} · ${esc(timeLabel)}`;
 
   return `
@@ -678,7 +678,7 @@ function runProgressHtml(run, opts = {}) {
 }
 
 // ---------------------------------------------------------------------------
-// "fertig ✓" celebration — one-shot pop/glow on the transition to done
+// "done ✓" celebration — one-shot pop/glow on the transition to done
 // ---------------------------------------------------------------------------
 
 function checkCelebration(node) {
@@ -711,17 +711,17 @@ function fireCelebration(nodeId) {
 // gateway-move conflict list (principle 5)
 // ---------------------------------------------------------------------------
 
-/** "SF7 ✓, SF9 läuft — SF12 fehlt · 142 Pakete" */
+/** "SF7 ✓, SF9 running — SF12 missing · 142 packets" */
 function sweepStatusText(run) {
   if (!run) return '';
-  if (!run.sf_schedule || !run.sf_schedule.length) return `${run.packets} Pakete`;
+  if (!run.sf_schedule || !run.sf_schedule.length) return `${run.packets} packets`;
   const idx = run.segment_index ?? 0;
   const doneParts = run.sf_schedule.slice(0, idx).map(s => `SF${s.sf} ✓`);
-  const current = run.sf_schedule[idx] ? [`SF${run.sf_schedule[idx].sf} läuft`] : [];
+  const current = run.sf_schedule[idx] ? [`SF${run.sf_schedule[idx].sf} running`] : [];
   const missing = run.sf_schedule.slice(idx + 1).map(s => `SF${s.sf}`);
   let text = doneParts.concat(current).join(', ');
-  if (missing.length) text += ` — ${missing.join('/')} fehlt`;
-  return `${text} · ${run.packets} Pakete`;
+  if (missing.length) text += ` — ${missing.join('/')} missing`;
+  return `${text} · ${run.packets} packets`;
 }
 
 // ---------------------------------------------------------------------------
@@ -730,7 +730,7 @@ function sweepStatusText(run) {
 
 let _confirmResolve = null;
 
-function confirmModal({ title, message, icon = '⚠️', okLabel = 'Bestätigen', cancelLabel = 'Abbrechen' }) {
+function confirmModal({ title, message, icon = '⚠️', okLabel = 'Confirm', cancelLabel = 'Cancel' }) {
   return new Promise(resolve => {
     _confirmResolve = resolve;
     document.getElementById('confirm-icon').textContent = icon;
@@ -757,7 +757,7 @@ function closeConfirmBackdrop(e) {
 }
 
 // ---------------------------------------------------------------------------
-// Run starten / stoppen (selected device) — timed SF-sweep
+// Start / stop run (selected device) — timed SF-sweep
 // ---------------------------------------------------------------------------
 
 const RUN_PRESETS = {
@@ -767,7 +767,7 @@ const RUN_PRESETS = {
   sf12:         [12],
 };
 
-/** Whether the "Downlink-Test" toggle is checked — read fresh on every run
+/** Whether the "Downlink test" toggle is checked — read fresh on every run
  * start (the checkbox itself isn't reset between renders, see index.html). */
 function isDownlinkTestEnabled() {
   const el = document.getElementById('run-downlink-test');
@@ -791,7 +791,7 @@ async function startSweepDefault() {
   });
 }
 
-/** "Anpassen" submit: build a schedule from the duration/interval/preset fields. */
+/** "Customize" submit: build a schedule from the duration/interval/preset fields. */
 async function startSweepCustom() {
   const hours       = parseFloat(document.getElementById('run-duration-h').value) || 24;
   const intervalMin = parseInt(document.getElementById('run-interval-min').value, 10) || 5;
@@ -822,14 +822,14 @@ async function startRunWithSchedule(payload) {
       body: JSON.stringify(Object.assign({ device_node_id: _selectedNodeId }, payload)),
     });
     if (res.ok) {
-      toast('Run gestartet — viel Erfolg mit der Messung!');
+      toast('Run started — good luck with the measurement!');
       setMsg(msg, '');
       await loadNodes();
     } else {
-      setMsg(msg, `Run nicht gestartet: ${await extractDetail(res)}`, 'err');
+      setMsg(msg, `Run not started: ${await extractDetail(res)}`, 'err');
     }
   } catch (e) {
-    setMsg(msg, `Fehler: ${e.message}`, 'err');
+    setMsg(msg, `Error: ${e.message}`, 'err');
   }
 }
 
@@ -846,14 +846,14 @@ async function stopSelectedRun() {
     const missing = run.sf_schedule.slice(idx + 1).map(s => `SF${s.sf}`);
     const statusText = sweepStatusText(run);
     const warnLine = missing.length
-      ? `Beim Abbruch fehlen die <strong>${esc(missing.join('/'))}</strong>-Daten.`
-      : 'Der letzte Abschnitt ist fast abgeschlossen.';
+      ? `Stopping now will leave the <strong>${esc(missing.join('/'))}</strong> data missing.`
+      : 'The last stage is almost complete.';
     const ok = await confirmModal({
       icon: '⚠️',
-      title: 'Messung wirklich beenden?',
-      message: `<p>${esc(statusText)}</p><p>${warnLine} Wirklich beenden?</p>`,
-      okLabel: 'Messung beenden',
-      cancelLabel: 'Weiterlaufen lassen',
+      title: 'Really end the measurement?',
+      message: `<p>${esc(statusText)}</p><p>${warnLine} Really end it?</p>`,
+      okLabel: 'End measurement',
+      cancelLabel: 'Keep running',
     });
     if (!ok) return;
   }
@@ -863,16 +863,16 @@ async function stopSelectedRun() {
       method: 'POST',
       body: JSON.stringify({ device_node_id: _selectedNodeId }),
     });
-    toast('Run gestoppt.');
+    toast('Run stopped.');
     setMsg(msg, '');
     await loadNodes();
   } catch (e) {
-    setMsg(msg, `Fehler: ${e.message}`, 'err');
+    setMsg(msg, `Error: ${e.message}`, 'err');
   }
 }
 
 // ---------------------------------------------------------------------------
-// Platzieren / Umsetzen / Gateway umsetzen — Bottom Sheet
+// Place / Relocate / Move gateway — Bottom Sheet
 // Smart defaults (principle 1) + outcome-stating submit labels (principle 4)
 // ---------------------------------------------------------------------------
 
@@ -906,14 +906,14 @@ function openPlaceSheet(mode) {
   const hasRun = !!(node.active_run && node.active_run.status === 'running');
   const submitBtn = document.getElementById('sheet-submit-btn');
   if (mode === 'gateway') {
-    document.getElementById('sheet-title').textContent = 'Gateway umsetzen';
-    submitBtn.textContent = 'Standort speichern';
+    document.getElementById('sheet-title').textContent = 'Move gateway';
+    submitBtn.textContent = 'Save location';
   } else if (hasRun) {
-    document.getElementById('sheet-title').textContent = 'Gerät umsetzen';
-    submitBtn.textContent = 'Umsetzen — altes Protokoll schließen';
+    document.getElementById('sheet-title').textContent = 'Relocate device';
+    submitBtn.textContent = 'Relocate — close current protocol';
   } else {
-    document.getElementById('sheet-title').textContent = 'Gerät platzieren';
-    submitBtn.textContent = 'Platzieren & Messung starten';
+    document.getElementById('sheet-title').textContent = 'Place device';
+    submitBtn.textContent = 'Place & start measurement';
   }
   document.getElementById('sheet-antenna-field').style.display = mode === 'gateway' ? 'none' : '';
   document.getElementById('sheet-photo-field').style.display   = mode === 'gateway' ? 'none' : '';
@@ -949,7 +949,7 @@ function closeSheetBackdrop(e) {
   if (e.target === document.getElementById('place-ov')) closeSheet();
 }
 
-// --- Foto-Aufnahme (bis zu 3) ---
+// --- Photo capture (up to 3) ---
 
 function onSheetPhotoSelected(e) {
   const file = e.target.files && e.target.files[0];
@@ -969,7 +969,7 @@ function renderSheetPhotoThumbs() {
   const wrap = document.getElementById('sheet-photo-thumbs');
   wrap.innerHTML = _sheetPhotos.map((f, i) => `
     <div class="pthumb">
-      <img src="${URL.createObjectURL(f)}" alt="Foto ${i + 1}">
+      <img src="${URL.createObjectURL(f)}" alt="Photo ${i + 1}">
       <button type="button" class="pthumb-x" onclick="removeSheetPhoto(${i})">×</button>
     </div>
   `).join('');
@@ -977,7 +977,7 @@ function renderSheetPhotoThumbs() {
   if (addBtn) addBtn.style.display = _sheetPhotos.length >= 3 ? 'none' : '';
 }
 
-// --- Absenden ---
+// --- Submit ---
 
 async function submitSheet() {
   const msg = document.getElementById('sheet-msg');
@@ -988,7 +988,7 @@ async function submitSheet() {
 
   const btn = document.getElementById('sheet-submit-btn');
   btn.disabled = true;
-  setMsg(msg, 'Speichere…');
+  setMsg(msg, 'Saving…');
 
   try {
     if (_sheetMode === 'gateway') {
@@ -997,7 +997,7 @@ async function submitSheet() {
         body: JSON.stringify({ floor, room, description, note }),
       });
       if (res.ok) {
-        toast('Gateway umgesetzt.');
+        toast('Gateway moved.');
         closeSheet();
         await loadNodes();
       } else if (res.status === 409) {
@@ -1005,11 +1005,11 @@ async function submitSheet() {
         const openRuns = (body.detail && body.detail.open_runs) || [];
         showGatewayConflict(openRuns);
       } else {
-        setMsg(msg, `Fehler: ${await extractDetail(res)}`, 'err');
+        setMsg(msg, `Error: ${await extractDetail(res)}`, 'err');
       }
     } else {
       const node = _nodesById[_selectedNodeId];
-      if (!node) { setMsg(msg, 'Kein Gerät ausgewählt.', 'err'); return; }
+      if (!node) { setMsg(msg, 'No device selected.', 'err'); return; }
 
       const hasRun = !!node.active_run;
       let placementId;
@@ -1035,15 +1035,15 @@ async function submitSheet() {
         try {
           await uploadPhoto(placementId, file);
         } catch (e) {
-          toast(`Foto-Upload fehlgeschlagen: ${e.message}`);
+          toast(`Photo upload failed: ${e.message}`);
         }
       }
 
       if (hasRun) {
         // /api/relocate already closed the old run and opened a new one.
-        toast('Umgesetzt — neues Protokoll gestartet.');
+        toast('Relocated — new protocol started.');
       } else {
-        // The sheet button promises "… & Messung starten" — actually start it,
+        // The sheet button promises "… & start measurement" — actually start it,
         // so the operator never needs a second tap.
         const total = 24 * 3600, per = Math.floor(total / 3);
         try {
@@ -1060,23 +1060,23 @@ async function submitSheet() {
               interval_minutes: 5,
             }),
           });
-          toast('Platziert — Messung gestartet (24 h Sweep).');
+          toast('Placed — measurement started (24 h sweep).');
         } catch (e) {
           // Most likely: gateway not placed yet (run/start → 409).
-          toast('Platziert, aber Messung NICHT gestartet — Gateway zuerst platzieren.');
+          toast('Placed, but measurement NOT started — place the gateway first.');
         }
       }
       closeSheet();
       await loadNodes();
     }
   } catch (e) {
-    setMsg(msg, `Fehler: ${e.message}`, 'err');
+    setMsg(msg, `Error: ${e.message}`, 'err');
   } finally {
     btn.disabled = false;
   }
 }
 
-/** Loss aversion: "⚠️ N laufende Messungen gehen verloren", each device's
+/** Loss aversion: "⚠️ N running measurements will be lost", each device's
  * captured/at-risk SF stages spelled out — using data already cached from
  * the last loadNodes() (no extra API call; the 409 body doesn't carry
  * sweep detail). */
@@ -1087,21 +1087,21 @@ function showGatewayConflict(openRuns) {
 
   const titleEl = document.getElementById('sheet-conflict-title');
   titleEl.textContent = openRuns.length === 1
-    ? '1 laufende Messung geht verloren'
-    : `${openRuns.length} laufende Messungen gehen verloren`;
+    ? '1 running measurement will be lost'
+    : `${openRuns.length} running measurements will be lost`;
 
   const list = document.getElementById('sheet-conflict-list');
   list.innerHTML = openRuns.length
     ? openRuns.map(r => {
         const liveRun = (_nodesById[r.device_node_id] && _nodesById[r.device_node_id].active_run) || null;
-        const detail = liveRun ? sweepStatusText(liveRun) : `${r.packets} Pakete · seit ${fmtTime(r.started_at)}`;
+        const detail = liveRun ? sweepStatusText(liveRun) : `${r.packets} packets · since ${fmtTime(r.started_at)}`;
         return `
           <div class="loss-row">
             <div class="loss-name">${esc(r.name)}</div>
             <div class="loss-detail">${esc(detail)}</div>
           </div>`;
       }).join('')
-    : '<div class="hint">Keine Details verfügbar.</div>';
+    : '<div class="hint">No details available.</div>';
 }
 
 async function forceGatewayMove() {
@@ -1114,16 +1114,16 @@ async function forceGatewayMove() {
       method: 'POST',
       body: JSON.stringify({ floor, room, description, note }),
     });
-    toast('Alle Runs quittiert, Gateway umgesetzt.');
+    toast('All runs acknowledged, gateway moved.');
     closeSheet();
     await loadNodes();
   } catch (e) {
-    toast(`Fehler: ${e.message}`);
+    toast(`Error: ${e.message}`);
   }
 }
 
 // ---------------------------------------------------------------------------
-// Verlauf (run history)
+// History (run history)
 // ---------------------------------------------------------------------------
 
 function onHistoryToggle(details) {
@@ -1133,25 +1133,25 @@ function onHistoryToggle(details) {
 async function loadHistory() {
   const body = document.getElementById('history-body');
   if (!body || _selectedNodeId == null) return;
-  body.innerHTML = '<p class="hint">Lädt…</p>';
+  body.innerHTML = '<p class="hint">Loading…</p>';
   try {
     const data = await apiJSON(`/api/runs?node_id=${_selectedNodeId}`);
     renderHistory(data.runs || []);
   } catch (e) {
-    body.innerHTML = `<p class="hint">Fehler: ${esc(e.message)}</p>`;
+    body.innerHTML = `<p class="hint">Error: ${esc(e.message)}</p>`;
   }
 }
 
 function renderHistory(runs) {
   const body = document.getElementById('history-body');
   // The active run's chart already lives at #sel-chart (always visible) —
-  // Verlauf only lists past/completed runs to avoid showing it twice.
+  // History only lists past/completed runs to avoid showing it twice.
   const pastRuns = runs.filter(r => r.status !== 'running');
-  if (!pastRuns.length) { body.innerHTML = '<p class="hint">Noch keine abgeschlossenen Runs.</p>'; return; }
+  if (!pastRuns.length) { body.innerHTML = '<p class="hint">No completed runs yet.</p>'; return; }
   body.innerHTML = `
     <div style="overflow-x:auto">
       <table class="dtbl">
-        <thead><tr><th>Standort</th><th>Status</th><th>Pakete</th><th>Start</th><th>CSV</th></tr></thead>
+        <thead><tr><th>Location</th><th>Status</th><th>Packets</th><th>Start</th><th>CSV</th></tr></thead>
         <tbody>
           ${pastRuns.map(r => `
             <tr>
@@ -1162,7 +1162,7 @@ function renderHistory(runs) {
               <td><a class="btn btn-g" href="/api/run/${r.id}/csv" target="_blank">↓</a></td>
             </tr>
             <tr class="hist-chart-row">
-              <td colspan="5"><div class="hist-chart" id="hist-chart-${r.id}"><p class="hint">Lädt…</p></div></td>
+              <td colspan="5"><div class="hist-chart" id="hist-chart-${r.id}"><p class="hint">Loading…</p></div></td>
             </tr>
           `).join('')}
         </tbody>
@@ -1173,11 +1173,11 @@ function renderHistory(runs) {
 }
 
 function histStatusLabel(s) {
-  return { running: 'Läuft', done: 'Fertig', aborted: 'Abgebrochen' }[s] || s;
+  return { running: 'Running', done: 'Done', aborted: 'Aborted' }[s] || s;
 }
 
 // ---------------------------------------------------------------------------
-// Verlauf — per-run RSSI/SNR/SF line chart (hand-rolled inline SVG, no
+// History — per-run RSSI/SNR/SF line chart (hand-rolled inline SVG, no
 // chart library / CDN). SF-stage colors mirror style.css's --sfN-color
 // tokens as literal hex (inline SVG stroke/fill attributes don't reliably
 // resolve CSS custom properties on every mobile browser).
@@ -1190,7 +1190,7 @@ const RUN_CHART_SF_COLORS = {
 };
 const RUN_CHART_DEFAULT_COLOR = '#8593a6'; // mirrors style.css --adr-color / --muted
 
-/** Charts in the Verlauf list are always expanded (no click-to-reveal) —
+/** Charts in History are always expanded (no click-to-reveal) —
  * fetch + render straight into the container renderHistory() already laid
  * out for this run. */
 async function loadRunChart(runId) {
@@ -1200,7 +1200,7 @@ async function loadRunChart(runId) {
     const data = await apiJSON(`/api/run/${runId}/series`);
     container.innerHTML = buildRunChartHtml(data);
   } catch (e) {
-    container.innerHTML = `<p class="hint">Fehler: ${esc(e.message)}</p>`;
+    container.innerHTML = `<p class="hint">Error: ${esc(e.message)}</p>`;
   }
 }
 
@@ -1236,7 +1236,7 @@ async function loadSelectedChart() {
 
   const run = node.active_run || node.last_run;
   if (!run) {
-    container.innerHTML = '<p class="hint">Noch keine Pakete in diesem Run.</p>';
+    container.innerHTML = '<p class="hint">No packets in this run yet.</p>';
     return;
   }
 
@@ -1247,14 +1247,14 @@ async function loadSelectedChart() {
     container.innerHTML = buildRunChartHtml(data);
   } catch (e) {
     if (_selectedNodeId !== nodeId) return;
-    container.innerHTML = `<p class="hint">Fehler: ${esc(e.message)}</p>`;
+    container.innerHTML = `<p class="hint">Error: ${esc(e.message)}</p>`;
   }
 }
 
 // ---------------------------------------------------------------------------
-// PDR pro SF — HEADLINE: delivery reliability per SF is the coverage metric
-// that actually matters (RSSI barely changes with SF, PDR does). Uplink-PDR
-// from the run's CSV vs. its commanded interval; Downlink-PDR from confirmed
+// PDR per SF — HEADLINE: delivery reliability per SF is the coverage metric
+// that actually matters (RSSI barely changes with SF, PDR does). Uplink PDR
+// from the run's CSV vs. its commanded interval; Downlink PDR from confirmed
 // downlink ACKs (GET /api/run/{id}/stats). Same active/last-run resolution
 // and staleness guard as loadSelectedChart() above.
 // ---------------------------------------------------------------------------
@@ -1278,7 +1278,7 @@ async function loadSelectedPdrStats() {
   } catch (e) {
     if (_selectedNodeId !== nodeId) return;
     const grid = document.getElementById('pdr-sf-grid');
-    if (grid) grid.innerHTML = `<p class="hint">Fehler: ${esc(e.message)}</p>`;
+    if (grid) grid.innerHTML = `<p class="hint">Error: ${esc(e.message)}</p>`;
   }
 }
 
@@ -1289,7 +1289,7 @@ function renderPdrSfBlock(data) {
   if (!grid) return;
 
   if (!data.sf_stats || !data.sf_stats.length) {
-    grid.innerHTML = '<p class="hint">Kein SF-Sweep in diesem Run — kein SF-Vergleich verfügbar.</p>';
+    grid.innerHTML = '<p class="hint">No SF sweep in this run — no SF comparison available.</p>';
     if (overallEl) overallEl.textContent = '';
     if (hintEl) hintEl.textContent = '';
     return;
@@ -1299,29 +1299,29 @@ function renderPdrSfBlock(data) {
 
   const o = data.overall;
   if (overallEl) {
-    overallEl.textContent = o.expected ? `Gesamt ${Math.round(o.pdr * 100)} %` : '';
+    overallEl.textContent = o.expected ? `Overall ${Math.round(o.pdr * 100)} %` : '';
   }
   if (hintEl) {
     hintEl.textContent = data.downlink_test
       ? ''
-      : 'Downlink-Test war für diesen Run deaktiviert — keine Downlink-PDR.';
+      : 'Downlink test was disabled for this run — no downlink PDR.';
   }
 }
 
-/** One SF's card: Uplink-PDR (empfangen/erwartet) and Downlink-PDR
- * (ACK-Rate), both colored via the shared pdrClass tiers; Ø RSSI/Ø SNR as
- * small secondary context. "—" (not 0 %) while a segment hasn't started
+/** One SF's card: Uplink PDR (received/expected) and Downlink PDR
+ * (ACK rate), both colored via the shared pdrClass tiers; Avg RSSI/Avg SNR
+ * as small secondary context. "—" (not 0 %) while a segment hasn't started
  * yet or no downlink test has fired for it. */
 function pdrSfCellHtml(s) {
   const upKnown = s.expected > 0;
   const upText = upKnown
-    ? `${Math.round(s.pdr * 100)} % <small>(${s.received}/${s.expected})</small>`
+    ? `${Math.round(s.pdr * 100)} % <small>(${s.received}/${s.expected})</small>`
     : '—';
   const upCls = upKnown ? pdrClass(s.pdr) : '';
 
   const dlKnown = s.dl_sent > 0;
   const dlText = dlKnown
-    ? `${Math.round(s.dl_pdr * 100)} % <small>(${s.dl_acked}/${s.dl_sent})</small>`
+    ? `${Math.round(s.dl_pdr * 100)} % <small>(${s.dl_acked}/${s.dl_sent})</small>`
     : '—';
   const dlCls = dlKnown ? pdrClass(s.dl_pdr) : '';
 
@@ -1337,8 +1337,8 @@ function pdrSfCellHtml(s) {
         <span class="pdr-sf-val ${dlCls}">${dlText}</span>
       </div>
       <div class="pdr-sf-sub">
-        <span class="${rssiClass(s.rssi_avg)}">Ø&nbsp;${fmtNum(s.rssi_avg)}&nbsp;dBm</span>
-        · <span class="${snrClass(s.snr_avg)}">Ø&nbsp;${fmtNum(s.snr_avg)}&nbsp;dB</span>
+        <span class="${rssiClass(s.rssi_avg)}">Avg&nbsp;${fmtNum(s.rssi_avg)}&nbsp;dBm</span>
+        · <span class="${snrClass(s.snr_avg)}">Avg&nbsp;${fmtNum(s.snr_avg)}&nbsp;dB</span>
       </div>
     </div>`;
 }
@@ -1348,7 +1348,7 @@ function pdrSfCellHtml(s) {
 function buildRunChartHtml(data) {
   const points = data.points || [];
   if (!points.length) {
-    return '<p class="hint">Noch keine Pakete in diesem Run.</p>';
+    return '<p class="hint">No packets in this run yet.</p>';
   }
 
   const W = 600, H = 200;
@@ -1412,7 +1412,7 @@ function buildRunChartHtml(data) {
   const snrSvg = snrPts.length > 1 ? `<polyline points="${snrPts.join(' ')}" class="rc-line-snr"/>` : '';
 
   const svg = `
-    <svg viewBox="0 0 ${W} ${H}" class="rc-svg" preserveAspectRatio="xMidYMid meet" role="img" aria-label="RSSI- und SNR-Verlauf">
+    <svg viewBox="0 0 ${W} ${H}" class="rc-svg" preserveAspectRatio="xMidYMid meet" role="img" aria-label="RSSI and SNR over time">
       <g>${gridSvg}</g>
       ${snrSvg}
       <g>${rssiSvg}</g>
@@ -1433,13 +1433,13 @@ function buildRunChartHtml(data) {
 }
 
 // ---------------------------------------------------------------------------
-// Übersicht — Node-Dashboard (device cards)
+// Overview — Node dashboard (device cards)
 // ---------------------------------------------------------------------------
 
 function renderNodeDashboard() {
   const grid = document.getElementById('node-grid');
   if (!_nodes.length) {
-    grid.innerHTML = '<div class="hint" style="padding:20px 0;text-align:center">Keine Geräte gefunden.</div>';
+    grid.innerHTML = '<div class="hint" style="padding:20px 0;text-align:center">No devices found.</div>';
     return;
   }
   const gateways = _nodes.filter(n => n.kind === 'gateway');
@@ -1452,14 +1452,14 @@ function renderNodeDashboard() {
   const summaryEl = document.getElementById('overview-summary');
   if (summaryEl) {
     summaryEl.style.display = doneCount > 0 ? '' : 'none';
-    summaryEl.textContent = doneCount > 0 ? `${doneCount} fertig` : '';
+    summaryEl.textContent = doneCount > 0 ? `${doneCount} done` : '';
   }
 }
 
 function gatewayCardHtml(n) {
   const loc = n.placement
     ? `${esc(n.placement.floor || '—')} · ${esc(n.placement.room || '—')}`
-    : 'nicht platziert';
+    : 'not placed';
   return `
     <div class="node-card gw-card ${n.id === _selectedNodeId ? 'selected' : ''}" id="nc-${n.id}" onclick="selectNode(${n.id}, true)">
       <div class="nc-top">
@@ -1476,13 +1476,13 @@ function deviceCardHtml(n) {
   const justDone = !running && n.last_run && n.last_run.status === 'done';
   const loc = n.placement
     ? `${esc(n.placement.floor || '—')} · ${esc(n.placement.room || '—')}`
-    : 'nicht platziert';
+    : 'not placed';
   const m = _devMetrics[n.eui] || {};
   const progressRun = n.active_run || n.last_run;
 
   const statusHtml = justDone
-    ? `<span class="nc-done">fertig ✓</span>`
-    : `<span class="nc-run ${running ? 'on' : ''}">${running ? '● Läuft' : 'kein Run'}</span>`;
+    ? `<span class="nc-done">done ✓</span>`
+    : `<span class="nc-run ${running ? 'on' : ''}">${running ? '● Running' : 'no run'}</span>`;
 
   return `
     <div class="node-card ${running ? 'running' : ''} ${n.id === _selectedNodeId ? 'selected' : ''}" id="nc-${n.id}" onclick="selectNode(${n.id}, true)">
@@ -1491,7 +1491,7 @@ function deviceCardHtml(n) {
         ${statusHtml}
       </div>
       <div class="nc-loc">${loc}</div>
-      ${running ? `<div class="nc-packets">${n.active_run.packets} Pakete</div>` : ''}
+      ${running ? `<div class="nc-packets">${n.active_run.packets} packets</div>` : ''}
       <div class="nc-metrics">${nodeCardMetricsHtml(m)}</div>
       <div class="nc-meta" id="nc-meta-${n.id}">${esc(metaLineText(m))}</div>
       ${progressRun ? runProgressHtml(progressRun, { compact: true }) : ''}
@@ -1504,12 +1504,12 @@ function deviceCardHtml(n) {
 function photoStripHtml(placement) {
   if (!placement || !placement.photo_ids || !placement.photo_ids.length) return '';
   return `<div class="photo-strip">${placement.photo_ids.slice(0, 3).map(id =>
-    `<img src="/api/photo/${id}" alt="Foto" loading="lazy">`
+    `<img src="/api/photo/${id}" alt="Photo" loading="lazy">`
   ).join('')}</div>`;
 }
 
-/** RSSI / SNR / SF only, per the Übersicht card spec (PDR stays in the
- * "Ausgewähltes Gerät" detail panel via selMetricsHtml). */
+/** RSSI / SNR / SF only, per the Overview card spec (PDR stays in the
+ * "Selected device" detail panel via selMetricsHtml). */
 function nodeCardMetricsHtml(m) {
   return `
     <span class="${rssiClass(m.rssi)}">${fmtNum(m.rssi)}&nbsp;dBm</span>
@@ -1532,7 +1532,7 @@ function updateNodeCardMetrics(eui) {
 }
 
 // ---------------------------------------------------------------------------
-// Farb-Helfer (reused across selected panel + dashboard cards)
+// Color helpers (reused across selected panel + dashboard cards)
 // ---------------------------------------------------------------------------
 
 function rssiClass(v) {
@@ -1560,7 +1560,7 @@ function pdrClass(v) {
 }
 
 // ---------------------------------------------------------------------------
-// Geräte-Registrierung (ChirpStack device list, Vicki bulk)
+// Device registration (ChirpStack device list, Vicki bulk)
 // ---------------------------------------------------------------------------
 
 async function registerDevice() {
@@ -1571,7 +1571,7 @@ async function registerDevice() {
   const msg      = document.getElementById('dev-msg');
 
   if (!name || !dev_eui || !app_key) {
-    setMsg(msg, 'Name, DevEUI und AppKey sind Pflichtfelder.', 'err');
+    setMsg(msg, 'Name, DevEUI and AppKey are required.', 'err');
     return;
   }
   try {
@@ -1579,11 +1579,11 @@ async function registerDevice() {
       method: 'POST',
       body: JSON.stringify({ name, dev_eui, app_key, join_eui }),
     });
-    setMsg(msg, `Registriert: ${data.dev_eui}`);
-    toast('Gerät registriert.');
+    setMsg(msg, `Registered: ${data.dev_eui}`);
+    toast('Device registered.');
     loadDevices();
   } catch (e) {
-    setMsg(msg, `Fehler: ${e.message}`, 'err');
+    setMsg(msg, `Error: ${e.message}`, 'err');
   }
 }
 
@@ -1592,7 +1592,7 @@ async function loadDevices() {
     const data = await apiJSON('/api/devices');
     renderDeviceList(data.devices || []);
   } catch (e) {
-    setMsg(document.getElementById('dev-msg'), `Fehler beim Laden: ${e.message}`, 'err');
+    setMsg(document.getElementById('dev-msg'), `Error loading: ${e.message}`, 'err');
   }
 }
 
@@ -1600,7 +1600,7 @@ function renderDeviceList(devices) {
   _currentDevices = devices;
   const tbody = document.getElementById('dev-list-body');
   if (!devices.length) {
-    tbody.innerHTML = '<tr><td colspan="4" style="color:var(--muted);text-align:center;padding:12px 0">— keine Geräte —</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="4" style="color:var(--muted);text-align:center;padding:12px 0">— no devices —</td></tr>';
     return;
   }
   tbody.innerHTML = devices.map(d => `
@@ -1616,14 +1616,14 @@ function renderDeviceList(devices) {
 async function sendVickiKeepalive() {
   const msg = document.getElementById('vicki-msg');
   if (!_currentDevices.length) {
-    setMsg(msg, 'Keine Geräte — zuerst Geräteliste laden (Geräte-Registrierung).', 'err');
+    setMsg(msg, 'No devices — load the device list first (above).', 'err');
     return;
   }
   let ok = 0, fail = 0, firstErr = null;
   for (const d of _currentDevices) {
     try {
-      // 0x02 SetSendPeriod, 0x05 = 5 Minuten
-      // count:false — Interval-Kommando zählt nicht in DL-PDR-Nenner
+      // 0x02 SetSendPeriod, 0x05 = 5 minutes
+      // count:false — interval command doesn't count towards the DL-PDR denominator
       await apiJSON('/api/downlink', {
         method: 'POST',
         body: JSON.stringify({ dev_eui: d.dev_eui, f_port: 1, data_hex: '0205', count: false }),
@@ -1631,21 +1631,21 @@ async function sendVickiKeepalive() {
       ok++;
     } catch (e) { fail++; if (!firstErr) firstErr = e.message; }
   }
-  const txt = `Intervall eingereiht: ${ok} ok` + (fail ? `, ${fail} fehlgeschlagen: ${firstErr}` : '') + '.';
+  const txt = `Interval queued: ${ok} ok` + (fail ? `, ${fail} failed: ${firstErr}` : '') + '.';
   setMsg(msg, txt, fail ? 'err' : '');
-  toast(`Vicki Intervall: ${ok} eingereiht.`);
+  toast(`Vicki interval: ${ok} queued.`);
 }
 
 async function sendVickiLoopback() {
   const msg = document.getElementById('vicki-msg');
   if (!_currentDevices.length) {
-    setMsg(msg, 'Keine Geräte — zuerst Geräteliste laden (Geräte-Registrierung).', 'err');
+    setMsg(msg, 'No devices — load the device list first (above).', 'err');
     return;
   }
   let ok = 0, fail = 0, firstErr = null;
   for (const d of _currentDevices) {
     try {
-      // 0x04 = HW/SW-Version lesen (bestätigt, zählt in DL-PDR; count:true)
+      // 0x04 = read HW/SW version (confirmed, counts towards DL-PDR; count:true)
       await apiJSON('/api/downlink', {
         method: 'POST',
         body: JSON.stringify({ dev_eui: d.dev_eui, f_port: 1, data_hex: '04', count: true }),
@@ -1653,34 +1653,13 @@ async function sendVickiLoopback() {
       ok++;
     } catch (e) { fail++; if (!firstErr) firstErr = e.message; }
   }
-  const txt = `HW/SW-Version eingereiht: ${ok} ok` + (fail ? `, ${fail} fehlgeschlagen: ${firstErr}` : '') + '.';
+  const txt = `HW/SW version queued: ${ok} ok` + (fail ? `, ${fail} failed: ${firstErr}` : '') + '.';
   setMsg(msg, txt, fail ? 'err' : '');
-  toast(`Vicki HW/SW-Version: ${ok} eingereiht.`);
+  toast(`Vicki HW/SW version: ${ok} queued.`);
 }
 
 // ---------------------------------------------------------------------------
-// Downlink-Loopback
-// ---------------------------------------------------------------------------
-
-async function enqueueDownlink() {
-  const msg = document.getElementById('dl-msg');
-  const body = {
-    dev_eui:  document.getElementById('dl-eui').value.trim().toLowerCase(),
-    f_port:   parseInt(document.getElementById('dl-fport').value),
-    data_hex: document.getElementById('dl-data').value.trim() || '00',
-  };
-  if (!body.dev_eui) { setMsg(msg, 'DevEUI ist Pflicht.', 'err'); return; }
-  try {
-    await apiJSON('/api/downlink', { method: 'POST', body: JSON.stringify(body) });
-    setMsg(msg, `Downlink eingereiht (FPort ${body.f_port}).`);
-    toast('Downlink eingereiht.');
-  } catch (e) {
-    setMsg(msg, `Fehler: ${e.message}`, 'err');
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Funkumgebung — always-on passive coexistence view (Trust & Sichtbarkeit).
+// RF environment — always-on passive coexistence view (Trust & visibility).
 // No start/stop: the gateway hears every LoRaWAN frame in range regardless
 // of any toggle; this just visualises what CampaignState already tallies.
 // ---------------------------------------------------------------------------
@@ -1705,7 +1684,7 @@ function renderCoexTable() {
   const tbody = document.getElementById('coex-body');
   const rows  = Object.values(_coexData);
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="5" style="color:var(--muted);text-align:center;padding:10px">Keine Daten.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" style="color:var(--muted);text-align:center;padding:10px">No data.</td></tr>';
     return;
   }
   rows.sort((a, b) => a.channel - b.channel || a.sf - b.sf);
@@ -1728,60 +1707,7 @@ function renderCoexTotals() {
 }
 
 // ---------------------------------------------------------------------------
-// Panel — Phase / SF-Wechsel
-// ---------------------------------------------------------------------------
-
-const _PHASE_LABELS = {
-  sf9:  'Phase 1 · SF9',
-  sf12: 'Phase 2 · SF12',
-  adr:  'Normal · ADR',
-};
-
-async function setPhase(phase) {
-  const msg = document.getElementById('phase-msg');
-  try {
-    const res = await apiFetch('/api/phase', { method: 'POST', body: JSON.stringify({ phase }) });
-    if (res.ok) {
-      const data = await res.json();
-      setMsg(msg, `Umgeschaltet: ${(data.switched || []).length} Gerät(e).`);
-      _applyPhase(phase);
-      toast(`Phase: ${_PHASE_LABELS[phase] || phase}`);
-    } else {
-      let detail;
-      try { detail = (await res.json()).detail; } catch (_) { detail = null; }
-      if (detail && typeof detail === 'object' && detail.failed && detail.failed.length) {
-        const first = detail.failed[0];
-        setMsg(msg, `${detail.failed.length} Gerät(e) fehlgeschlagen. Erstes: ${first.dev_eui}: ${first.error}`, 'err');
-      } else {
-        setMsg(msg, `Fehler ${res.status}: ${typeof detail === 'string' ? detail : JSON.stringify(detail)}`, 'err');
-      }
-      // _applyPhase wird NICHT aufgerufen — Anzeige bleibt bei alter Phase
-    }
-  } catch (e) {
-    setMsg(msg, `Fehler: ${e.message}`, 'err');
-  }
-}
-
-function _applyPhase(phase) {
-  const label = _PHASE_LABELS[phase] || phase;
-  const big   = document.getElementById('phase-big');
-  const pill  = document.getElementById('pill-phase');
-
-  big.textContent  = label;
-  big.className    = phase;
-  pill.textContent = label;
-  pill.className   = 'pill ' + phase;
-
-  ['sf9', 'sf12', 'adr'].forEach(p => {
-    const btn = document.getElementById(`pbtn-${p}`);
-    if (!btn) return;
-    if (p === phase) btn.setAttribute('data-a', p);
-    else             btn.removeAttribute('data-a');
-  });
-}
-
-// ---------------------------------------------------------------------------
-// SSE — Live-Eventstream
+// SSE — live event stream
 // ---------------------------------------------------------------------------
 
 function initSSE() {
@@ -1845,9 +1771,6 @@ function handleEvent(ev) {
     case 'coex':
       updateCoexTable(ev);
       break;
-    case 'state':
-      if (ev.phase) _applyPhase(ev.phase);
-      break;
     case 'nodes':
       loadNodes();
       break;
@@ -1855,7 +1778,7 @@ function handleEvent(ev) {
 }
 
 // ---------------------------------------------------------------------------
-// Run-Fortschritt-Ticker — recomputes the progress bars/labels from
+// Run-progress ticker — recomputes the progress bars/labels from
 // wall-clock time every ~30 s so they move smoothly between SSE 'nodes'
 // events; loadNodes() (triggered by that event) snaps them back to server
 // truth (segment_index/current_sf/done).
@@ -1890,7 +1813,6 @@ async function init() {
 }
 
 function applyInitialState(s) {
-  _applyPhase(s.phase || 'adr');
   for (const [eui, m] of Object.entries(s.devices || {})) {
     _devMetrics[eui] = {
       rssi:            m.rssi_dbm,
@@ -1906,7 +1828,7 @@ function applyInitialState(s) {
     };
   }
 
-  // Funkumgebung (always-on) — seed totals + per-channel/SF table from the
+  // RF environment (always-on) — seed totals + per-channel/SF table from the
   // snapshot so a page refresh shows what has already accumulated, not an
   // empty view until the next live frame arrives.
   _coexOwn = s.coex_own_frames || 0;
@@ -1927,7 +1849,7 @@ function applyInitialState(s) {
 }
 
 // ---------------------------------------------------------------------------
-// Hilfe-Overlay
+// Help overlay
 // ---------------------------------------------------------------------------
 
 function openHelp() {

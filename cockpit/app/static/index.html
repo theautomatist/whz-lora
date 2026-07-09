@@ -1,29 +1,28 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>WHZ LoRa Feldtest</title>
+  <title>WHZ LoRa Field Test</title>
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
 
 <!-- ===== STICKY HEADER ===== -->
 <header id="app-header">
-  <span id="app-title">WHZ LoRa Feldtest</span>
+  <span id="app-title">WHZ LoRa Field Test</span>
   <div id="status-pills">
-    <span class="pill" id="pill-phase">ADR</span>
     <span class="pill" id="pill-node">—</span>
-    <span class="pill" id="pill-run" style="display:none">Kein Run</span>
-    <span id="dot-sse" title="SSE-Verbindung"></span>
+    <span class="pill" id="pill-run" style="display:none">No run</span>
+    <span id="dot-sse" title="SSE connection"></span>
   </div>
-  <button id="btn-help" onclick="openHelp()" aria-label="Hilfe">?</button>
+  <button id="btn-help" onclick="openHelp()" aria-label="Help">?</button>
 </header>
 
 <!-- ===== MAIN GRID ===== -->
 <div id="main">
 
-  <!-- Kampagnen-Status — hero: goal-gradient anchor, never zero -->
+  <!-- Campaign status — hero: goal-gradient anchor, never zero -->
   <section class="card full hero" id="card-hero">
     <div class="hero-inner">
       <div class="hero-ring-wrap">
@@ -42,31 +41,31 @@
         </div>
       </div>
       <div class="hero-text">
-        <div class="hero-title">Deine Messkampagne</div>
-        <div class="hero-sub" id="hero-sub">Lädt…</div>
+        <div class="hero-title">Your measurement campaign</div>
+        <div class="hero-sub" id="hero-sub">Loading…</div>
       </div>
     </div>
   </section>
 
-  <!-- Übersicht — PRIMARY: first thing under the hero, entry point -->
+  <!-- Overview — PRIMARY: first thing under the hero, entry point -->
   <section class="card full" id="card-dashboard">
     <div class="card-title">
       <span class="ti">▦</span>
-      <span>Übersicht</span>
+      <span>Overview</span>
       <span class="pill" id="overview-summary" style="margin-left:auto;display:none"></span>
     </div>
     <div id="node-grid">
-      <div class="hint" style="padding:20px 0;text-align:center">Lädt…</div>
+      <div class="hint" style="padding:20px 0;text-align:center">Loading…</div>
     </div>
   </section>
 
-  <!-- Ausgewähltes Gerät / Gateway — appears directly below the overview -->
+  <!-- Selected device / gateway — appears directly below the overview -->
   <section class="card full" id="card-selected">
     <div class="card-title">
       <span class="ti">◈</span>
-      <span>Ausgewähltes Gerät / Gateway</span>
+      <span>Selected device / gateway</span>
       <select class="node-select" id="node-select" onchange="onNodeSelect()">
-        <option value="">— lädt —</option>
+        <option value="">— loading —</option>
       </select>
     </div>
 
@@ -75,12 +74,12 @@
         <div class="sel-name" id="sel-name">—</div>
         <div class="sel-eui mono" id="sel-eui"></div>
       </div>
-      <span class="pill" id="sel-run-pill" style="display:none">Kein Run</span>
+      <span class="pill" id="sel-run-pill" style="display:none">No run</span>
     </div>
 
     <!-- Reciprocity: proves itself with live signal before you do anything.
-         Big RSSI + quality live ONLY here — "Letztes Paket"/"Sendeintervall"
-         live ONLY in Geräte-Status below (F-0006 dedup pass). -->
+         Big RSSI + quality live ONLY here — "Last packet"/"Send interval"
+         live ONLY in Device status below (F-0006 dedup pass). -->
     <div class="signal-hero" id="signal-hero" style="display:none">
       <div class="signal-hero-top">
         <div class="signal-hero-value">
@@ -94,18 +93,18 @@
     </div>
 
     <!-- Compact secondary line — SNR/SF only, RSSI stays hero-only; PDR now
-         lives in the "PDR pro SF" headline block below (per-SF, not a
+         lives in the "PDR per SF" headline block below (per-SF, not a
          single always-empty legacy figure). -->
     <div class="nc-metrics" id="sel-metrics" style="display:none"></div>
 
     <!-- HEADLINE: delivery reliability per SF (coverage that actually
-         matters — RSSI barely changes with SF, PDR does). Uplink-PDR from
-         the run's CSV vs. its commanded interval; Downlink-PDR from
+         matters — RSSI barely changes with SF, PDR does). Uplink PDR from
+         the run's CSV vs. its commanded interval; Downlink PDR from
          confirmed-downlink ACKs (see GET /api/run/{id}/stats). -->
     <div id="pdr-sf-block" style="display:none">
       <div class="pdr-sf-wrap">
         <div class="pdr-sf-hdr">
-          <span class="pdr-sf-title">PDR pro SF</span>
+          <span class="pdr-sf-title">PDR per SF</span>
           <span class="pdr-sf-overall" id="pdr-sf-overall"></span>
         </div>
         <div class="pdr-sf-grid" id="pdr-sf-grid"></div>
@@ -115,83 +114,83 @@
 
     <!-- Context: RSSI-over-time chart for the active (or most recent) run —
          inline SVG, live via SSE 'up' events for the selected device. The
-         SAME run's chart is excluded from Verlauf below while it's active
+         SAME run's chart is excluded from History below while it's active
          (renderHistory only lists past/completed runs). -->
     <div id="sel-chart-wrap" style="display:none">
-      <div class="hist-chart" id="sel-chart"><p class="hint">Lädt…</p></div>
+      <div class="hist-chart" id="sel-chart"><p class="hint">Loading…</p></div>
     </div>
 
     <div id="sel-progress" style="display:none"></div>
 
-    <!-- Geräte-Status — "arbeitet die Konfiguration?" (Trust & Sichtbarkeit) -->
+    <!-- Device status — "is the configuration working?" (Trust & visibility) -->
     <div id="dev-status-block" style="display:none">
       <div class="dstatus">
         <div class="dstatus-row">
-          <span class="dstatus-label">Letztes Paket</span>
+          <span class="dstatus-label">Last packet</span>
           <span class="dstatus-value" id="ds-last-packet">—</span>
         </div>
         <div class="dstatus-row">
-          <span class="dstatus-label">Sendeintervall (gemessen)</span>
+          <span class="dstatus-label">Send interval (measured)</span>
           <span class="dstatus-value" id="ds-interval">—</span>
         </div>
         <div class="dstatus-row">
-          <span class="dstatus-label">Konfig-Downlink</span>
+          <span class="dstatus-label">Config downlink</span>
           <span class="dstatus-value" id="ds-config-dl">—</span>
         </div>
         <div class="brow" style="margin-top:10px">
-          <button class="btn btn-o" onclick="setDeviceInterval5()">Intervall auf 5 min setzen</button>
-          <button class="btn btn-o" onclick="wakeDeviceTest()">Gerät antworten lassen (Test)</button>
+          <button class="btn btn-o" onclick="setDeviceInterval5()">Set interval to 5 min</button>
+          <button class="btn btn-o" onclick="wakeDeviceTest()">Ping device (test)</button>
         </div>
-        <div class="dstatus-hint">Konfiguration erreicht das Gerät erst bei seinem nächsten Uplink (Class A) — stumme Geräte ggf. am TRV kurz wecken.</div>
+        <div class="dstatus-hint">Config only reaches the device on its next uplink (Class A) — wake a silent device briefly at the TRV.</div>
       </div>
     </div>
 
-    <!-- Standort -->
+    <!-- Location -->
     <div class="place-info" id="sel-place-info">
-      <div class="place-empty">Lädt…</div>
+      <div class="place-empty">Loading…</div>
     </div>
 
     <div class="photo-thumbs" id="sel-photos"></div>
 
-    <!-- Aktionen -->
+    <!-- Actions -->
     <div class="brow">
-      <button class="btn btn-p" id="btn-place" onclick="openPlaceSheet('device')" style="display:none">Platzieren / Umsetzen</button>
-      <button class="btn btn-d" id="btn-run-stop" onclick="stopSelectedRun()" style="display:none">Run stoppen</button>
-      <button class="btn btn-p" id="btn-gw-move" onclick="openPlaceSheet('gateway')" style="display:none">Gateway umsetzen</button>
+      <button class="btn btn-p" id="btn-place" onclick="openPlaceSheet('device')" style="display:none">Place / Relocate</button>
+      <button class="btn btn-d" id="btn-run-stop" onclick="stopSelectedRun()" style="display:none">Stop run</button>
+      <button class="btn btn-p" id="btn-gw-move" onclick="openPlaceSheet('gateway')" style="display:none">Move gateway</button>
     </div>
 
     <div id="run-start-block" style="display:none">
       <div class="brow" style="margin-top:4px">
-        <button class="btn btn-s" id="btn-run-start" onclick="startSweepDefault()" style="width:100%">Run starten — 24 h · SF7→SF9→SF12 · 5-min-Intervall</button>
+        <button class="btn btn-s" id="btn-run-start" onclick="startSweepDefault()" style="width:100%">Start run — 24 h · SF7→SF9→SF12 · 5-min interval</button>
       </div>
       <label class="run-dltest-toggle">
         <input type="checkbox" id="run-downlink-test" checked>
-        <span>Downlink-Test (bestätigte Downlinks zur Rückkanal-Prüfung)</span>
+        <span>Downlink test (confirmed downlinks to check the return channel)</span>
       </label>
       <details class="coll" id="run-adjust-details">
-        <summary>Anpassen</summary>
+        <summary>Customize</summary>
         <div class="db">
           <div class="f2">
             <div class="f">
-              <label>Dauer (Stunden)</label>
+              <label>Duration (hours)</label>
               <input id="run-duration-h" type="number" min="1" value="24">
             </div>
             <div class="f">
-              <label>Intervall (min)</label>
+              <label>Interval (min)</label>
               <input id="run-interval-min" type="number" min="1" max="255" value="5">
             </div>
           </div>
           <div class="f">
-            <label>SF-Ablauf</label>
+            <label>SF sequence</label>
             <select id="run-preset">
               <option value="sf7_sf9_sf12">SF7 → SF9 → SF12</option>
               <option value="sf9_sf12">SF9 → SF12</option>
-              <option value="sf9">fest SF9</option>
-              <option value="sf12">fest SF12</option>
+              <option value="sf9">fixed SF9</option>
+              <option value="sf12">fixed SF12</option>
             </select>
           </div>
           <div class="brow">
-            <button class="btn btn-p" onclick="startSweepCustom()">Run starten (angepasst)</button>
+            <button class="btn btn-p" onclick="startSweepCustom()">Start run (customized)</button>
           </div>
         </div>
       </details>
@@ -200,39 +199,87 @@
     <div class="msg" id="selected-msg"></div>
 
     <details class="coll" id="history-details" ontoggle="onHistoryToggle(this)" style="display:none">
-      <summary>Verlauf</summary>
-      <div class="db" id="history-body"><p class="hint">Wird beim Öffnen geladen.</p></div>
+      <summary>History</summary>
+      <div class="db" id="history-body"><p class="hint">Loading on open.</p></div>
     </details>
   </section>
 
-  <!-- Phase / SF-Wechsel — secondary, collapsed by default -->
-  <details class="card full coll-card" id="card-phase">
-    <summary class="card-title"><span class="ti">⬡</span> Phase / SF-Wechsel</summary>
+  <!-- RF environment — always-on, passive (Trust & visibility); secondary, collapsed by default -->
+  <details class="card coll-card" id="card-coex">
+    <summary class="card-title"><span class="ti">◎</span> RF environment</summary>
     <div class="card-body">
-      <div id="phase-big" class="adr">Normal · ADR</div>
-      <div class="phase-grid">
-        <button class="pbtn" id="pbtn-sf9"  onclick="setPhase('sf9')">
-          <span class="lbl">Phase 1 · SF9</span>
-          <span class="sub">Abdeckung screenen,<br>viele Punkte</span>
-        </button>
-        <button class="pbtn" id="pbtn-sf12" onclick="setPhase('sf12')">
-          <span class="lbl">Phase 2 · SF12</span>
-          <span class="sub">Reserve /&nbsp;Worst-Case</span>
-        </button>
-        <button class="pbtn" id="pbtn-adr" onclick="setPhase('adr')" data-a="adr">
-          <span class="lbl">Normal · ADR</span>
-          <span class="sub">Kein Messmodus</span>
-        </button>
+      <p class="hint" style="margin-bottom:10px">The gateway overhears every LoRaWAN frame in range. CAF = foreign airtime fraction. At least 60 s needed for valid values per channel/SF.</p>
+      <div class="coex-totals">
+        <div class="coex-total-box own">
+          <span class="coex-total-num" id="coex-own-count">0</span>
+          <span class="coex-total-lbl">our frames</span>
+        </div>
+        <div class="coex-total-box foreign">
+          <span class="coex-total-num" id="coex-foreign-count">0</span>
+          <span class="coex-total-lbl">foreign networks</span>
+        </div>
       </div>
-      <div class="msg" id="phase-msg">Wechsel wirkt beim nächsten Uplink / Rejoin jedes Geräts.</div>
+      <div class="coex-wrap">
+        <table class="coex-tbl">
+          <thead>
+            <tr><th>Channel</th><th>SF</th><th>Frames</th><th>CAF</th><th>Status</th></tr>
+          </thead>
+          <tbody id="coex-body">
+            <tr><td colspan="5" style="color:var(--muted);text-align:center;padding:10px">No data.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </details>
 
+  <!-- Device registration — secondary, collapsed by default -->
+  <details class="card coll-card" id="card-devices">
+    <summary class="card-title"><span class="ti">◉</span> Device registration</summary>
+    <div class="card-body">
+      <div class="f">
+        <label>Name</label>
+        <input id="dev-name" type="text" placeholder="sensor-01" autocorrect="off" autocapitalize="none">
+      </div>
+      <div class="f">
+        <label>DevEUI (16 hex characters)</label>
+        <input id="dev-eui" type="text" placeholder="0102030405060708" maxlength="16" autocorrect="off" autocapitalize="none">
+      </div>
+      <div class="f">
+        <label>AppKey (32 hex characters)</label>
+        <input id="dev-appkey" type="text" placeholder="0102030405060708090a0b0c0d0e0f10" autocorrect="off" autocapitalize="none">
+      </div>
+      <div class="f">
+        <label>JoinEUI (optional, 16 hex characters)</label>
+        <input id="dev-joineui" type="text" placeholder="0000000000000000" maxlength="16" autocorrect="off" autocapitalize="none">
+      </div>
+      <div class="brow">
+        <button class="btn btn-p" onclick="registerDevice()">Register</button>
+      </div>
+      <div class="msg" id="dev-msg"></div>
+      <p class="hint" style="margin-top:10px">Newly registered devices appear in the overview only after the cockpit is restarted (node sync runs at startup).</p>
+
+      <hr class="sep">
+      <div class="between" style="margin-bottom:8px">
+        <span class="hint">Registered devices (ChirpStack)</span>
+        <button class="btn btn-g" onclick="loadDevices()">⟳ Load</button>
+      </div>
+      <div style="overflow-x:auto">
+        <table class="dtbl">
+          <thead><tr><th>DevEUI</th><th>Name</th><th>Profile</th><th>Last seen</th></tr></thead>
+          <tbody id="dev-list-body">
+            <tr><td colspan="4" style="color:var(--muted);text-align:center;padding:12px 0">— not loaded yet —</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <hr class="sep">
       <details class="coll">
-        <summary>Vicki-Kommandos (MClimate)</summary>
+        <summary>Vicki commands (MClimate)</summary>
         <div class="db">
-          <p class="hint">Geräteliste zuerst laden (Geräte-Registrierung). Wird an alle registrierten Geräte gesendet.</p>
+          <p class="hint">Load the device list above first. Sent to all registered devices.</p>
           <div class="brow">
-            <button class="btn btn-o" onclick="sendVickiKeepalive()">Intervall 5 min setzen</button>
-            <button class="btn btn-o" onclick="sendVickiLoopback()">HW/SW-Version lesen</button>
+            <button class="btn btn-o" onclick="sendVickiKeepalive()">Set interval to 5 min</button>
+            <button class="btn btn-o" onclick="sendVickiLoopback()">Read HW/SW version</button>
           </div>
           <div class="msg" id="vicki-msg"></div>
         </div>
@@ -240,110 +287,14 @@
     </div>
   </details>
 
-  <!-- Funkumgebung — always-on, passive (Trust & Sichtbarkeit); secondary, collapsed by default -->
-  <details class="card coll-card" id="card-coex">
-    <summary class="card-title"><span class="ti">◎</span> Funkumgebung</summary>
-    <div class="card-body">
-      <p class="hint" style="margin-bottom:10px">Das Gateway hört alle LoRaWAN-Frames in Reichweite mit. CAF = Fremd-Airtime-Anteil. Mind. 60 s für valide Werte je Kanal/SF.</p>
-      <div class="coex-totals">
-        <div class="coex-total-box own">
-          <span class="coex-total-num" id="coex-own-count">0</span>
-          <span class="coex-total-lbl">unsere Frames</span>
-        </div>
-        <div class="coex-total-box foreign">
-          <span class="coex-total-num" id="coex-foreign-count">0</span>
-          <span class="coex-total-lbl">fremde Netze</span>
-        </div>
-      </div>
-      <div class="coex-wrap">
-        <table class="coex-tbl">
-          <thead>
-            <tr><th>Kanal</th><th>SF</th><th>Frames</th><th>CAF</th><th>Status</th></tr>
-          </thead>
-          <tbody id="coex-body">
-            <tr><td colspan="5" style="color:var(--muted);text-align:center;padding:10px">Keine Daten.</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </details>
-
-  <!-- Downlink-Loopback — secondary, collapsed by default -->
-  <details class="card coll-card" id="card-dl">
-    <summary class="card-title"><span class="ti">↓</span> Downlink-Loopback</summary>
-    <div class="card-body">
-      <p class="hint" style="margin-bottom:10px">Bestätigten Downlink senden; ACK-Antwort zählt in DL-PDR.</p>
-      <div class="f">
-        <label>DevEUI</label>
-        <input id="dl-eui" type="text" placeholder="0102030405060708" autocorrect="off" autocapitalize="none">
-      </div>
-      <div class="f2">
-        <div class="f" style="margin-bottom:0">
-          <label>FPort (1–223)</label>
-          <input id="dl-fport" type="number" value="1" min="1" max="223">
-        </div>
-        <div class="f" style="margin-bottom:0">
-          <label>Daten (hex)</label>
-          <input id="dl-data" type="text" placeholder="00" value="00" autocorrect="off" autocapitalize="none">
-        </div>
-      </div>
-      <div class="brow">
-        <button class="btn btn-p" onclick="enqueueDownlink()">Downlink senden</button>
-      </div>
-      <div class="msg" id="dl-msg"></div>
-    </div>
-  </details>
-
-  <!-- Geräte-Registrierung — secondary, collapsed by default -->
-  <details class="card coll-card" id="card-devices">
-    <summary class="card-title"><span class="ti">◉</span> Geräte-Registrierung</summary>
-    <div class="card-body">
-      <div class="f">
-        <label>Name</label>
-        <input id="dev-name" type="text" placeholder="sensor-01" autocorrect="off" autocapitalize="none">
-      </div>
-      <div class="f">
-        <label>DevEUI (16 Hex-Zeichen)</label>
-        <input id="dev-eui" type="text" placeholder="0102030405060708" maxlength="16" autocorrect="off" autocapitalize="none">
-      </div>
-      <div class="f">
-        <label>AppKey (32 Hex-Zeichen)</label>
-        <input id="dev-appkey" type="text" placeholder="0102030405060708090a0b0c0d0e0f10" autocorrect="off" autocapitalize="none">
-      </div>
-      <div class="f">
-        <label>JoinEUI (optional, 16 Hex-Zeichen)</label>
-        <input id="dev-joineui" type="text" placeholder="0000000000000000" maxlength="16" autocorrect="off" autocapitalize="none">
-      </div>
-      <div class="brow">
-        <button class="btn btn-p" onclick="registerDevice()">Registrieren</button>
-      </div>
-      <div class="msg" id="dev-msg"></div>
-      <p class="hint" style="margin-top:10px">Neu registrierte Geräte erscheinen in der Übersicht erst nach einem Neustart des Cockpits (Node-Sync läuft beim Start).</p>
-
-      <hr class="sep">
-      <div class="between" style="margin-bottom:8px">
-        <span class="hint">Registrierte Geräte (ChirpStack)</span>
-        <button class="btn btn-g" onclick="loadDevices()">⟳ Laden</button>
-      </div>
-      <div style="overflow-x:auto">
-        <table class="dtbl">
-          <thead><tr><th>DevEUI</th><th>Name</th><th>Profil</th><th>Gesehen</th></tr></thead>
-          <tbody id="dev-list-body">
-            <tr><td colspan="4" style="color:var(--muted);text-align:center;padding:12px 0">— noch nicht geladen —</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </details>
-
 </div><!-- #main -->
 
-<!-- ===== PLATZIEREN / UMSETZEN SHEET (device + gateway) ===== -->
+<!-- ===== PLACE / RELOCATE SHEET (device + gateway) ===== -->
 <div id="place-ov" class="sheet-ov" onclick="closeSheetBackdrop(event)">
   <div class="sheet-panel">
     <div class="h-handle"></div>
     <div class="h-hdr">
-      <h2 id="sheet-title">Platzieren</h2>
+      <h2 id="sheet-title">Place</h2>
       <button class="sheet-x" onclick="closeSheet()">✕</button>
     </div>
     <div class="h-body">
@@ -351,56 +302,56 @@
       <div id="sheet-form">
         <div class="f2">
           <div class="f">
-            <label>Etage</label>
-            <input id="sheet-floor" type="text" placeholder="3OG" autocorrect="off">
+            <label>Floor</label>
+            <input id="sheet-floor" type="text" placeholder="3rd floor" autocorrect="off">
           </div>
           <div class="f">
-            <label>Raum</label>
+            <label>Room</label>
             <input id="sheet-room" type="text" placeholder="R301" autocorrect="off">
           </div>
         </div>
         <div class="f">
-          <label>Beschreibung</label>
-          <input id="sheet-desc" type="text" placeholder="z. B. am Fenster, Flurende, Kellerraum" autocorrect="off">
+          <label>Description</label>
+          <input id="sheet-desc" type="text" placeholder="e.g. by the window, end of hallway, basement room" autocorrect="off">
         </div>
         <div class="f">
-          <label>Notiz</label>
+          <label>Note</label>
           <input id="sheet-note" type="text" placeholder="optional" autocorrect="off">
         </div>
 
         <div class="f" id="sheet-antenna-field">
-          <label>Antenne</label>
+          <label>Antenna</label>
           <div class="ant-grid">
             <button type="button" class="abtn" id="sheet-ant-3dbi" onclick="selectSheetAntenna('3dbi')">
               <span class="av">3 dBi</span>
-              <span class="as">Kurze Antenne</span>
+              <span class="as">Short antenna</span>
             </button>
             <button type="button" class="abtn" id="sheet-ant-12dbi" onclick="selectSheetAntenna('12dbi')">
               <span class="av">12 dBi</span>
-              <span class="as">Lange Antenne</span>
+              <span class="as">Long antenna</span>
             </button>
           </div>
         </div>
 
         <div class="f" id="sheet-photo-field">
-          <label>Fotos (max. 3)</label>
+          <label>Photos (max. 3)</label>
           <div id="sheet-photo-thumbs" class="photo-thumbs"></div>
           <input type="file" id="sheet-photo-input" accept="image/*" capture="environment" style="display:none" onchange="onSheetPhotoSelected(event)">
-          <button type="button" class="btn btn-o" id="sheet-photo-add-btn" onclick="document.getElementById('sheet-photo-input').click()">+ Foto aufnehmen</button>
+          <button type="button" class="btn btn-o" id="sheet-photo-add-btn" onclick="document.getElementById('sheet-photo-input').click()">+ Take photo</button>
         </div>
 
         <div class="brow">
-          <button type="button" class="btn btn-p" id="sheet-submit-btn" onclick="submitSheet()">Speichern</button>
+          <button type="button" class="btn btn-p" id="sheet-submit-btn" onclick="submitSheet()">Save</button>
         </div>
         <div class="msg" id="sheet-msg"></div>
       </div>
 
       <div id="sheet-conflict" style="display:none">
-        <div class="loss-title"><span>⚠️</span><span id="sheet-conflict-title">Laufende Messungen gehen verloren</span></div>
+        <div class="loss-title"><span>⚠️</span><span id="sheet-conflict-title">Running measurements will be lost</span></div>
         <div id="sheet-conflict-list"></div>
         <div class="brow">
-          <button type="button" class="btn btn-o" onclick="closeSheet()">Abbrechen</button>
-          <button type="button" class="btn btn-d" onclick="forceGatewayMove()">Trotzdem umsetzen — Messungen beenden</button>
+          <button type="button" class="btn btn-o" onclick="closeSheet()">Cancel</button>
+          <button type="button" class="btn btn-d" onclick="forceGatewayMove()">Move anyway — end measurements</button>
         </div>
       </div>
 
@@ -414,12 +365,12 @@
     <div class="h-handle"></div>
     <div class="confirm-body">
       <div class="confirm-icon" id="confirm-icon">⚠️</div>
-      <h3 id="confirm-title">Wirklich fortfahren?</h3>
+      <h3 id="confirm-title">Really continue?</h3>
       <div id="confirm-message"></div>
       <div id="confirm-list"></div>
       <div class="brow confirm-actions">
-        <button class="btn btn-o" id="confirm-cancel-btn" onclick="_resolveConfirm(false)">Abbrechen</button>
-        <button class="btn btn-d" id="confirm-ok-btn" onclick="_resolveConfirm(true)">Bestätigen</button>
+        <button class="btn btn-o" id="confirm-cancel-btn" onclick="_resolveConfirm(false)">Cancel</button>
+        <button class="btn btn-d" id="confirm-ok-btn" onclick="_resolveConfirm(true)">Confirm</button>
       </div>
     </div>
   </div>
@@ -430,84 +381,74 @@
   <div class="sheet-panel">
     <div class="h-handle"></div>
     <div class="h-hdr">
-      <h2>Anleitung &amp; Feldmess-Workflow</h2>
+      <h2>Guide &amp; field-measurement workflow</h2>
       <button class="sheet-x" onclick="closeHelp()">✕</button>
     </div>
     <div class="h-body">
 
       <div class="h-sec">
-        <h3>So funktioniert der Workflow</h3>
+        <h3>How the workflow works</h3>
         <ul>
-          <li>Oben zeigt der <strong>Kampagnen-Ring</strong> den Gesamtfortschritt — Setup zählt schon mit, der Ring startet nie bei 0 %.</li>
-          <li>In der <strong>Übersicht</strong> das Gerät antippen, das du gerade in der Hand hast (oder den Gateway) — das öffnet direkt darunter „Ausgewähltes Gerät / Gateway" und zeigt sofort das <strong>Live-Signal</strong>, auch ohne laufenden Run.</li>
-          <li><strong>Platzieren:</strong> Etage/Raum sind vorausgefüllt (letzter bekannter Standort bzw. Gateway-Etage), Antenne merkt sich die letzte Wahl. Optional bis zu 3 Fotos aufnehmen — deine eigene Foto-Sammlung wächst mit jedem Standort.</li>
-          <li><strong>Run starten — 24 h · SF7→SF9→SF12 · 5-min-Intervall</strong> — ein Tap startet den vollen Sweep; unter „Anpassen" lassen sich Dauer, Intervall und SF-Ablauf ändern. Nur möglich, wenn Gerät <em>und</em> Gateway platziert sind.</li>
-          <li>Die <strong>glühende SF-Leiste</strong> zeigt den Sweep live: erledigte Stufen ✓, die aktuelle Stufe pulsiert, künftige bleiben dunkel. Fortschritt wird immer im Verhältnis zum Gesamtplan angezeigt (z. B. „14 h von 24 h"), nie isoliert.</li>
-          <li>Läuft die geplante Dauer ab, endet der Run automatisch — die Karte feiert kurz mit einem Puls und zeigt <strong>„fertig ✓"</strong>.</li>
-          <li><strong>Umsetzen (Relocate):</strong> Zum nächsten Standort? „Platzieren / Umsetzen" erneut antippen — schließt den laufenden Run automatisch und startet direkt einen neuen.</li>
-          <li>Vorzeitig fertig? <strong>„Run stoppen"</strong> fragt zur Sicherheit nach, welche SF-Stufen dabei noch fehlen — Datenverlust ist so nie eine Überraschung.</li>
-          <li><strong>Gateway bewegen</strong> geht nur, wenn kein Run mehr läuft — sonst zeigt eine Warnung genau, was pro Gerät verloren geht; „Trotzdem umsetzen" bricht die Runs kontrolliert ab (Daten bleiben erhalten).</li>
+          <li>At the top, the <strong>campaign ring</strong> shows overall progress — setup already counts, so the ring never starts at 0%.</li>
+          <li>In the <strong>Overview</strong>, tap the device you're currently holding (or the gateway) — this opens "Selected device / gateway" right below it and shows the <strong>live signal</strong> immediately, even without a running run.</li>
+          <li><strong>Place:</strong> floor/room are pre-filled (last known location, or the gateway's floor), and the antenna remembers your last choice. Optionally take up to 3 photos — your own photo collection grows with every location.</li>
+          <li><strong>Start run — 24 h · SF7→SF9→SF12 · 5-min interval</strong> — one tap starts the full sweep; under "Customize" you can change the duration, interval and SF sequence. Only possible once both the device <em>and</em> the gateway are placed.</li>
+          <li>The <strong>glowing SF bar</strong> shows the sweep live: completed stages ✓, the current stage pulses, future stages stay dark. Progress is always shown relative to the overall plan (e.g. "14 h of 24 h"), never in isolation.</li>
+          <li>Live <strong>PDR per SF</strong> shows delivery reliability for each spreading factor — both uplink (received/expected) and downlink (ACK rate from confirmed test downlinks) — the coverage metric that actually matters, since RSSI barely changes with SF.</li>
+          <li>When the planned duration elapses, the run ends automatically — the card briefly celebrates with a pulse and shows <strong>"done ✓"</strong>.</li>
+          <li><strong>Relocate:</strong> moving to the next spot? Tap "Place / Relocate" again — it automatically closes the running run and starts a new one right away.</li>
+          <li>Done early? <strong>"Stop run"</strong> asks for confirmation and shows exactly which SF stages would still be missing — so data loss is never a surprise.</li>
+          <li><strong>Moving the gateway</strong> only works once no run is active — otherwise a warning shows exactly what would be lost per device; "Move anyway" ends the runs in a controlled way (data is kept).</li>
         </ul>
       </div>
 
       <div class="h-sec">
-        <h3>Schritt für Schritt</h3>
+        <h3>Step by step</h3>
         <ol>
-          <li>In der Übersicht das Gerät antippen (oder oben im Auswahlfeld wählen) — Live-Signal erscheint sofort.</li>
-          <li>„Platzieren / Umsetzen" → vorausgefüllte Felder prüfen/anpassen, Antenne, optional Fotos → Speichern.</li>
-          <li>„Run starten — 24 h · SF7→SF9→SF12 · 5-min-Intervall" (der Gateway muss ebenfalls platziert sein) oder unter „Anpassen" Dauer/Intervall/SF-Ablauf wählen.</li>
-          <li>Der Sweep läuft automatisch durch SF7 → SF9 → SF12 (oder den gewählten Ablauf) — die glühende Leiste zeigt den Stand, immer im Verhältnis zur Gesamtdauer.</li>
-          <li>Gerät bewegt sich? Erneut „Platzieren / Umsetzen" antippen — schließt den Run automatisch und startet direkt einen neuen.</li>
-          <li>Vorzeitig fertig? „Run stoppen" (mit Sicherheitsabfrage). Läuft die Dauer ab, endet der Run selbst und die Karte zeigt „fertig ✓". CSV je Run steht im Verlauf zum Download bereit.</li>
+          <li>Tap a device in the Overview (or pick one in the selector at the top) — the live signal appears immediately.</li>
+          <li>"Place / Relocate" → check/adjust the pre-filled fields, pick the antenna, optionally add photos → Save.</li>
+          <li>"Start run — 24 h · SF7→SF9→SF12 · 5-min interval" (the gateway must be placed too), or pick a custom duration/interval/SF sequence under "Customize".</li>
+          <li>The sweep runs automatically through SF7 → SF9 → SF12 (or your chosen sequence) — the glowing bar shows progress, always relative to the total duration.</li>
+          <li>Device moved? Tap "Place / Relocate" again — it closes the run automatically and starts a new one right away.</li>
+          <li>Done early? "Stop run" (with a confirmation prompt). If the duration runs out, the run ends by itself and the card shows "done ✓". Each run's CSV is available for download in History.</li>
         </ol>
       </div>
 
       <div class="h-sec">
-        <h3>Phasen</h3>
-        <ul>
-          <li><strong style="color:var(--sf9-color)">Phase 1 · SF9 (DR3):</strong> Abdeckung über viele Standorte screenen; Airtime ~144 ms/Paket.</li>
-          <li><strong style="color:var(--sf12-color)">Phase 2 · SF12 (DR0):</strong> Reserve / Worst-Case; robustester Modus, misst die Funk-Reserve.</li>
-          <li><strong style="color:var(--adr-color)">Normal · ADR:</strong> Kein Messmodus — SF wird vom Netz geregelt.</li>
-        </ul>
+        <h3>Metrics &amp; color legend</h3>
+
+        <p style="margin:0 0 6px"><strong>RSSI (dBm) — received signal strength at the gateway</strong></p>
+        <div class="lgrow"><span class="lgdot" style="background:var(--m-good)"></span>&gt; −80 dBm: <strong>excellent</strong></div>
+        <div class="lgrow"><span class="lgdot" style="background:var(--m-ok)"></span>−80 to −110 dBm: <strong>good</strong></div>
+        <div class="lgrow"><span class="lgdot" style="background:var(--m-warn)"></span>−110 to −120 dBm: <strong>marginal</strong></div>
+        <div class="lgrow" style="margin-bottom:14px"><span class="lgdot" style="background:var(--m-bad)"></span>&lt; −120 dBm: <strong>poor</strong> (floor −140 dBm)</div>
+
+        <p style="margin:0 0 6px"><strong>SNR (dB) — how far LoRa receives below the noise floor</strong></p>
+        <div class="lgrow"><span class="lgdot" style="background:var(--m-good)"></span>≥ 0 dB: comfortable</div>
+        <div class="lgrow"><span class="lgdot" style="background:var(--m-ok)"></span>−10 to 0 dB: good</div>
+        <div class="lgrow"><span class="lgdot" style="background:var(--m-warn)"></span>−15 to −10 dB: tight</div>
+        <div class="lgrow" style="margin-bottom:14px"><span class="lgdot" style="background:var(--m-bad)"></span>&lt; −15 dB (demod floor −20 dB)</div>
+
+        <p style="margin:0 0 6px"><strong>PDR — packet delivery ratio (per SF, uplink &amp; downlink)</strong></p>
+        <div class="lgrow"><span class="lgdot" style="background:var(--m-good)"></span>≥ 99 %: excellent</div>
+        <div class="lgrow"><span class="lgdot" style="background:var(--m-ok)"></span>≥ 80 %: adequate for heating control</div>
+        <div class="lgrow"><span class="lgdot" style="background:var(--m-warn)"></span>50–80 %: problematic</div>
+        <div class="lgrow" style="margin-bottom:14px"><span class="lgdot" style="background:var(--m-bad)"></span>&lt; 50 %: coverage gap</div>
+
+        <p style="margin:0 0 6px"><strong>CAF — foreign airtime fraction (RF coexistence)</strong></p>
+        <div class="lgrow"><span class="lgdot" style="background:var(--m-good)"></span>&lt; 2 %: green — uncritical</div>
+        <div class="lgrow"><span class="lgdot" style="background:var(--m-warn)"></span>2–10 %: yellow — keep an eye on it</div>
+        <div class="lgrow"><span class="lgdot" style="background:var(--m-bad)"></span>&gt; 10 %: red — critical</div>
       </div>
 
       <div class="h-sec">
-        <h3>Kennzahlen &amp; Farblegende</h3>
-
-        <p style="margin:0 0 6px"><strong>RSSI (dBm) — Empfangsstärke am Gateway</strong></p>
-        <div class="lgrow"><span class="lgdot" style="background:var(--m-good)"></span>&gt; −80 dBm: <strong>sehr gut</strong></div>
-        <div class="lgrow"><span class="lgdot" style="background:var(--m-ok)"></span>−80 bis −110 dBm: <strong>gut</strong></div>
-        <div class="lgrow"><span class="lgdot" style="background:var(--m-warn)"></span>−110 bis −120 dBm: <strong>grenzwertig</strong></div>
-        <div class="lgrow" style="margin-bottom:14px"><span class="lgdot" style="background:var(--m-bad)"></span>&lt; −120 dBm: <strong>schlecht</strong> (Grenze −140 dBm)</div>
-
-        <p style="margin:0 0 6px"><strong>SNR (dB) — LoRa empfängt unter dem Rauschen</strong></p>
-        <div class="lgrow"><span class="lgdot" style="background:var(--m-good)"></span>≥ 0 dB: komfortabel</div>
-        <div class="lgrow"><span class="lgdot" style="background:var(--m-ok)"></span>−10 bis 0 dB: gut</div>
-        <div class="lgrow"><span class="lgdot" style="background:var(--m-warn)"></span>−15 bis −10 dB: knapp</div>
-        <div class="lgrow" style="margin-bottom:14px"><span class="lgdot" style="background:var(--m-bad)"></span>&lt; −15 dB (Demod-Grenze −20 dB)</div>
-
-        <p style="margin:0 0 6px"><strong>PDR — Paketempfangsrate (Uplink)</strong></p>
-        <div class="lgrow"><span class="lgdot" style="background:var(--m-good)"></span>≥ 99 %: exzellent</div>
-        <div class="lgrow"><span class="lgdot" style="background:var(--m-ok)"></span>≥ 80 %: für Heizung ausreichend</div>
-        <div class="lgrow"><span class="lgdot" style="background:var(--m-warn)"></span>50–80 %: problematisch</div>
-        <div class="lgrow" style="margin-bottom:14px"><span class="lgdot" style="background:var(--m-bad)"></span>&lt; 50 %: Abdeckungslücke</div>
-
-        <p style="margin:0 0 6px"><strong>CAF — Fremd-Airtime-Anteil (Koexistenz)</strong></p>
-        <div class="lgrow"><span class="lgdot" style="background:var(--m-good)"></span>&lt; 2 %: grün — unkritisch</div>
-        <div class="lgrow"><span class="lgdot" style="background:var(--m-warn)"></span>2–10 %: gelb — beobachten</div>
-        <div class="lgrow"><span class="lgdot" style="background:var(--m-bad)"></span>&gt; 10 %: rot — kritisch</div>
-      </div>
-
-      <div class="h-sec">
-        <h3>Panels kurz</h3>
+        <h3>Panels at a glance</h3>
         <ul>
-          <li><strong>Kampagnen-Status</strong> — Gesamtfortschritt als Ring; nie bei 0 %, wächst mit jedem platzierten/gestarteten/fertigen Gerät.</li>
-          <li><strong>Übersicht</strong> — Karte pro Gerät + Gateway: Standort, Run-Status, Pakete, Live-Werte, SF-Sweep-Leiste. Antippen wählt aus und öffnet das Detail-Panel darunter.</li>
-          <li><strong>Ausgewähltes Gerät / Gateway</strong> — Live-Signal sofort sichtbar, Standort, Fotos, Run-Status, Sweep-Fortschritt, Geräte-Status (letztes Paket, gemessenes Sendeintervall, Konfig-Downlink); Platzieren/Umsetzen, Run starten/stoppen, Gateway umsetzen. Auswahlfeld oben rechts als Alternative zum Antippen der Karte.</li>
-          <li><strong>Phase/SF-Wechsel</strong> (einklappbar) — Alle Geräte auf festes SF oder ADR umschalten.</li>
-          <li><strong>Funkumgebung</strong> (einklappbar) — läuft immer passiv mit, kein Start/Stopp nötig; zeigt eigene vs. fremde Frames sowie CAF je Kanal/SF.</li>
-          <li><strong>Downlink-Loopback</strong> (einklappbar) — Bestätigten Downlink senden; ACK-PDR messen.</li>
-          <li><strong>Geräte-Registrierung</strong> (einklappbar) — Neue OTAA-Geräte in ChirpStack anlegen.</li>
+          <li><strong>Campaign status</strong> — overall progress as a ring; never at 0%, grows with every device placed/started/finished.</li>
+          <li><strong>Overview</strong> — one card per device + gateway: location, run status, packets, live values, SF-sweep bar. Tapping selects it and opens the detail panel below.</li>
+          <li><strong>Selected device / gateway</strong> — live signal visible immediately, location, photos, run status, sweep progress, PDR per SF, device status (last packet, measured send interval, config downlink); Place/Relocate, start/stop run, move gateway. The selector at the top right is an alternative to tapping the card.</li>
+          <li><strong>RF environment</strong> (collapsible) — always running passively, no start/stop needed; shows our vs. foreign frames and CAF per channel/SF.</li>
+          <li><strong>Device registration</strong> (collapsible) — register new OTAA devices in ChirpStack; also holds the bulk Vicki commands (set interval / read version) for all registered devices.</li>
         </ul>
       </div>
 
