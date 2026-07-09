@@ -71,6 +71,12 @@ RF_FRAME_COLUMNS = [
     "vendor",
 ]
 
+# get_rf_environment: the live frame-log shows the last N foreign frames
+# (newest first); the traffic timeline covers a fixed 24 h window bucketed
+# by hour.
+RF_RECENT_FRAMES_LIMIT = 20
+RF_TIMELINE_HOURS = 24
+
 # CSV schema for per-run recordings (written by record_uplink_for_run).
 CSV_COLUMNS = [
     "timestamp_utc",
@@ -793,31 +799,54 @@ class Database:
             ).fetchone()
             return row["value"] if row else 0
 
-    def list_rf_frames(self) -> list[dict]:
-        """Full dump of the rf_frame log, oldest first — used by the CSV
-        export. Bounded by RF_FRAME_RETENTION_MAX, so this is a modest,
-        non-streamed read even for a long campaign."""
+    def list_rf_frames(self, limit: Optional[int] = None, newest_first: bool = False) -> list[dict]:
+        """Dump of the rf_frame log. Default (no args): the full log, oldest
+        first — used by the CSV export; bounded by RF_FRAME_RETENTION_MAX,
+        so that is a modest, non-streamed read even for a long campaign.
+        Pass limit/newest_first for a cheap indexed "last N frames" query
+        (e.g. get_rf_environment's live frame-log) instead of loading the
+        whole log."""
         with self._lock:
-            rows = self._conn.execute(
+            order = "id DESC" if newest_first else "id ASC"
+            sql = (
                 "SELECT id, ts, dev_addr, network, channel, sf, rssi, snr, mtype, "
-                "join_deveui, join_joineui, vendor FROM rf_frame ORDER BY id"
-            ).fetchall()
+                "join_deveui, join_joineui, vendor FROM rf_frame ORDER BY " + order
+            )
+            params: tuple = ()
+            if limit is not None:
+                sql += " LIMIT ?"
+                params = (limit,)
+            rows = self._conn.execute(sql, params).fetchall()
             return [dict(r) for r in rows]
 
-    def get_rf_environment(self, recent_window_s: int = 900, sparkline_buckets: int = 10) -> dict:
+    def get_rf_environment(
+        self,
+        recent_window_s: int = 900,
+        sparkline_buckets: int = 10,
+        now: Optional[datetime.datetime] = None,
+    ) -> dict:
         """Aggregate the RF-environment survey snapshot straight from the
         rf_frame log (plus the rf_stat own_frames counter) — this is the
         DB-backed replacement for the old in-memory
         CampaignState.get_rf_environment. See the rf_frame table comment
         above for what feeds it.
 
+        *now* is the reference "current time" for every time-windowed field
+        below (recent-window sparkline, the 24 h timeline) — defaults to
+        the real current time; a caller (tests) can pass a fixed value for
+        a deterministic window instead of depending on wall-clock time.
+
         Returns own_frames/foreign_frames totals, per-dev_addr latest-seen
         detail (foreign_devices), a per-network rollup, a foreign-only
         (channel, SF) matrix, per-OUI vendor counts (from join-requests),
-        an MType breakdown, and a recent-window frames/min figure with a
-        short sparkline.
+        an MType breakdown, a recent-window frames/min figure with a short
+        sparkline, an hourly 24 h traffic timeline, the last N frames for a
+        live log, and SF/RSSI distributions (data frames only — like
+        channel_sf_matrix, join-requests are excluded so these agree with
+        the heatmap).
         """
         with self._lock:
+            now = now or datetime.datetime.now(datetime.timezone.utc)
             own_frames = self.get_rf_stat("own_frames")
             total_row = self._conn.execute("SELECT COUNT(*) AS c FROM rf_frame").fetchone()
             foreign_frames = total_row["c"] if total_row else 0
@@ -880,7 +909,6 @@ class Database:
                 else:
                     mtype_counts["other"] += row["cnt"]
 
-            now = datetime.datetime.now(datetime.timezone.utc)
             cutoff = (now - datetime.timedelta(seconds=recent_window_s)).isoformat(
                 timespec="seconds"
             )
@@ -900,6 +928,76 @@ class Database:
                 if 0 <= idx < sparkline_buckets:
                     sparkline[sparkline_buckets - 1 - idx] += 1
 
+            # Traffic timeline — foreign frames per 1 h bucket over the last
+            # RF_TIMELINE_HOURS, zero-filled, oldest -> newest. Bucketed in
+            # Python (not SQL strftime) to match the sparkline above and
+            # avoid any doubt about SQLite's handling of the "+00:00" suffix
+            # in stored timestamps.
+            def _hour_floor(dt: datetime.datetime) -> datetime.datetime:
+                return dt.replace(minute=0, second=0, microsecond=0)
+
+            hour_start = _hour_floor(now)  # start of the current (newest) bucket
+            timeline_start = hour_start - datetime.timedelta(hours=RF_TIMELINE_HOURS - 1)
+            timeline_rows = self._conn.execute(
+                "SELECT ts FROM rf_frame WHERE ts >= ? ORDER BY ts",
+                (timeline_start.isoformat(timespec="seconds"),),
+            ).fetchall()
+            timeline_counts = [0] * RF_TIMELINE_HOURS
+            for row in timeline_rows:
+                t_hour = _hour_floor(datetime.datetime.fromisoformat(row["ts"]))
+                hours_ago = int((hour_start - t_hour).total_seconds() // 3600)
+                idx = RF_TIMELINE_HOURS - 1 - hours_ago
+                if 0 <= idx < RF_TIMELINE_HOURS:
+                    timeline_counts[idx] += 1
+            timeline = [
+                {
+                    "bucket": (timeline_start + datetime.timedelta(hours=i)).isoformat(
+                        timespec="seconds"
+                    ),
+                    "count": timeline_counts[i],
+                }
+                for i in range(RF_TIMELINE_HOURS)
+            ]
+
+            # Live frame log — the last RF_RECENT_FRAMES_LIMIT foreign frames
+            # (data frames AND join-requests), newest first.
+            recent_frames = [
+                {
+                    "ts": row["ts"],
+                    "dev_addr": row["dev_addr"],
+                    "network": row["network"],
+                    "sf": row["sf"],
+                    "rssi": row["rssi"],
+                    "mtype": row["mtype"],
+                }
+                for row in self.list_rf_frames(limit=RF_RECENT_FRAMES_LIMIT, newest_first=True)
+            ]
+
+            # SF / RSSI distributions — data frames only (dev_addr IS NOT
+            # NULL), same population as channel_sf_matrix, so these agree
+            # with the heatmap they're displayed alongside.
+            sf_rows = self._conn.execute(
+                "SELECT sf, COUNT(*) AS cnt FROM rf_frame "
+                "WHERE dev_addr IS NOT NULL AND sf IS NOT NULL GROUP BY sf"
+            ).fetchall()
+            sf_counts_by_val = {row["sf"]: row["cnt"] for row in sf_rows}
+            sf_distribution = {str(sf): sf_counts_by_val.get(sf, 0) for sf in range(7, 13)}
+
+            rssi_row = self._conn.execute(
+                "SELECT "
+                "  SUM(CASE WHEN rssi >= -80 THEN 1 ELSE 0 END) AS strong, "
+                "  SUM(CASE WHEN rssi < -80 AND rssi >= -100 THEN 1 ELSE 0 END) AS mid, "
+                "  SUM(CASE WHEN rssi < -100 AND rssi >= -115 THEN 1 ELSE 0 END) AS weak, "
+                "  SUM(CASE WHEN rssi < -115 THEN 1 ELSE 0 END) AS weakest "
+                "FROM rf_frame WHERE dev_addr IS NOT NULL AND rssi IS NOT NULL"
+            ).fetchone()
+            rssi_distribution = [
+                {"label": "≥ -80 dBm", "count": (rssi_row["strong"] or 0) if rssi_row else 0},
+                {"label": "-80…-100 dBm", "count": (rssi_row["mid"] or 0) if rssi_row else 0},
+                {"label": "-100…-115 dBm", "count": (rssi_row["weak"] or 0) if rssi_row else 0},
+                {"label": "< -115 dBm", "count": (rssi_row["weakest"] or 0) if rssi_row else 0},
+            ]
+
             return {
                 "own_frames": own_frames,
                 "foreign_frames": foreign_frames,
@@ -910,4 +1008,8 @@ class Database:
                 "channel_sf_matrix": channel_sf_matrix,
                 "frames_per_min": frames_per_min,
                 "frames_per_min_sparkline": sparkline,
+                "timeline": timeline,
+                "recent_frames": recent_frames,
+                "sf_distribution": sf_distribution,
+                "rssi_distribution": rssi_distribution,
             }
