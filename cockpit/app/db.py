@@ -15,7 +15,10 @@ Schema (see _SCHEMA below):
                adds an optional timed per-device SF-sweep to a run
                (planned_seconds/sf_schedule/interval_minutes/segment_index/
                segment_started_at) — NULL/0 on a run means "no sweep",
-               behaving exactly like a Phase A fixed run.
+               behaving exactly like a Phase A fixed run. "Trust &
+               Sichtbarkeit" adds a per-SF downlink reliability test
+               (downlink_test/dl_counts) on top of that — see
+               maybe_trigger_downlink_test/record_downlink_test_ack below.
 
 No GPS anywhere — placements are floor/room/description, not coordinates.
 """
@@ -99,7 +102,13 @@ CREATE TABLE IF NOT EXISTS run (
     sf_schedule           TEXT,             -- JSON [{"sf":7,"seconds":28800}, ...] or NULL
     interval_minutes      INTEGER,
     segment_index         INTEGER NOT NULL DEFAULT 0,
-    segment_started_at    TEXT
+    segment_started_at    TEXT,
+    -- "Trust & Sichtbarkeit" — per-SF downlink reliability test (confirmed
+    -- downlinks). downlink_test defaults ON; dl_counts is JSON
+    -- {"by_sf": {"<sf>": {"sent": int, "acked": int}}, "pending_sf": int|null}
+    -- — see maybe_trigger_downlink_test/record_downlink_test_ack.
+    downlink_test         INTEGER NOT NULL DEFAULT 1,
+    dl_counts             TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_run_device ON run(device_node_id);
 CREATE INDEX IF NOT EXISTS idx_run_status ON run(status);
@@ -122,7 +131,25 @@ _RUN_MIGRATION_COLUMNS: list[tuple[str, str]] = [
     ("interval_minutes", "INTEGER"),
     ("segment_index", "INTEGER NOT NULL DEFAULT 0"),
     ("segment_started_at", "TEXT"),
+    ("downlink_test", "INTEGER NOT NULL DEFAULT 1"),
+    ("dl_counts", "TEXT"),
 ]
+
+
+def parse_dl_counts(raw: Optional[str]) -> dict:
+    """Decode run.dl_counts JSON:
+    {"by_sf": {"<sf>": {"sent": int, "acked": int}}, "pending_sf": int|None}.
+    Empty/None/invalid -> the empty/default shape (never raises).
+    """
+    if not raw:
+        return {"by_sf": {}, "pending_sf": None}
+    try:
+        data = json.loads(raw)
+    except (TypeError, ValueError):
+        return {"by_sf": {}, "pending_sf": None}
+    if not isinstance(data, dict):
+        return {"by_sf": {}, "pending_sf": None}
+    return {"by_sf": data.get("by_sf") or {}, "pending_sf": data.get("pending_sf")}
 
 
 class Database:
@@ -339,6 +366,7 @@ class Database:
         planned_seconds: Optional[int] = None,
         sf_schedule: Optional[list] = None,
         interval_minutes: Optional[int] = None,
+        downlink_test: bool = True,
     ) -> dict:
         """Insert a new 'running' run row, write its CSV file + header, return it.
 
@@ -350,6 +378,12 @@ class Database:
         scheduler (see scheduler.py + main.py) advances it over time. When
         *sf_schedule* is None/empty, the row behaves exactly like a Phase A
         fixed run (no sweep) — full backward compatibility.
+
+        *downlink_test* (default True) enables the per-SF confirmed-downlink
+        reliability test (see maybe_trigger_downlink_test) — it only ever
+        actually fires for a sweep run (needs interval_minutes + sf_schedule
+        to attribute to an SF), so it is harmless to leave True on a plain
+        Phase A run too.
         """
         with self._lock:
             now = self._now()
@@ -359,11 +393,13 @@ class Database:
                 "INSERT INTO run "
                 "(device_node_id, device_placement_id, gateway_placement_id, phase, "
                 " csv_path, started_at, ended_at, status, reason, packets, "
-                " planned_seconds, sf_schedule, interval_minutes, segment_index, segment_started_at) "
-                "VALUES (?, ?, ?, ?, '', ?, NULL, 'running', NULL, 0, ?, ?, ?, 0, ?)",
+                " planned_seconds, sf_schedule, interval_minutes, segment_index, segment_started_at, "
+                " downlink_test, dl_counts) "
+                "VALUES (?, ?, ?, ?, '', ?, NULL, 'running', NULL, 0, ?, ?, ?, 0, ?, ?, NULL)",
                 (
                     device_node_id, device_placement_id, gateway_placement_id, phase, now,
                     planned_seconds, sf_schedule_json, interval_minutes, segment_started_at,
+                    1 if downlink_test else 0,
                 ),
             )
             run_id = cur.lastrowid
@@ -512,3 +548,98 @@ class Database:
                 writer.writerow(row)
 
             return self.increment_run_packets(run["id"])
+
+    # ------------------------------------------------------------------
+    # "Trust & Sichtbarkeit" — per-SF downlink reliability test
+    #
+    # LoRaWAN Class A: a confirmed downlink can only be *delivered* right
+    # after the device's own next uplink, and its MAC-ACK only becomes
+    # visible on the uplink *after that* — so "sent" and "acked" are two
+    # separate MQTT events, potentially minutes apart and, for a short
+    # sweep segment, potentially spanning a segment change. dl_counts'
+    # pending_sf remembers which SF the currently in-flight downlink was
+    # sent for, so the eventual ack is attributed correctly even if the
+    # sweep has since advanced.
+    # ------------------------------------------------------------------
+
+    def maybe_trigger_downlink_test(self, dev_eui: str, packet_count: int) -> Optional[dict]:
+        """Called after record_uplink_for_run, once per uplink, with the
+        packet count it just returned. Every Kth uplink
+        (K = max(1, round(15 / interval_minutes)), i.e. roughly one every
+        ~15 min) enqueues a confirmed benign downlink (fPort 1, data "04" =
+        read HW/SW version) for the device's CURRENT SF segment — unless
+        one is already pending/un-acked (never pile up) or downlink_test is
+        off for this run. Returns {"dev_eui", "f_port", "data_hex",
+        "run_id", "sf"} for the caller to actually enqueue via ChirpStack,
+        or None when nothing should be sent right now.
+        """
+        with self._lock:
+            node = self.get_node_by_eui(dev_eui)
+            if node is None or node["kind"] != "device":
+                return None
+            run = self.get_active_run(node["id"])
+            if run is None or not run.get("downlink_test"):
+                return None
+            interval_minutes = run.get("interval_minutes")
+            if not interval_minutes:
+                return None  # Phase A fixed run — no commanded rate, no SF to attribute to
+            schedule = json.loads(run["sf_schedule"]) if run.get("sf_schedule") else []
+            segment_index = run.get("segment_index") or 0
+            if not schedule or not (0 <= segment_index < len(schedule)):
+                return None
+            current_sf = schedule[segment_index]["sf"]
+
+            counts = parse_dl_counts(run.get("dl_counts"))
+            if counts.get("pending_sf") is not None:
+                return None  # a confirmed downlink is still in flight — don't pile up
+
+            k = max(1, round(15 / interval_minutes))
+            if packet_count % k != 0:
+                return None
+
+            by_sf = counts.setdefault("by_sf", {})
+            entry = by_sf.setdefault(str(current_sf), {"sent": 0, "acked": 0})
+            entry["sent"] += 1
+            counts["pending_sf"] = current_sf
+            self._conn.execute(
+                "UPDATE run SET dl_counts = ? WHERE id = ?", (json.dumps(counts), run["id"])
+            )
+            self._conn.commit()
+            return {
+                "dev_eui": dev_eui,
+                "f_port": 1,
+                "data_hex": "04",
+                "run_id": run["id"],
+                "sf": current_sf,
+            }
+
+    def record_downlink_test_ack(self, dev_eui: str, acknowledged: bool) -> None:
+        """Resolve the currently-pending downlink test for *dev_eui*'s
+        active run — attributed to whichever SF it was originally SENT for
+        (dl_counts.pending_sf), not whatever SF is current now. A no-op if
+        there is no active run or nothing pending (e.g. this ack belongs to
+        an unrelated confirmed downlink, such as a manual test/keep-alive).
+        A NACK (acknowledged=False) still clears pending_sf — ChirpStack has
+        resolved the attempt (exhausted retries), so the next uplink is free
+        to trigger another test.
+        """
+        with self._lock:
+            node = self.get_node_by_eui(dev_eui)
+            if node is None or node["kind"] != "device":
+                return
+            run = self.get_active_run(node["id"])
+            if run is None:
+                return
+            counts = parse_dl_counts(run.get("dl_counts"))
+            pending_sf = counts.get("pending_sf")
+            if pending_sf is None:
+                return
+            if acknowledged:
+                by_sf = counts.setdefault("by_sf", {})
+                entry = by_sf.setdefault(str(pending_sf), {"sent": 0, "acked": 0})
+                entry["acked"] += 1
+            counts["pending_sf"] = None
+            self._conn.execute(
+                "UPDATE run SET dl_counts = ? WHERE id = ?", (json.dumps(counts), run["id"])
+            )
+            self._conn.commit()

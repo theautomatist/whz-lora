@@ -14,9 +14,11 @@ import logging
 import threading
 from typing import Optional
 
+import grpc
 import paho.mqtt.client as mqtt
 from chirpstack_api.gw import gw_pb2
 
+from . import chirpstack as cs
 from . import config
 from .db import Database
 from .state import CampaignState
@@ -66,10 +68,16 @@ class MQTTIngest:
         state: CampaignState,
         app_id: str,
         db: Optional[Database] = None,
+        grpc_channel: Optional[grpc.Channel] = None,
+        grpc_token: Optional[str] = None,
     ) -> None:
         self._state = state
         self._app_id = app_id
         self._db = db  # F-0006 per-run CSV recording; None disables it (tests)
+        # "Trust & Sichtbarkeit" — per-SF downlink reliability test; None
+        # disables it (tests, or gRPC not (yet) available at startup).
+        self._grpc_channel = grpc_channel
+        self._grpc_token = grpc_token
         self._client: Optional[mqtt.Client] = None
         self._thread: Optional[threading.Thread] = None
         self._app_topic = f"application/{app_id}/device/+/event/+"
@@ -155,12 +163,15 @@ class MQTTIngest:
             metrics = _parse_uplink_event(evt)
             self._state.process_uplink(metrics)
             if self._db is not None:
+                packet_count = None
                 try:
-                    self._db.record_uplink_for_run(dev_eui, metrics)
+                    packet_count = self._db.record_uplink_for_run(dev_eui, metrics)
                 except Exception as e:
                     logger.warning(
                         "record_uplink_for_run failed for %s: %s", dev_eui, e
                     )
+                if packet_count is not None:
+                    self._maybe_send_downlink_test(dev_eui, packet_count)
         elif event_type == "join":
             dev_addr = evt.get("devAddr", "")
             self._state.process_join(dev_eui, dev_addr)
@@ -172,7 +183,15 @@ class MQTTIngest:
             # record it as the device's last-downlink activity (F-0006
             # "Trust & Sichtbarkeit" — Geräte-Status).
             self._state.record_downlink_txack(dev_eui)
-            if evt.get("acknowledged"):
+            acknowledged = bool(evt.get("acknowledged"))
+            if self._db is not None:
+                try:
+                    self._db.record_downlink_test_ack(dev_eui, acknowledged)
+                except Exception as e:
+                    logger.warning(
+                        "record_downlink_test_ack failed for %s: %s", dev_eui, e
+                    )
+            if acknowledged:
                 self._state.process_ack(dev_eui)
             else:
                 self._state.broadcast_nack(dev_eui)
@@ -181,6 +200,30 @@ class MQTTIngest:
             # the air (independent of confirmed/unconfirmed) — the earliest
             # "gesendet" signal for the Geräte-Status block.
             self._state.record_downlink_txack(dev_eui)
+
+    def _maybe_send_downlink_test(self, dev_eui: str, packet_count: int) -> None:
+        """F-0006 "Trust & Sichtbarkeit" — per-SF downlink reliability test.
+        Best-effort: does nothing without both a DB (to decide/track) and a
+        gRPC channel (to actually enqueue) — db.py already guards against
+        piling up (never triggers while one is still pending/un-acked) and
+        against a disabled run (downlink_test=False)."""
+        if self._db is None or not (self._grpc_channel and self._grpc_token):
+            return
+        try:
+            dl = self._db.maybe_trigger_downlink_test(dev_eui, packet_count)
+        except Exception as e:
+            logger.warning(
+                "maybe_trigger_downlink_test failed for %s: %s", dev_eui, e
+            )
+            return
+        if dl is None:
+            return
+        try:
+            cs.enqueue_downlink(
+                self._grpc_channel, self._grpc_token, dl["dev_eui"], dl["f_port"], dl["data_hex"]
+            )
+        except grpc.RpcError as e:
+            logger.warning("downlink-test enqueue failed for %s: %s", dev_eui, e)
 
     def _handle_gateway_up(self, payload: bytes) -> None:
         """Decode a gateway UplinkFrame protobuf and forward to coex scan.

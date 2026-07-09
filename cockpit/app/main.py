@@ -29,6 +29,7 @@ Routes:
   GET  /api/runs               run history for a device (?node_id=)
   GET  /api/run/{id}/csv       download a run's CSV file
   GET  /api/run/{id}/series    per-run RSSI/SNR/SF time series for the "Verlauf" line chart
+  GET  /api/run/{id}/stats     per-SF uplink + downlink PDR for one run (coverage that matters)
 
   F-0006 Phase B — timed per-device SF-sweep on top of /api/run/start:
   optional duration_seconds/sf_schedule/interval_minutes switch the device
@@ -41,6 +42,11 @@ Routes:
   coex_* fields) + per-device config visibility:
   GET  /api/device/{node_id}/config-status   live uplink/downlink-queue status for one device
   POST /api/device/{node_id}/set-interval    manually enqueue the Vicki send-interval downlink
+
+  F-0006 "Trust & Sichtbarkeit" — per-SF PDR (coverage that actually
+  matters, not RSSI which barely varies with SF): POST /api/run/start's
+  downlink_test flag + ingest.py's confirmed-downlink test feed
+  GET /api/run/{id}/stats above.
 """
 import asyncio
 import base64
@@ -65,7 +71,7 @@ from pydantic import BaseModel, field_validator
 from . import chirpstack as cs
 from . import config
 from . import scheduler
-from .db import MAX_PHOTOS_PER_PLACEMENT, Database
+from .db import MAX_PHOTOS_PER_PLACEMENT, Database, parse_dl_counts
 from .ingest import MQTTIngest
 from .state import CampaignState
 
@@ -210,9 +216,11 @@ async def _lifespan(app: FastAPI):
         except Exception as e:
             logger.warning("Node sync (devices) failed: %s", e)
 
-    # Start MQTT ingest
+    # Start MQTT ingest — gRPC channel/token (if available) enable the
+    # per-SF downlink reliability test (F-0006 "Trust & Sichtbarkeit");
+    # ingest degrades gracefully (test disabled) when they're None.
     if _app_id:
-        _ingest = MQTTIngest(campaign, _app_id, _db)
+        _ingest = MQTTIngest(campaign, _app_id, _db, _grpc_channel, _grpc_token)
         _ingest.start()
     else:
         logger.warning("MQTT ingest not started — no app_id available")
@@ -498,6 +506,10 @@ class RunStartRequest(BaseModel):
     duration_seconds: Optional[int] = None
     sf_schedule: Optional[list[SFSegment]] = None
     interval_minutes: Optional[int] = None
+    # "Trust & Sichtbarkeit" — per-SF confirmed-downlink reliability test,
+    # on by default; only actually fires for a sweep run (see
+    # db.maybe_trigger_downlink_test), so it is harmless on a plain run too.
+    downlink_test: bool = True
 
     @field_validator("interval_minutes")
     @classmethod
@@ -1039,6 +1051,7 @@ def start_run(req: RunStartRequest):
         planned_seconds=planned_seconds,
         sf_schedule=sf_schedule,
         interval_minutes=interval_minutes,
+        downlink_test=req.downlink_test,
     )
 
     if sf_schedule:
@@ -1193,9 +1206,12 @@ async def download_run_csv(run_id: int):
 
 
 # ---------------------------------------------------------------------------
-# "Verlauf" line chart — per-run RSSI/SNR/SF time series
+# "Verlauf" line chart — per-run RSSI/SNR/SF time series — and the per-SF
+# PDR stats below it (F-0006 "Trust & Sichtbarkeit" — coverage that actually
+# matters is delivery reliability per SF, not RSSI, which barely changes
+# with SF).
 #
-# Parses the run's CSV file directly (that's where record_uplink_for_run
+# Both parse the run's CSV file directly (that's where record_uplink_for_run
 # writes per-uplink metrics; the sqlite `run` row only holds the summary/
 # packet count) — pure w.r.t. HTTP/DB, so unit-testable without a running
 # FastAPI app or a real run (mirrors _resolve_schedule above).
@@ -1215,6 +1231,15 @@ def _to_number(value, cast):
         return None
 
 
+def _read_run_csv_rows(csv_path: Optional[str]) -> list[dict]:
+    """Read a run's CSV rows as dicts, or [] if csv_path is empty/missing —
+    shared by _parse_run_series and _compute_run_stats below."""
+    if not csv_path or not os.path.exists(csv_path):
+        return []
+    with open(csv_path, newline="", encoding="utf-8") as f:
+        return list(csv.DictReader(f))
+
+
 def _parse_run_series(
     csv_path: Optional[str], started_at: Optional[str], max_points: int = _RUN_SERIES_MAX_POINTS
 ) -> dict:
@@ -1226,11 +1251,10 @@ def _parse_run_series(
     it just yields no points, so the caller can always return HTTP 200.
     """
     started = scheduler.parse_iso(started_at)
-    if not csv_path or not os.path.exists(csv_path) or started is None:
+    if started is None:
         return {"total": 0, "points": []}
 
-    with open(csv_path, newline="", encoding="utf-8") as f:
-        rows = list(csv.DictReader(f))
+    rows = _read_run_csv_rows(csv_path)
     total = len(rows)
 
     if total > max_points:
@@ -1270,6 +1294,163 @@ async def run_series(run_id: int):
         "sf_schedule": scheduler.parse_schedule(run.get("sf_schedule")),
         "total": series["total"],
         "points": series["points"],
+    }
+
+
+# ---------------------------------------------------------------------------
+# Per-SF PDR stats — GET /api/run/{run_id}/stats
+#
+# Uplink PDR is derived from the CSV (expected from the run's COMMANDED
+# interval_minutes — NOT the measured cadence, which would hide loss —
+# received = CSV rows whose timestamp falls in that segment's time window).
+# Downlink PDR comes from run.dl_counts, maintained by
+# db.maybe_trigger_downlink_test/record_downlink_test_ack as confirmed
+# downlinks are sent/acked (see db.py's "Trust & Sichtbarkeit" section).
+# ---------------------------------------------------------------------------
+
+
+def _segment_bounds(schedule: list[dict]) -> list[tuple[float, float]]:
+    """Cumulative (start, end) offsets in seconds since started_at for each
+    schedule segment, back-to-back in order."""
+    bounds = []
+    acc = 0.0
+    for seg in schedule:
+        bounds.append((acc, acc + seg["seconds"]))
+        acc += seg["seconds"]
+    return bounds
+
+
+def _segment_index_for_offset(t: float, bounds: list[tuple[float, float]]) -> Optional[int]:
+    """Which schedule segment does offset *t* (seconds since started_at)
+    fall into? A t past the last boundary folds into the last segment
+    (covers scheduler-tick lag and a manually-stopped run's tail packets);
+    None for a negative offset (defensive — should not happen) or an empty
+    schedule."""
+    if t < 0 or not bounds:
+        return None
+    for i, (start, end) in enumerate(bounds):
+        if start <= t < end:
+            return i
+    return len(bounds) - 1
+
+
+def _avg(values: list[float]) -> Optional[float]:
+    return round(sum(values) / len(values), 1) if values else None
+
+
+def _compute_run_stats(run: dict, now: Optional[datetime.datetime] = None) -> dict:
+    """Return {"sf_stats": [...], "overall": {...}} — see module docstring
+    above. Pure w.r.t. HTTP/DB beyond the already-fetched *run* row — only
+    reads the CSV file, so unit-testable without a running app.
+    """
+    schedule = scheduler.parse_schedule(run.get("sf_schedule"))
+    started_at = scheduler.parse_iso(run.get("started_at"))
+    interval_minutes = run.get("interval_minutes")
+    rows = _read_run_csv_rows(run.get("csv_path"))
+    dl_counts = parse_dl_counts(run.get("dl_counts"))
+    by_sf_dl = dl_counts.get("by_sf", {})
+
+    if not schedule or not interval_minutes or started_at is None:
+        # Phase A fixed run (or corrupted/legacy data) — no SF-segment
+        # concept (no commanded interval to derive "expected" from); still
+        # surface an overall row so the panel has *something* to show.
+        rssi_vals = [v for v in (_to_number(r.get("rssi_dbm"), float) for r in rows) if v is not None]
+        snr_vals = [v for v in (_to_number(r.get("snr_db"), float) for r in rows) if v is not None]
+        dl_sent = sum(e.get("sent", 0) for e in by_sf_dl.values())
+        dl_acked = sum(e.get("acked", 0) for e in by_sf_dl.values())
+        overall = {
+            "sf": None, "expected": None, "received": len(rows), "pdr": None,
+            "rssi_avg": _avg(rssi_vals), "snr_avg": _avg(snr_vals),
+            "dl_sent": dl_sent, "dl_acked": dl_acked,
+            "dl_pdr": round(dl_acked / dl_sent, 4) if dl_sent else None,
+        }
+        return {"sf_stats": [], "overall": overall}
+
+    if run.get("status") == "running":
+        reference = now or datetime.datetime.now(datetime.timezone.utc)
+    else:
+        reference = scheduler.parse_iso(run.get("ended_at")) or now or datetime.datetime.now(
+            datetime.timezone.utc
+        )
+    elapsed_total = max(0.0, (reference - started_at).total_seconds())
+
+    bounds = _segment_bounds(schedule)
+    buckets: list[list[dict]] = [[] for _ in schedule]
+    for row in rows:
+        ts = scheduler.parse_iso(row.get("timestamp_utc"))
+        if ts is None:
+            continue
+        idx = _segment_index_for_offset((ts - started_at).total_seconds(), bounds)
+        if idx is not None:
+            buckets[idx].append(row)
+
+    interval_s = interval_minutes * 60
+    sf_stats = []
+    total_expected = total_received = total_dl_sent = total_dl_acked = 0
+    all_rssi: list[float] = []
+    all_snr: list[float] = []
+
+    for i, seg in enumerate(schedule):
+        seg_start, seg_end = bounds[i]
+        seg_elapsed = max(0.0, min(elapsed_total, seg_end) - seg_start)
+        expected = round(seg_elapsed / interval_s)
+        seg_rows = buckets[i]
+        received = len(seg_rows)
+        rssi_vals = [v for v in (_to_number(r.get("rssi_dbm"), float) for r in seg_rows) if v is not None]
+        snr_vals = [v for v in (_to_number(r.get("snr_db"), float) for r in seg_rows) if v is not None]
+        dl_entry = by_sf_dl.get(str(seg["sf"]), {})
+        dl_sent = dl_entry.get("sent", 0)
+        dl_acked = dl_entry.get("acked", 0)
+
+        sf_stats.append({
+            "sf": seg["sf"],
+            "expected": expected,
+            "received": received,
+            "pdr": round(min(1.0, received / max(1, expected)), 4),
+            "rssi_avg": _avg(rssi_vals),
+            "snr_avg": _avg(snr_vals),
+            "dl_sent": dl_sent,
+            "dl_acked": dl_acked,
+            "dl_pdr": round(dl_acked / dl_sent, 4) if dl_sent else None,
+        })
+        total_expected += expected
+        total_received += received
+        all_rssi.extend(rssi_vals)
+        all_snr.extend(snr_vals)
+        total_dl_sent += dl_sent
+        total_dl_acked += dl_acked
+
+    overall = {
+        "sf": None,
+        "expected": total_expected,
+        "received": total_received,
+        "pdr": round(min(1.0, total_received / max(1, total_expected)), 4),
+        "rssi_avg": _avg(all_rssi),
+        "snr_avg": _avg(all_snr),
+        "dl_sent": total_dl_sent,
+        "dl_acked": total_dl_acked,
+        "dl_pdr": round(total_dl_acked / total_dl_sent, 4) if total_dl_sent else None,
+    }
+    return {"sf_stats": sf_stats, "overall": overall}
+
+
+@app.get("/api/run/{run_id}/stats", dependencies=[Depends(_require_auth)])
+async def run_stats(run_id: int):
+    """Per-SF uplink PDR (expected from the commanded interval_minutes,
+    never the measured one — that would hide loss) + downlink PDR (from
+    confirmed-downlink tests, see db.maybe_trigger_downlink_test) for one
+    run. A Phase A fixed run (no sf_schedule) gets sf_stats: [] and an
+    overall-only summary."""
+    d = _dbh()
+    run = d.get_run(run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="run not found")
+    stats = _compute_run_stats(run)
+    return {
+        "run_id": run["id"],
+        "downlink_test": bool(run.get("downlink_test")),
+        "sf_stats": stats["sf_stats"],
+        "overall": stats["overall"],
     }
 
 
