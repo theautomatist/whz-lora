@@ -42,6 +42,14 @@ Routes:
                                 as they stood during the run; measurement data itself stays on
                                 the /series, /stats, /csv, and /api/photo/{id} endpoints above
 
+  F-0008 Map / Placement Editor (PoC) — drag node markers onto an uploaded map
+  image; positions are image-relative fractions, not real-world coordinates:
+  POST   /api/floorplan            upload a map image (multipart), becomes current
+  GET    /api/floorplan            the current floorplan + its markers
+  GET    /api/floorplan/{id}/image serve a floorplan image
+  PUT    /api/marker               upsert a node's marker position on the current floorplan
+  DELETE /api/marker/{node_id}     remove a node's marker from the current floorplan
+
   F-0006 Phase B — timed per-device SF-sweep on top of /api/run/start:
   optional duration_seconds/sf_schedule/interval_minutes switch the device
   through SF7 -> SF9 -> SF12 (default 24 h, 8 h each) on a 5-min send
@@ -74,11 +82,11 @@ from contextlib import asynccontextmanager
 from typing import Optional
 
 import grpc
-from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile, status
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 from . import chirpstack as cs
 from . import config
@@ -566,6 +574,16 @@ class SetIntervalRequest(BaseModel):
         return v
 
 
+class MarkerUpsertRequest(BaseModel):
+    """F-0008 Map / Placement Editor (PoC) — PUT /api/marker. x/y are
+    fractions (0..1) of the current floorplan image, not real-world
+    coordinates — see the floorplan/map_marker table comments in db.py."""
+
+    node_id: int
+    x: float = Field(ge=0.0, le=1.0)
+    y: float = Field(ge=0.0, le=1.0)
+
+
 # Map logical phase names to ChirpStack device-profile names
 _PHASE_PROFILES: dict[str, str] = {
     "sf9":  config.PROFILE_SF9,
@@ -941,6 +959,95 @@ async def get_photo(photo_id: int):
         raise HTTPException(status_code=404, detail="photo file missing on disk")
     media_type, _ = mimetypes.guess_type(path)
     return FileResponse(path, media_type=media_type or "application/octet-stream")
+
+
+# ---------------------------------------------------------------------------
+# F-0008 Map / Placement Editor (PoC) — drag node markers onto an uploaded
+# map image. Explicitly a placeholder: the first real map is an isometric
+# building view whose perspective distorts real coordinates, so x/y are
+# fractions (0..1) of the image, not real-world positions — this is about
+# the editor UX + persistence, not accurate positioning yet. A new upload
+# simply becomes the current floorplan (the most recently uploaded row);
+# older floorplans/markers are kept, not surfaced. Reboot-safe: same
+# SQLite DB as everything else, images under /data/floorplans/.
+# ---------------------------------------------------------------------------
+
+
+@app.post("/api/floorplan", dependencies=[Depends(_require_auth)])
+async def upload_floorplan(file: UploadFile = File(...), name: str = Form("")):
+    """Upload a map image — any image is fine (the isometric PoC JPEG now,
+    a real floor plan later); becomes the current floorplan."""
+    d = _dbh()
+    ext = os.path.splitext(file.filename or "")[1].lower() or ".jpg"
+    os.makedirs(config.FLOORPLANS_DIR, exist_ok=True)
+    ts = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    filename = f"floorplan_{ts}{ext}"
+    dest = os.path.join(config.FLOORPLANS_DIR, filename)
+
+    content = await file.read()
+    with open(dest, "wb") as f:
+        f.write(content)
+
+    fp = d.create_floorplan(name.strip() or file.filename or "Map", filename)
+    return {"id": fp["id"], "name": fp["name"], "image_url": f"/api/floorplan/{fp['id']}/image"}
+
+
+@app.get("/api/floorplan", dependencies=[Depends(_require_auth)])
+async def get_current_floorplan():
+    """The current floorplan (most recently uploaded) + its markers, joined
+    with each node's name/kind. {"floorplan": null, "markers": []} when
+    nothing has been uploaded yet."""
+    d = _dbh()
+    fp = d.get_current_floorplan()
+    if fp is None:
+        return {"floorplan": None, "markers": []}
+    return {
+        "floorplan": {
+            "id": fp["id"],
+            "name": fp["name"],
+            "image_url": f"/api/floorplan/{fp['id']}/image",
+        },
+        "markers": d.list_markers(fp["id"]),
+    }
+
+
+@app.get("/api/floorplan/{floorplan_id}/image", dependencies=[Depends(_require_auth)])
+async def get_floorplan_image(floorplan_id: int):
+    d = _dbh()
+    fp = d.get_floorplan(floorplan_id)
+    if fp is None:
+        raise HTTPException(status_code=404, detail="floorplan not found")
+    path = os.path.join(config.FLOORPLANS_DIR, fp["image_filename"])
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="floorplan image missing on disk")
+    media_type, _ = mimetypes.guess_type(path)
+    return FileResponse(path, media_type=media_type or "application/octet-stream")
+
+
+@app.put("/api/marker", dependencies=[Depends(_require_auth)])
+async def upsert_marker(req: MarkerUpsertRequest):
+    """Upsert a node's marker position (x,y as fractions 0..1) on the
+    current floorplan — one marker per node, unique per (floorplan, node)."""
+    d = _dbh()
+    fp = d.get_current_floorplan()
+    if fp is None:
+        raise HTTPException(status_code=404, detail="no floorplan uploaded yet")
+    if d.get_node(req.node_id) is None:
+        raise HTTPException(status_code=404, detail="node not found")
+    d.upsert_marker(fp["id"], req.node_id, req.x, req.y)
+    return {"ok": True}
+
+
+@app.delete("/api/marker/{node_id}", dependencies=[Depends(_require_auth)])
+async def remove_marker(node_id: int):
+    """Remove a node's marker from the current floorplan — a no-op (still
+    200) if it wasn't on the map."""
+    d = _dbh()
+    fp = d.get_current_floorplan()
+    if fp is None:
+        raise HTTPException(status_code=404, detail="no floorplan uploaded yet")
+    d.delete_marker(fp["id"], node_id)
+    return {"ok": True}
 
 
 def _resolve_run_placements(

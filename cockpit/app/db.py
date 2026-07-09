@@ -31,8 +31,17 @@ Schema (see _SCHEMA below):
   rf_stat    — small persistent key/value counter table alongside rf_frame
                (currently just "own_frames") so the own/foreign totals
                also survive a restart.
+  floorplan  — an uploaded map image (F-0008 Map / Placement Editor, PoC);
+               the most recently uploaded row is always "current" (see
+               get_current_floorplan) — older rows/markers are kept, just no
+               longer surfaced.
+  map_marker — a node's dragged position (x,y as fractions 0..1 of the
+               image — NOT real-world coordinates, see the module docstring
+               in main.py's F-0008 section) on one floorplan; unique per
+               (floorplan_id, node_id), upserted on every drag.
 
-No GPS anywhere — placements are floor/room/description, not coordinates.
+No GPS anywhere — placements are floor/room/description, not coordinates
+(map_marker above is image-relative, same idea).
 """
 import csv
 import datetime
@@ -176,6 +185,23 @@ CREATE TABLE IF NOT EXISTS rf_stat (
     key   TEXT PRIMARY KEY,
     value INTEGER NOT NULL DEFAULT 0
 );
+
+CREATE TABLE IF NOT EXISTS floorplan (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    name           TEXT NOT NULL,
+    image_filename TEXT NOT NULL,
+    uploaded_at    TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS map_marker (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    floorplan_id INTEGER NOT NULL REFERENCES floorplan(id),
+    node_id      INTEGER NOT NULL REFERENCES node(id),
+    x            REAL NOT NULL,
+    y            REAL NOT NULL,
+    UNIQUE(floorplan_id, node_id)
+);
+CREATE INDEX IF NOT EXISTS idx_map_marker_floorplan ON map_marker(floorplan_id);
 """
 
 # NOTE — schema deviation from the original brief: a `packets INTEGER` column
@@ -1026,3 +1052,68 @@ class Database:
                 "sf_distribution": sf_distribution,
                 "rssi_distribution": rssi_distribution,
             }
+
+    # ------------------------------------------------------------------
+    # floorplan / map_marker — Map / Placement Editor (F-0008 PoC)
+    # ------------------------------------------------------------------
+
+    def create_floorplan(self, name: str, image_filename: str) -> dict:
+        """Insert a new floorplan row. The most recently uploaded one is
+        always "current" (see get_current_floorplan) — no separate flag to
+        keep in sync; older floorplans/markers are simply left behind,
+        still in the DB but no longer surfaced by GET /api/floorplan."""
+        with self._lock:
+            cur = self._conn.execute(
+                "INSERT INTO floorplan (name, image_filename, uploaded_at) VALUES (?, ?, ?)",
+                (name, image_filename, self._now()),
+            )
+            self._conn.commit()
+            row = self._conn.execute(
+                "SELECT * FROM floorplan WHERE id = ?", (cur.lastrowid,)
+            ).fetchone()
+            return dict(row)
+
+    def get_current_floorplan(self) -> Optional[dict]:
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT * FROM floorplan ORDER BY id DESC LIMIT 1"
+            ).fetchone()
+            return dict(row) if row else None
+
+    def get_floorplan(self, floorplan_id: int) -> Optional[dict]:
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT * FROM floorplan WHERE id = ?", (floorplan_id,)
+            ).fetchone()
+            return dict(row) if row else None
+
+    def upsert_marker(self, floorplan_id: int, node_id: int, x: float, y: float) -> None:
+        """One marker per (floorplan_id, node_id) — a re-save (drag) just
+        moves it."""
+        with self._lock:
+            self._conn.execute(
+                "INSERT INTO map_marker (floorplan_id, node_id, x, y) VALUES (?, ?, ?, ?) "
+                "ON CONFLICT(floorplan_id, node_id) DO UPDATE SET x = excluded.x, y = excluded.y",
+                (floorplan_id, node_id, x, y),
+            )
+            self._conn.commit()
+
+    def delete_marker(self, floorplan_id: int, node_id: int) -> None:
+        """A no-op if the node had no marker on this floorplan."""
+        with self._lock:
+            self._conn.execute(
+                "DELETE FROM map_marker WHERE floorplan_id = ? AND node_id = ?",
+                (floorplan_id, node_id),
+            )
+            self._conn.commit()
+
+    def list_markers(self, floorplan_id: int) -> list[dict]:
+        """Markers on one floorplan, joined with each node's name/kind."""
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT m.node_id, n.name, n.kind, m.x, m.y "
+                "FROM map_marker m JOIN node n ON n.id = m.node_id "
+                "WHERE m.floorplan_id = ? ORDER BY m.id",
+                (floorplan_id,),
+            ).fetchall()
+            return [dict(r) for r in rows]
