@@ -25,6 +25,7 @@
   adr_plugins=[
     "/etc/chirpstack/adr_fixed_dr0.js",
     "/etc/chirpstack/adr_fixed_dr3.js",
+    "/etc/chirpstack/adr_fixed_dr5.js",
   ]
 
 [api]
