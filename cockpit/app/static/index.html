@@ -154,9 +154,9 @@
 
     <!-- Actions -->
     <div class="brow">
-      <button class="btn btn-p" id="btn-place" onclick="openPlaceSheet('device')" style="display:none">Place / Relocate</button>
+      <button class="btn btn-p" id="btn-place" onclick="onPlaceOrRelocateClick()" style="display:none">Place / Relocate</button>
       <button class="btn btn-d" id="btn-run-stop" onclick="stopSelectedRun()" style="display:none">Stop run</button>
-      <button class="btn btn-p" id="btn-gw-move" onclick="openPlaceSheet('gateway')" style="display:none">Move gateway</button>
+      <button class="btn btn-p" id="btn-gw-move" onclick="onMoveGatewayClick()" style="display:none">Move gateway</button>
     </div>
 
     <div id="run-start-block" style="display:none">
@@ -369,8 +369,13 @@
         <div class="f" id="sheet-photo-field">
           <label>Photos (max. 3)</label>
           <div id="sheet-photo-thumbs" class="photo-thumbs"></div>
-          <input type="file" id="sheet-photo-input" accept="image/*" capture="environment" style="display:none" onchange="onSheetPhotoSelected(event)">
-          <button type="button" class="btn btn-o" id="sheet-photo-add-btn" onclick="document.getElementById('sheet-photo-input').click()">+ Take photo</button>
+          <input type="file" id="sheet-photo-upload-input" accept="image/*" multiple style="display:none" onchange="onSheetPhotoSelected(event)">
+          <input type="file" id="sheet-photo-camera-input" accept="image/*" capture="environment" style="display:none" onchange="onSheetPhotoSelected(event)">
+          <div class="brow" id="sheet-photo-btn-row">
+            <button type="button" class="btn btn-o" id="sheet-photo-upload-btn" onclick="document.getElementById('sheet-photo-upload-input').click()">Upload photo</button>
+            <button type="button" class="btn btn-o" id="sheet-photo-camera-btn" onclick="document.getElementById('sheet-photo-camera-input').click()">Take Picture</button>
+          </div>
+          <p class="hint" id="sheet-photo-cap-hint" style="display:none">3/3 photos</p>
         </div>
 
         <div class="brow">
@@ -429,9 +434,9 @@
           <li>The <strong>glowing SF bar</strong> shows the sweep live: completed stages ✓, the current stage pulses, future stages stay dark. Progress is always shown relative to the overall plan (e.g. "14 h of 24 h"), never in isolation.</li>
           <li>Live <strong>PDR per SF</strong> shows delivery reliability for each spreading factor — both uplink (received/expected) and downlink (ACK rate from confirmed test downlinks) — the coverage metric that actually matters, since RSSI barely changes with SF.</li>
           <li>When the planned duration elapses, the run ends automatically — the card briefly celebrates with a pulse and shows <strong>"done ✓"</strong>.</li>
-          <li><strong>Relocate:</strong> moving to the next spot? Tap "Place / Relocate" again — it automatically closes the running run and starts a new one right away.</li>
+          <li><strong>Relocate:</strong> moving to the next spot? Tap "Place / Relocate" again — if a measurement is still running it first asks you to confirm, then closes it and starts a new one right away.</li>
           <li>Done early? <strong>"Stop run"</strong> asks for confirmation and shows exactly which SF stages would still be missing — so data loss is never a surprise.</li>
-          <li><strong>Moving the gateway</strong> only works once no run is active — otherwise a warning shows exactly what would be lost per device; "Move anyway" ends the runs in a controlled way (data is kept).</li>
+          <li><strong>Moving the gateway</strong> while measurements are still running first shows a warning with exactly what would be lost per device — confirm "Move anyway" to end them in a controlled way (data is kept) and continue to the move dialog.</li>
         </ul>
       </div>
 
@@ -442,7 +447,7 @@
           <li>"Place / Relocate" → check/adjust the pre-filled fields, pick the antenna, optionally add photos → Save.</li>
           <li>"Start run — 24 h · SF7→SF9→SF12 · 5-min interval" (the gateway must be placed too), or pick a custom duration/interval/SF sequence under "Customize".</li>
           <li>The sweep runs automatically through SF7 → SF9 → SF12 (or your chosen sequence) — the glowing bar shows progress, always relative to the total duration.</li>
-          <li>Device moved? Tap "Place / Relocate" again — it closes the run automatically and starts a new one right away.</li>
+          <li>Device moved? Tap "Place / Relocate" again — confirm stopping the running measurement, and it closes the run and starts a new one right away.</li>
           <li>Done early? "Stop run" (with a confirmation prompt). If the duration runs out, the run ends by itself and the card shows "done ✓". Each run's CSV is available for download in History.</li>
         </ol>
       </div>
@@ -480,7 +485,7 @@
           <li><strong>Campaign status</strong> — overall progress as a ring; never at 0%, grows with every device placed/started/finished.</li>
           <li><strong>Overview</strong> — one card per device + gateway: location, run status, packets, live values, SF-sweep bar. Tapping selects it and opens the detail panel below.</li>
           <li><strong>Selected device / gateway</strong> — live signal visible immediately, location, photos, run status, sweep progress, PDR per SF, device status (last packet, measured send interval, config downlink); Place/Relocate, start/stop run, move gateway. The selector at the top right is an alternative to tapping the card.</li>
-          <li><strong>RF Environment</strong> (collapsible) — always running passively, no start/stop needed; a spectrum survey of what the gateway overhears: a channel × SF heatmap of foreign traffic, detected networks (TTN/private/other), a scrollable foreign-device list, nearby vendors (from joins, best-effort), and band busyness (frames/min + MType breakdown).</li>
+          <li><strong>RF Environment</strong> — always running passively, no start/stop needed, recorded continuously; a spectrum survey of what the gateway overhears: a channel × SF heatmap of foreign traffic, detected networks (TTN/private/other), a scrollable foreign-device list, nearby vendors (from joins, best-effort), band busyness (frames/min + MType breakdown), and a CSV download of the full log.</li>
           <li><strong>Device registration</strong> (collapsible) — register new OTAA devices in ChirpStack; also holds the bulk Vicki commands (set interval / read version) for all registered devices.</li>
         </ul>
       </div>

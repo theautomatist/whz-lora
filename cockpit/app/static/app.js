@@ -22,6 +22,12 @@ let _devConfigStatus = null; // { nodeId, last_uplink_at, interval_seconds, queu
 let _sheetMode    = null; // 'device' | 'gateway'
 let _sheetAntenna = '3dbi';
 let _sheetPhotos  = [];   // File[] queued for upload after the placement is created
+let _gatewayForce = false; // set by onMoveGatewayClick() before opening the gateway
+                            // sheet — true when the pre-flight conflict check already
+                            // got the operator's "end the running measurements" OK, so
+                            // submitSheet() must call /api/gateway/move/force, not the
+                            // plain /api/gateway/move. Reset on sheet open (device mode)
+                            // and close — see openPlaceSheet()/closeSheet().
 
 // ---------------------------------------------------------------------------
 // Toast
@@ -721,19 +727,34 @@ function sweepStatusText(run) {
   return `${text} · ${run.packets} packets`;
 }
 
+/** One row of the loss-framed list — shared by the gateway-move pre-flight
+ * confirm modal (onMoveGatewayClick) and the in-sheet fallback conflict box
+ * (showGatewayConflict). */
+function _lossRowHtml(name, detail) {
+  return `
+    <div class="loss-row">
+      <div class="loss-name">${esc(name)}</div>
+      <div class="loss-detail">${esc(detail)}</div>
+    </div>`;
+}
+
+function _gatewayLossTitle(count) {
+  return count === 1 ? '1 running measurement will be lost' : `${count} running measurements will be lost`;
+}
+
 // ---------------------------------------------------------------------------
 // Generic confirm modal (reused for stop-run + gateway-force loss prompts)
 // ---------------------------------------------------------------------------
 
 let _confirmResolve = null;
 
-function confirmModal({ title, message, icon = '⚠️', okLabel = 'Confirm', cancelLabel = 'Cancel' }) {
+function confirmModal({ title, message, icon = '⚠️', okLabel = 'Confirm', cancelLabel = 'Cancel', listHtml = '' }) {
   return new Promise(resolve => {
     _confirmResolve = resolve;
     document.getElementById('confirm-icon').textContent = icon;
     document.getElementById('confirm-title').textContent = title;
     document.getElementById('confirm-message').innerHTML = message;
-    document.getElementById('confirm-list').innerHTML = '';
+    document.getElementById('confirm-list').innerHTML = listHtml;
     document.getElementById('confirm-ok-btn').textContent = okLabel;
     document.getElementById('confirm-cancel-btn').textContent = cancelLabel;
     document.getElementById('confirm-ov').classList.add('open');
@@ -873,6 +894,57 @@ async function stopSelectedRun() {
 // Smart defaults (principle 1) + outcome-stating submit labels (principle 4)
 // ---------------------------------------------------------------------------
 
+/** "Place / Relocate" button — the confirm gate sits BEFORE the data-entry
+ * sheet: a running measurement is a real loss if relocated, so confirm
+ * first; a never-run/no-run device has nothing to lose, so it's just a
+ * placement — open the sheet directly. */
+async function onPlaceOrRelocateClick() {
+  const node = _nodesById[_selectedNodeId];
+  if (!node) return;
+  const run = node.active_run;
+
+  if (run && run.status === 'running') {
+    const ok = await confirmModal({
+      icon: '⚠️',
+      title: 'Stop the running measurement?',
+      message: `<p>${esc(sweepStatusText(run))}</p><p>Relocating will stop it and start a new protocol.</p>`,
+      okLabel: 'Stop & relocate',
+      cancelLabel: 'Cancel',
+    });
+    if (!ok) return;
+  }
+  openPlaceSheet('device');
+}
+
+/** "Move gateway" button — same confirm-before-sheet ordering as
+ * onPlaceOrRelocateClick above: check for running measurements FIRST (from
+ * the already-loaded _nodes, no extra API call) and confirm the loss before
+ * the data-entry sheet even opens, rather than opening the sheet and only
+ * discovering the 409 conflict on submit. _gatewayForce then tells
+ * submitSheet() which endpoint to call. */
+async function onMoveGatewayClick() {
+  const runningDevices = _nodes.filter(
+    n => n.kind === 'device' && n.active_run && n.active_run.status === 'running'
+  );
+
+  if (runningDevices.length) {
+    const listHtml = runningDevices.map(n => _lossRowHtml(n.name, sweepStatusText(n.active_run))).join('');
+    const ok = await confirmModal({
+      icon: '⚠️',
+      title: _gatewayLossTitle(runningDevices.length),
+      message: '',
+      listHtml,
+      okLabel: 'Move anyway — end measurements',
+      cancelLabel: 'Cancel',
+    });
+    if (!ok) return;
+    _gatewayForce = true;
+  } else {
+    _gatewayForce = false;
+  }
+  openPlaceSheet('gateway');
+}
+
 function openPlaceSheet(mode) {
   const node = _nodesById[_selectedNodeId];
   if (!node) return;
@@ -880,6 +952,10 @@ function openPlaceSheet(mode) {
   _sheetMode = mode;
   _sheetPhotos = [];
   renderSheetPhotoThumbs();
+  // _gatewayForce is set by onMoveGatewayClick() right before opening the
+  // gateway sheet — nothing to do with the device path, reset it there so
+  // it can never leak a stale 'true' into an unrelated device placement.
+  if (mode !== 'gateway') _gatewayForce = false;
 
   document.getElementById('sheet-conflict').style.display = 'none';
   document.getElementById('sheet-form').style.display = '';
@@ -912,8 +988,11 @@ function openPlaceSheet(mode) {
     document.getElementById('sheet-title').textContent = 'Place device';
     submitBtn.textContent = 'Place & start measurement';
   }
+  // Antenna is a per-device attribute (the gateway has none); photos apply
+  // to both — a site photo of the gateway's mounting spot is just as
+  // useful as one of a device's.
   document.getElementById('sheet-antenna-field').style.display = mode === 'gateway' ? 'none' : '';
-  document.getElementById('sheet-photo-field').style.display   = mode === 'gateway' ? 'none' : '';
+  document.getElementById('sheet-photo-field').style.display   = '';
 
   // Smart default: last-used antenna (from the current placement), else 3 dBi.
   _sheetAntenna = (p && p.antenna) || '3dbi';
@@ -940,20 +1019,25 @@ function openSheetOverlay() {
 function closeSheet() {
   document.getElementById('place-ov').classList.remove('open');
   document.body.style.overflow = '';
+  _gatewayForce = false;
 }
 
 function closeSheetBackdrop(e) {
   if (e.target === document.getElementById('place-ov')) closeSheet();
 }
 
-// --- Photo capture (up to 3) ---
+// --- Photo capture (up to 3) — two entry points feed the same queue:
+// "Upload photo" (plain file/gallery picker, multi-select) and
+// "Take Picture" (capture="environment" opens the live camera on a phone,
+// one shot per tap). ---
 
 function onSheetPhotoSelected(e) {
-  const file = e.target.files && e.target.files[0];
+  const files = Array.from(e.target.files || []);
   e.target.value = ''; // allow re-selecting the same file again
-  if (!file) return;
-  if (_sheetPhotos.length >= 3) return;
-  _sheetPhotos.push(file);
+  for (const file of files) {
+    if (_sheetPhotos.length >= 3) break;
+    _sheetPhotos.push(file);
+  }
   renderSheetPhotoThumbs();
 }
 
@@ -970,8 +1054,11 @@ function renderSheetPhotoThumbs() {
       <button type="button" class="pthumb-x" onclick="removeSheetPhoto(${i})">×</button>
     </div>
   `).join('');
-  const addBtn = document.getElementById('sheet-photo-add-btn');
-  if (addBtn) addBtn.style.display = _sheetPhotos.length >= 3 ? 'none' : '';
+  const atCap = _sheetPhotos.length >= 3;
+  const btnRow = document.getElementById('sheet-photo-btn-row');
+  if (btnRow) btnRow.style.display = atCap ? 'none' : '';
+  const capHint = document.getElementById('sheet-photo-cap-hint');
+  if (capHint) capHint.style.display = atCap ? '' : 'none';
 }
 
 // --- Submit ---
@@ -989,15 +1076,30 @@ async function submitSheet() {
 
   try {
     if (_sheetMode === 'gateway') {
-      const res = await apiFetch('/api/gateway/move', {
+      // onMoveGatewayClick() already ran the loss-framed confirm and set
+      // _gatewayForce before this sheet even opened — call the matching
+      // endpoint directly instead of trying the plain move first.
+      const endpoint = _gatewayForce ? '/api/gateway/move/force' : '/api/gateway/move';
+      const res = await apiFetch(endpoint, {
         method: 'POST',
         body: JSON.stringify({ floor, room, description, note }),
       });
       if (res.ok) {
-        toast('Gateway moved.');
+        const result = await res.json();
+        for (const file of _sheetPhotos) {
+          try {
+            await uploadPhoto(result.placement_id, file);
+          } catch (e) {
+            toast(`Photo upload failed: ${e.message}`);
+          }
+        }
+        toast(_gatewayForce ? 'All runs acknowledged, gateway moved.' : 'Gateway moved.');
         closeSheet();
         await loadNodes();
-      } else if (res.status === 409) {
+      } else if (res.status === 409 && !_gatewayForce) {
+        // Defensive fallback: a run started between the pre-flight check
+        // and this submit — fall back to the existing in-sheet conflict
+        // handling (forceGatewayMove() re-POSTs with /force on confirm).
         const body = await res.json();
         const openRuns = (body.detail && body.detail.open_runs) || [];
         showGatewayConflict(openRuns);
@@ -1073,30 +1175,25 @@ async function submitSheet() {
   }
 }
 
-/** Loss aversion: "⚠️ N running measurements will be lost", each device's
- * captured/at-risk SF stages spelled out — using data already cached from
- * the last loadNodes() (no extra API call; the 409 body doesn't carry
- * sweep detail). */
+/** Loss aversion — defensive-fallback path only: a plain /api/gateway/move
+ * still 409ed (a run started between the pre-flight check in
+ * onMoveGatewayClick and this submit), so fall back to the same in-sheet
+ * conflict box as before, using the 409 body's open_runs (device-level
+ * detail comes from the last loadNodes() cache, same as onMoveGatewayClick;
+ * the 409 body itself doesn't carry sweep detail). */
 function showGatewayConflict(openRuns) {
   document.getElementById('sheet-form').style.display = 'none';
   const box = document.getElementById('sheet-conflict');
   box.style.display = '';
 
-  const titleEl = document.getElementById('sheet-conflict-title');
-  titleEl.textContent = openRuns.length === 1
-    ? '1 running measurement will be lost'
-    : `${openRuns.length} running measurements will be lost`;
+  document.getElementById('sheet-conflict-title').textContent = _gatewayLossTitle(openRuns.length);
 
   const list = document.getElementById('sheet-conflict-list');
   list.innerHTML = openRuns.length
     ? openRuns.map(r => {
         const liveRun = (_nodesById[r.device_node_id] && _nodesById[r.device_node_id].active_run) || null;
         const detail = liveRun ? sweepStatusText(liveRun) : `${r.packets} packets · since ${fmtTime(r.started_at)}`;
-        return `
-          <div class="loss-row">
-            <div class="loss-name">${esc(r.name)}</div>
-            <div class="loss-detail">${esc(detail)}</div>
-          </div>`;
+        return _lossRowHtml(r.name, detail);
       }).join('')
     : '<div class="hint">No details available.</div>';
 }
@@ -1107,10 +1204,17 @@ async function forceGatewayMove() {
   const description = document.getElementById('sheet-desc').value.trim();
   const note        = document.getElementById('sheet-note').value.trim();
   try {
-    await apiJSON('/api/gateway/move/force', {
+    const result = await apiJSON('/api/gateway/move/force', {
       method: 'POST',
       body: JSON.stringify({ floor, room, description, note }),
     });
+    for (const file of _sheetPhotos) {
+      try {
+        await uploadPhoto(result.placement_id, file);
+      } catch (e) {
+        toast(`Photo upload failed: ${e.message}`);
+      }
+    }
     toast('All runs acknowledged, gateway moved.');
     closeSheet();
     await loadNodes();
