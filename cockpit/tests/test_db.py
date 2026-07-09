@@ -1401,3 +1401,143 @@ def test_get_rf_environment_shape_includes_new_fields():
         "mtype_counts", "channel_sf_matrix", "frames_per_min", "frames_per_min_sparkline",
         "timeline", "recent_frames", "sf_distribution", "rssi_distribution",
     }
+
+
+# ---------------------------------------------------------------------------
+# floorplan / map_marker — Map / Placement Editor (F-0008 PoC)
+# ---------------------------------------------------------------------------
+
+
+def test_create_floorplan_returns_row():
+    d = _new_db()
+    fp = d.create_floorplan("Building A", "floorplan_20260101T000000Z.jpg")
+    assert fp["id"] is not None
+    assert fp["name"] == "Building A"
+    assert fp["image_filename"] == "floorplan_20260101T000000Z.jpg"
+    assert fp["uploaded_at"]
+
+
+def test_get_current_floorplan_none_initially():
+    d = _new_db()
+    assert d.get_current_floorplan() is None
+
+
+def test_get_current_floorplan_is_the_most_recent_upload():
+    d = _new_db()
+    d.create_floorplan("Old map", "old.jpg")
+    newest = d.create_floorplan("New map", "new.jpg")
+    current = d.get_current_floorplan()
+    assert current["id"] == newest["id"]
+    assert current["name"] == "New map"
+
+
+def test_get_floorplan_by_id():
+    d = _new_db()
+    fp = d.create_floorplan("Building A", "a.jpg")
+    assert d.get_floorplan(fp["id"])["name"] == "Building A"
+
+
+def test_get_floorplan_unknown_returns_none():
+    d = _new_db()
+    assert d.get_floorplan(999) is None
+
+
+def test_upsert_marker_creates_then_updates_position():
+    d = _new_db()
+    fp = d.create_floorplan("Building A", "a.jpg")
+    node_id, _ = d.upsert_node("device", "d1", "aaaa000000000001")
+
+    d.upsert_marker(fp["id"], node_id, 0.25, 0.5)
+    markers = d.list_markers(fp["id"])
+    assert len(markers) == 1
+    assert markers[0]["x"] == 0.25
+    assert markers[0]["y"] == 0.5
+
+    d.upsert_marker(fp["id"], node_id, 0.9, 0.1)  # drag it elsewhere
+    markers = d.list_markers(fp["id"])
+    assert len(markers) == 1  # still just one row for this node
+    assert markers[0]["x"] == 0.9
+    assert markers[0]["y"] == 0.1
+
+
+def test_upsert_marker_independent_per_node():
+    d = _new_db()
+    fp = d.create_floorplan("Building A", "a.jpg")
+    n1, _ = d.upsert_node("device", "d1", "aaaa000000000001")
+    n2, _ = d.upsert_node("device", "d2", "bbbb000000000002")
+    d.upsert_marker(fp["id"], n1, 0.1, 0.1)
+    d.upsert_marker(fp["id"], n2, 0.9, 0.9)
+    assert len(d.list_markers(fp["id"])) == 2
+
+
+def test_delete_marker_removes_it():
+    d = _new_db()
+    fp = d.create_floorplan("Building A", "a.jpg")
+    node_id, _ = d.upsert_node("device", "d1", "aaaa000000000001")
+    d.upsert_marker(fp["id"], node_id, 0.5, 0.5)
+
+    d.delete_marker(fp["id"], node_id)
+    assert d.list_markers(fp["id"]) == []
+
+
+def test_delete_marker_noop_when_absent():
+    d = _new_db()
+    fp = d.create_floorplan("Building A", "a.jpg")
+    node_id, _ = d.upsert_node("device", "d1", "aaaa000000000001")
+    d.delete_marker(fp["id"], node_id)  # never placed — must not raise
+    assert d.list_markers(fp["id"]) == []
+
+
+def test_list_markers_joins_node_name_and_kind():
+    d = _new_db()
+    fp = d.create_floorplan("Building A", "a.jpg")
+    gw_id, _ = d.upsert_node("gateway", "gw", "7076ff0064071a3d")
+    dev_id, _ = d.upsert_node("device", "d1", "aaaa000000000001")
+    d.upsert_marker(fp["id"], gw_id, 0.5, 0.5)
+    d.upsert_marker(fp["id"], dev_id, 0.2, 0.3)
+
+    markers = {m["node_id"]: m for m in d.list_markers(fp["id"])}
+    assert markers[gw_id]["name"] == "gw"
+    assert markers[gw_id]["kind"] == "gateway"
+    assert markers[dev_id]["name"] == "d1"
+    assert markers[dev_id]["kind"] == "device"
+
+
+def test_list_markers_empty_for_unknown_floorplan():
+    d = _new_db()
+    assert d.list_markers(999) == []
+
+
+def test_list_markers_scoped_to_its_own_floorplan():
+    """A marker on an older (no-longer-current) floorplan must not leak
+    into another floorplan's marker list."""
+    d = _new_db()
+    fp1 = d.create_floorplan("Old map", "old.jpg")
+    fp2 = d.create_floorplan("New map", "new.jpg")
+    node_id, _ = d.upsert_node("device", "d1", "aaaa000000000001")
+    d.upsert_marker(fp1["id"], node_id, 0.5, 0.5)
+
+    assert len(d.list_markers(fp1["id"])) == 1
+    assert d.list_markers(fp2["id"]) == []
+
+
+def test_floorplan_and_markers_survive_a_simulated_restart():
+    """Re-opening a NEW Database instance against the SAME file must see
+    everything the previous instance wrote."""
+    path = os.path.join(tempfile.mkdtemp(), "test.db")
+    d1 = Database(path)
+    d1.init_schema()
+    fp = d1.create_floorplan("Building A", "a.jpg")
+    node_id, _ = d1.upsert_node("device", "d1", "aaaa000000000001")
+    d1.upsert_marker(fp["id"], node_id, 0.4, 0.6)
+
+    d2 = Database(path)  # simulates a fresh process re-opening /data/cockpit.db
+    d2.init_schema()
+
+    current = d2.get_current_floorplan()
+    assert current is not None
+    assert current["name"] == "Building A"
+    markers = d2.list_markers(current["id"])
+    assert len(markers) == 1
+    assert markers[0]["x"] == 0.4
+    assert markers[0]["y"] == 0.6

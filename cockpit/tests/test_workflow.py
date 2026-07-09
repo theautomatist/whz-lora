@@ -15,13 +15,14 @@ MQTT is never touched by this module.
 import asyncio
 import csv
 import datetime
+import io
 import json
 import os
 import tempfile
 
 import grpc
 import pytest
-from fastapi import HTTPException
+from fastapi import HTTPException, UploadFile
 
 from app import config, main
 from app.db import CSV_COLUMNS, Database
@@ -1555,3 +1556,171 @@ def test_rf_environment_csv_endpoint(workflow, fresh_campaign):
     body = response.body.decode("utf-8")
     assert "dev_addr" in body.splitlines()[0]  # header row
     assert "26ccbbaa" in body
+
+
+# ---------------------------------------------------------------------------
+# F-0008 Map / Placement Editor (PoC) — drag node markers onto an uploaded
+# map image; x/y are image-relative fractions, not real-world coordinates.
+# ---------------------------------------------------------------------------
+
+
+def _fake_upload(filename: str, content: bytes = b"fake-image-bytes") -> UploadFile:
+    return UploadFile(file=io.BytesIO(content), filename=filename)
+
+
+def test_upload_floorplan_creates_current_floorplan(workflow, monkeypatch):
+    d, _ = workflow
+    tmp_dir = tempfile.mkdtemp()
+    monkeypatch.setattr(config, "FLOORPLANS_DIR", tmp_dir)
+
+    result = _run(main.upload_floorplan(file=_fake_upload("map.jpg"), name="Building A"))
+
+    assert result["name"] == "Building A"
+    assert result["image_url"] == f"/api/floorplan/{result['id']}/image"
+    current = d.get_current_floorplan()
+    assert current["id"] == result["id"]
+    assert os.path.exists(os.path.join(tmp_dir, current["image_filename"]))  # written to disk
+
+
+def test_upload_floorplan_defaults_name_to_original_filename(workflow, monkeypatch):
+    monkeypatch.setattr(config, "FLOORPLANS_DIR", tempfile.mkdtemp())
+    result = _run(main.upload_floorplan(file=_fake_upload("iso-view.png"), name=""))
+    assert result["name"] == "iso-view.png"
+
+
+def test_upload_floorplan_replaces_current(workflow, monkeypatch):
+    monkeypatch.setattr(config, "FLOORPLANS_DIR", tempfile.mkdtemp())
+    _run(main.upload_floorplan(file=_fake_upload("a.jpg"), name="First"))
+    second = _run(main.upload_floorplan(file=_fake_upload("b.jpg"), name="Second"))
+
+    result = _run(main.get_current_floorplan())
+    assert result["floorplan"]["id"] == second["id"]
+    assert result["floorplan"]["name"] == "Second"
+
+
+def test_get_current_floorplan_empty_when_none_uploaded(workflow):
+    result = _run(main.get_current_floorplan())
+    assert result == {"floorplan": None, "markers": []}
+
+
+def test_get_current_floorplan_includes_markers(workflow, monkeypatch):
+    d, _ = workflow
+    monkeypatch.setattr(config, "FLOORPLANS_DIR", tempfile.mkdtemp())
+    fp = _run(main.upload_floorplan(file=_fake_upload("a.jpg"), name="Map"))
+    node_id, _ = d.upsert_node("device", "d1", "aaaa000000000001")
+    d.upsert_marker(fp["id"], node_id, 0.3, 0.4)
+
+    result = _run(main.get_current_floorplan())
+    assert result["floorplan"]["id"] == fp["id"]
+    assert len(result["markers"]) == 1
+    assert result["markers"][0]["node_id"] == node_id
+    assert result["markers"][0]["x"] == 0.3
+    assert result["markers"][0]["y"] == 0.4
+
+
+def test_get_floorplan_image_serves_the_uploaded_file(workflow, monkeypatch):
+    d, _ = workflow
+    tmp_dir = tempfile.mkdtemp()
+    monkeypatch.setattr(config, "FLOORPLANS_DIR", tmp_dir)
+    fp = _run(main.upload_floorplan(file=_fake_upload("a.jpg"), name="Map"))
+
+    response = _run(main.get_floorplan_image(fp["id"]))
+    assert response.path == os.path.join(tmp_dir, d.get_floorplan(fp["id"])["image_filename"])
+
+
+def test_get_floorplan_image_404_for_unknown_id(workflow):
+    with pytest.raises(HTTPException) as exc_info:
+        _run(main.get_floorplan_image(999))
+    assert exc_info.value.status_code == 404
+
+
+def test_get_floorplan_image_404_when_file_missing_on_disk(workflow, monkeypatch):
+    d, _ = workflow
+    tmp_dir = tempfile.mkdtemp()
+    monkeypatch.setattr(config, "FLOORPLANS_DIR", tmp_dir)
+    fp = _run(main.upload_floorplan(file=_fake_upload("a.jpg"), name="Map"))
+    os.remove(os.path.join(tmp_dir, d.get_floorplan(fp["id"])["image_filename"]))
+
+    with pytest.raises(HTTPException) as exc_info:
+        _run(main.get_floorplan_image(fp["id"]))
+    assert exc_info.value.status_code == 404
+
+
+def test_upsert_marker_requires_a_floorplan(workflow):
+    d, _ = workflow
+    node_id, _ = d.upsert_node("device", "d1", "aaaa000000000001")
+    with pytest.raises(HTTPException) as exc_info:
+        _run(main.upsert_marker(main.MarkerUpsertRequest(node_id=node_id, x=0.5, y=0.5)))
+    assert exc_info.value.status_code == 404
+
+
+def test_upsert_marker_requires_a_known_node(workflow, monkeypatch):
+    monkeypatch.setattr(config, "FLOORPLANS_DIR", tempfile.mkdtemp())
+    _run(main.upload_floorplan(file=_fake_upload("a.jpg"), name="Map"))
+
+    with pytest.raises(HTTPException) as exc_info:
+        _run(main.upsert_marker(main.MarkerUpsertRequest(node_id=999, x=0.5, y=0.5)))
+    assert exc_info.value.status_code == 404
+
+
+def test_upsert_marker_then_visible_via_get_current_floorplan(workflow, monkeypatch):
+    d, _ = workflow
+    monkeypatch.setattr(config, "FLOORPLANS_DIR", tempfile.mkdtemp())
+    _run(main.upload_floorplan(file=_fake_upload("a.jpg"), name="Map"))
+    node_id, _ = d.upsert_node("device", "d1", "aaaa000000000001")
+
+    _run(main.upsert_marker(main.MarkerUpsertRequest(node_id=node_id, x=0.15, y=0.85)))
+
+    result = _run(main.get_current_floorplan())
+    assert len(result["markers"]) == 1
+    assert result["markers"][0]["x"] == 0.15
+    assert result["markers"][0]["y"] == 0.85
+
+
+def test_upsert_marker_drag_updates_existing_position(workflow, monkeypatch):
+    d, _ = workflow
+    monkeypatch.setattr(config, "FLOORPLANS_DIR", tempfile.mkdtemp())
+    _run(main.upload_floorplan(file=_fake_upload("a.jpg"), name="Map"))
+    node_id, _ = d.upsert_node("device", "d1", "aaaa000000000001")
+
+    _run(main.upsert_marker(main.MarkerUpsertRequest(node_id=node_id, x=0.1, y=0.1)))
+    _run(main.upsert_marker(main.MarkerUpsertRequest(node_id=node_id, x=0.7, y=0.2)))
+
+    result = _run(main.get_current_floorplan())
+    assert len(result["markers"]) == 1  # still just one marker for this node
+    assert result["markers"][0]["x"] == 0.7
+    assert result["markers"][0]["y"] == 0.2
+
+
+def test_marker_request_rejects_out_of_range_coordinates():
+    with pytest.raises(Exception):
+        main.MarkerUpsertRequest(node_id=1, x=1.5, y=0.5)
+
+
+def test_remove_marker_requires_a_floorplan(workflow):
+    with pytest.raises(HTTPException) as exc_info:
+        _run(main.remove_marker(1))
+    assert exc_info.value.status_code == 404
+
+
+def test_remove_marker_deletes_it(workflow, monkeypatch):
+    d, _ = workflow
+    monkeypatch.setattr(config, "FLOORPLANS_DIR", tempfile.mkdtemp())
+    _run(main.upload_floorplan(file=_fake_upload("a.jpg"), name="Map"))
+    node_id, _ = d.upsert_node("device", "d1", "aaaa000000000001")
+    _run(main.upsert_marker(main.MarkerUpsertRequest(node_id=node_id, x=0.5, y=0.5)))
+
+    _run(main.remove_marker(node_id))
+
+    result = _run(main.get_current_floorplan())
+    assert result["markers"] == []
+
+
+def test_remove_marker_noop_when_not_on_map(workflow, monkeypatch):
+    d, _ = workflow
+    monkeypatch.setattr(config, "FLOORPLANS_DIR", tempfile.mkdtemp())
+    _run(main.upload_floorplan(file=_fake_upload("a.jpg"), name="Map"))
+    node_id, _ = d.upsert_node("device", "d1", "aaaa000000000001")
+
+    result = _run(main.remove_marker(node_id))  # never placed — must not raise
+    assert result == {"ok": True}
