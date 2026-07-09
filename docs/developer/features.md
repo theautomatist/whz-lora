@@ -137,3 +137,97 @@ records what was removed and why. The entry format is defined in
 - Realised by: n/a
 - Linked directives / ADRs: ADR-0014, ADR-0015, ADR-0017, PR #2
 - History: 2026-05-26 added; 2026-05-26 status → active (PR #2)
+
+### F-0005 — Feldtest-Cockpit
+
+- Status: active
+- Summary: Schlankes Web-UI (FastAPI) auf dem Mess-Host (Raspberry Pi), das
+  die LoRaWAN-Messkampagne (Testkonzept, Studien-Phase 4) komfortabel — auch
+  vom Handy — bedienbar macht: Geräte registrieren, Messpunkte + Messblatt-
+  Metadaten setzen und mitschneiden, Live-Metriken sehen, Downlink-Loopback
+  (Phase 5) und Koexistenz-Scan (Phase 4) starten. Kapselt ChirpStack-gRPC +
+  MQTT und schreibt dieselbe CSV wie `scripts/field_logger.py`.
+- Problem solved: Die Kampagne wird heute per SSH + Skript (`field_logger.py`
+  via stdin, `register_device.py`) bedient — vor Ort im Gebäude unpraktisch.
+  Ein Browser-Cockpit macht Punktwechsel, Registrierung, Live-Kontrolle und die
+  Phasen 4/5 bequem bedienbar.
+- User-facing behavior: Operator öffnet `http://<host>:8000`, registriert
+  Geräte per Formular, setzt den aktuellen Messpunkt inkl. Metadaten
+  (Etage/Raum/Punkt-Typ/Pfad→GW/Montage), startet/stoppt die CSV-Aufzeichnung,
+  sieht live RSSI/SNR/SF je Gerät + PDR je Punkt, taggt die aktive Antenne
+  (3 dBi/12 dBi), löst bestätigte Downlinks aus (Downlink-PDR) und startet den
+  passiven Koexistenz-Scan (CAF/Ampel). Über einen Phasen-Schalter setzt er
+  alle Geräte per Klick auf ein festes SF (SF9/SF12) oder normales ADR um
+  (server-seitig via ChirpStack-ADR-Plugins + Profile) und sendet
+  MClimate-Vicki-Downlinks (5-min-Intervall `02 05`, Loopback `04`).
+- Acceptance criteria:
+  - Nach `docker compose up` unter `http://<host>:8000` erreichbar (HTTP 200 auf
+    `/`), eigener Container `cockpit` (arm64, gepinnte Basis-Version, kein
+    `:latest`).
+  - Registrierung: ein per Formular (Name/DevEUI/AppKey) angelegtes OTAA-Gerät
+    erscheint per gRPC in App `whz-feldtest` mit gesetztem Key; ein
+    anschließender OTAA-Join wird akzeptiert.
+  - Messpunkt/CSV: bei gesetztem `pos_id` + Metadaten und aktiver Aufzeichnung
+    wird je Uplink eine CSV-Zeile im `field_logger`-Schema (+ Metadaten-Spalten)
+    geschrieben.
+  - Live-Dashboard: eingehende Uplinks erscheinen binnen ~2 s mit
+    RSSI/SNR/SF/fCnt; PDR je `pos_id` = empfangen/erwartet(N).
+  - Downlink-Loopback: ausgelöster bestätigter Downlink wird eingereiht, ACK
+    gezählt, Downlink-PDR je Punkt ausgewiesen.
+  - Koexistenz-Scan: passiv, abonniert `eu868/gateway/+/event/up`, zählt
+    Fremd-Frames je Kanal/SF, zeigt CAF-Ampel; keine aktiven Sendungen.
+  - Antennen-Toggle: aktiver Typ (3 dBi/12 dBi) wird als Tag in jede CSV-Zeile
+    geschrieben; keine Hardware-Schaltung.
+  - Phasen-Schalter: `POST /api/phase {sf9|sf12|adr}` setzt alle Geräte der App
+    auf das zugehörige Device-Profil (festes SF via ADR-Plugin `fixed_dr3`/
+    `fixed_dr0` bzw. normales ADR); die Phase wird als CSV-Spalte getaggt.
+  - Zugriffsschutz: einfacher Token/Basic-Auth aus `.env` schützt UI/API;
+    Credentials nicht im Repo.
+- Dependencies: F-0001 (Gateway-Anbindung), F-0002 (Geräte-Verwaltung —
+  komplementär), F-0003 (Daten-Weiterleitung), F-0004 (Reproduzierbares Setup)
+- Interfaces & data: HTTP/8000 (UI + SSE); ChirpStack-gRPC (8080,
+  Geräte/Queue); MQTT (1883, `application/#` + `eu868/gateway/#`, read via
+  `testsubscriber`); CSV wie `field_logger` + Metadaten; `.env`
+  (Cockpit-Auth, ChirpStack-Zugang); ChirpStack-ADR-Plugins
+  `chirpstack/adr_fixed_dr{0,3}.js` + Profile `WHZ-Feldtest-SF9`/`-SF12`.
+- Realised by: n/a (Single-Repo)
+- Linked directives / ADRs: Issue #10, PR #11
+- History: 2026-07-02 added (proposed); 2026-07-03 active — first wave +
+  Phasen-/festes-SF-Schalter (PR #11)
+
+### F-0006 — Feldmess-Workflow
+
+- Status: proposed
+- Summary: Gerätezentrierter Feldmess-Workflow im Cockpit: Geräte und Gateway
+  per Handy platzieren und umsetzen (Relocate), je Platzierung Fotos + Notizen,
+  pro Gerät ein Messprotokoll (Run) mit Historie, ein Dashboard über
+  laufende/fertige Runs und ein Riegel beim Gateway-Umzug. Persistiert in
+  SQLite (reboot-fest). Baut auf F-0005 auf.
+- Problem solved: Der Parameter-Formular-Ansatz von F-0005 bildet den realen
+  Ablauf (Gerät anbinden, positionieren, Reichweite/Signalqualität prüfen,
+  umsetzen) nicht ab und ist vor Ort unpraktisch.
+- User-facing behavior: Operator wählt am Handy das Gerät (Dropdown), trägt den
+  Standort (Etage/Raum/Beschreibung/Notiz) + bis zu 3 Fotos ein, startet/stoppt
+  den Run bzw. „Relocate" (schließt das alte Protokoll, öffnet ein neues am
+  neuen Standort), sieht je Gerät Live-Signal + gesammelte Pakete und setzt das
+  Gateway nur um, wenn alle Geräte-Runs beendet/quittiert sind.
+- Acceptance criteria:
+  - Datenmodell in SQLite (nodes/placements/photos/runs) unter `/data`
+    (reboot-fest); Fotos unter `/data/photos`.
+  - Platzierung/Relocate: neues Placement beendet das alte; Relocate schließt
+    den laufenden Run und öffnet einen neuen.
+  - Foto-Upload je Placement, max. 3.
+  - Run-Start verlangt aktives Geräte- und Gateway-Placement; je Run eine CSV
+    mit Placement-/Gateway-Metadaten; Aufzeichnung per-Run (mehrere gleichzeitig).
+  - Gateway-Umzug blockiert, solange ein Geräte-Run läuft (409 + offene Runs);
+    „force/quittieren" beendet sie (Daten bleiben) und erlaubt den Umzug.
+  - Dashboard je Gerät: Standort, Run-Status, Pakete, RSSI/SNR/SF/PDR live.
+  - Kein GPS (bewusst weggelassen).
+- Dependencies: F-0001, F-0002, F-0003, F-0004, F-0005 (Cockpit-Plumbing)
+- Interfaces & data: HTTP/8000 (neue `/api/nodes|placement|photo|run|relocate|
+  gateway/move`); SQLite `/data/cockpit.db`; Fotos `/data/photos`; CSV je Run;
+  ChirpStack-gRPC + MQTT wie F-0005.
+- Realised by: n/a (Single-Repo)
+- Linked directives / ADRs: <Issue folgt>
+- History: 2026-07-08 added (proposed) — Phase A (Backend/Datenmodell) im Bau;
+  Phase B (zeitgesteuerte Runs + Auto-SF-Sweep) geplant.

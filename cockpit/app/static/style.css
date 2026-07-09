@@ -1,0 +1,1044 @@
+/* Feldtest-Cockpit — modern dark UI, mobile-first, device-centric (F-0006).
+   Self-contained: no external fonts/CDN/libs — everything inline. */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  /* --- core palette (tuned from the suggested tokens) --- */
+  --bg:        #0a0e14;
+  --bg-elev:   #141b26;
+  --bg-elev2:  #1b2430;
+  --bg-elev3:  #212b38;
+  --line:      #26303d;
+  --text:      #e8eef6;
+  --muted:     #8593a6;
+  --accent1:   #22d3ee;   /* cyan   */
+  --accent2:   #6366f1;   /* indigo */
+  --good:      #34d399;
+  --warn:      #fbbf24;
+  --bad:       #f87171;
+  --accent-grad: linear-gradient(135deg, var(--accent1), var(--accent2));
+
+  /* --- backward-compat aliases (existing rules + inline styles use these) --- */
+  --surface:      var(--bg-elev);
+  --surface-2:    var(--bg-elev2);
+  --surface-3:    var(--bg-elev3);
+  --border:       var(--line);
+  --accent:       var(--accent1);
+  --accent-light: #67e8f9;
+  --accent-dim:   rgba(34,211,238,.14);
+  --danger:       var(--bad);
+  --success:      var(--good);
+  --m-good: var(--good);
+  --m-ok:   #60a5fa;
+  --m-warn: var(--warn);
+  --m-bad:  var(--bad);
+
+  /* SF-sweep segment colours — cyan (SF7) -> amber (SF9) -> indigo (SF12),
+     also reused by the fixed-SF Phase panel for the same SF values. */
+  --sf7-color:  var(--accent1);
+  --sf7-dim:    rgba(34,211,238,.15);
+  --sf9-color:  #fb923c;
+  --sf9-dim:    rgba(251,146,60,.15);
+  --sf12-color: var(--accent2);
+  --sf12-dim:   rgba(99,102,241,.18);
+  --adr-color:  var(--muted);
+  --adr-dim:    rgba(133,147,166,.12);
+
+  --radius:    16px;
+  --radius-sm: 10px;
+  --shadow:    0 8px 24px rgba(0,0,0,.35), 0 1px 2px rgba(0,0,0,.5);
+  --glow:      0 0 0 1px rgba(34,211,238,.35), 0 0 18px rgba(34,211,238,.22);
+  --font:      -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+
+  --t-fast: .18s;
+  --t-med:  .35s;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: var(--font);
+  font-size: 15px;
+  color: var(--text);
+  background:
+    radial-gradient(1200px 600px at 20% -10%, rgba(99,102,241,.10), transparent 60%),
+    radial-gradient(900px 500px at 100% 0%, rgba(34,211,238,.08), transparent 55%),
+    var(--bg);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Respect prefers-reduced-motion: collapse every animation/transition to
+   effectively-instant, and disable smooth scrolling. Placed early so later
+   more specific rules cannot accidentally re-enable motion. */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+  }
+}
+
+/* =================================================================
+   HEADER
+   ================================================================= */
+
+#app-header {
+  position: sticky;
+  top: 0;
+  z-index: 200;
+  background: rgba(20,27,38,.85);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--line);
+  box-shadow: 0 2px 20px rgba(0,0,0,.5);
+  padding: 0 12px;
+  height: 54px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+#app-title {
+  font-size: 0.85rem;
+  font-weight: 800;
+  letter-spacing: .01em;
+  background: var(--accent-grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+#status-pills {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.70rem;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 3px 9px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 40vw;
+  border: 1px solid var(--line);
+  background: var(--bg-elev2);
+  color: var(--muted);
+  transition: color var(--t-fast), border-color var(--t-fast), background var(--t-fast), box-shadow var(--t-fast);
+}
+
+/* run pill (header + selected panel) */
+.pill.on { color: var(--bad); border-color: var(--bad); background: rgba(248,113,113,.12); }
+
+/* SSE indicator */
+#dot-sse {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--bad); flex-shrink: 0;
+  transition: background var(--t-med), box-shadow var(--t-med);
+}
+#dot-sse.ok { background: var(--good); box-shadow: 0 0 8px rgba(52,211,153,.7); }
+
+/* F-0007 top-level view switch (Live | History) */
+#view-switch {
+  display: flex; gap: 2px; flex-shrink: 0;
+  background: var(--bg-elev2); border: 1px solid var(--line);
+  border-radius: 999px; padding: 2px;
+}
+.vsw-btn {
+  border: none; background: transparent; color: var(--muted); cursor: pointer;
+  font-size: .68rem; font-weight: 700; padding: 5px 10px; border-radius: 999px;
+  transition: background var(--t-fast), color var(--t-fast);
+}
+.vsw-btn.active { background: var(--accent-grad); color: #0b1220; }
+
+/* help button */
+#btn-help {
+  margin-left: auto; flex-shrink: 0;
+  width: 32px; height: 32px; border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--bg-elev2); color: var(--muted);
+  font-size: 0.95rem; font-weight: 800; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: border-color var(--t-fast), color var(--t-fast), transform var(--t-fast);
+}
+#btn-help:hover { border-color: var(--accent1); color: var(--accent-light); }
+#btn-help:active { transform: scale(.92); }
+
+/* =================================================================
+   MAIN GRID
+   ================================================================= */
+
+#main {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  padding: 12px 12px 40px;
+  max-width: 980px;
+  margin: 0 auto;
+}
+@media (min-width: 720px) {
+  #main { grid-template-columns: repeat(2, 1fr); }
+}
+.full { grid-column: 1 / -1; }
+
+/* =================================================================
+   CARDS
+   ================================================================= */
+
+.card {
+  background: linear-gradient(180deg, var(--bg-elev), var(--bg-elev) 60%, var(--bg-elev2));
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 18px;
+}
+.card-title {
+  font-size: 0.67rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .10em;
+  color: var(--muted);
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+  display: flex; align-items: center; gap: 7px;
+  flex-wrap: wrap;
+}
+.card-title .ti { color: var(--accent-light); font-size: 1rem; }
+
+/* =================================================================
+   HERO — "Deine Messkampagne" (goal-gradient anchor, never zero)
+   ================================================================= */
+
+.hero {
+  background:
+    linear-gradient(135deg, rgba(34,211,238,.10), rgba(99,102,241,.10)),
+    linear-gradient(180deg, var(--bg-elev), var(--bg-elev2));
+  border: 1px solid rgba(34,211,238,.25);
+  box-shadow: var(--shadow), 0 0 32px rgba(99,102,241,.10);
+  padding: 18px 20px;
+}
+.hero-inner { display: flex; align-items: center; gap: 18px; }
+
+.hero-ring-wrap { position: relative; width: 104px; height: 104px; flex-shrink: 0; }
+.hero-ring { width: 100%; height: 100%; transform: rotate(-90deg); overflow: visible; }
+.ring-track { fill: none; stroke: var(--bg-elev3); stroke-width: 10; }
+.ring-fill {
+  fill: none; stroke: url(#heroGrad); stroke-width: 10; stroke-linecap: round;
+  stroke-dasharray: 326.7; stroke-dashoffset: 326.7;
+  transition: stroke-dashoffset 1s cubic-bezier(.4,0,.2,1);
+}
+.hero-ring-label {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  flex-direction: column;
+}
+.hero-pct {
+  font-size: 1.55rem; font-weight: 800; line-height: 1;
+  background: var(--accent-grad);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  font-variant-numeric: tabular-nums;
+}
+
+.hero-text { min-width: 0; }
+.hero-title { font-size: 1.02rem; font-weight: 800; margin-bottom: 5px; }
+.hero-sub { font-size: .80rem; color: var(--muted); line-height: 1.5; }
+
+/* Per-device progress breakdown — compact, one thin row per device (see
+   renderHeroDeviceList in app.js). */
+.hero-devices {
+  margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line);
+  display: flex; flex-direction: column; gap: 7px;
+}
+.hdev-hdr { display: flex; justify-content: space-between; gap: 8px; font-size: .74rem; margin-bottom: 3px; }
+.hdev-name { font-weight: 700; color: var(--text); }
+.hdev-label { color: var(--muted); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.hdev-bar-track { height: 5px; border-radius: 3px; background: var(--bg-elev3); overflow: hidden; }
+.hdev-bar-fill { height: 100%; border-radius: 3px; background: var(--accent1); transition: width .6s ease; }
+.hdev-done .hdev-bar-fill { background: var(--m-good); }
+.hdev-not-placed .hdev-name, .hdev-not-placed .hdev-label { color: var(--muted); }
+
+/* =================================================================
+   COLLAPSIBLE CARD (secondary panel: Device registration)
+   <details class="card coll-card"><summary class="card-title">…</summary>
+   <div class="card-body">…</div></details>  — collapsed by default.
+   ================================================================= */
+
+.coll-card { padding: 0; }
+.coll-card > summary {
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  padding: 16px 18px 10px;
+  margin-bottom: 0;
+}
+.coll-card > summary::-webkit-details-marker { display: none; }
+.coll-card > summary::before {
+  content: '▶';
+  font-size: .60rem;
+  color: var(--muted);
+  transition: transform var(--t-fast);
+  flex-shrink: 0;
+  display: inline-block;
+}
+.coll-card[open] > summary::before { transform: rotate(90deg); }
+.coll-card .card-body { padding: 0 18px 18px; }
+
+/* =================================================================
+   NODE SELECT — compact, folded into the "Selected …" card title
+   ================================================================= */
+
+.node-select {
+  margin-left: auto;
+  background: var(--bg-elev2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: .72rem;
+  font-weight: 700;
+  text-transform: none;
+  letter-spacing: normal;
+  padding: 6px 26px 6px 10px;
+  min-height: 32px;
+  max-width: 60%;
+  outline: none;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2322d3ee' stroke-width='3'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 6px center;
+  background-size: 14px;
+  transition: border-color var(--t-fast);
+}
+.node-select:focus { border-color: var(--accent1); }
+
+/* =================================================================
+   SELECTED NODE PANEL
+   ================================================================= */
+
+.sel-name { font-size: 1.18rem; font-weight: 800; color: var(--text); }
+.sel-eui  { font-size: .75rem; color: var(--accent-light); margin-top: 2px; }
+
+/* --- Reciprocity: live signal shown immediately on selection --- */
+.signal-hero {
+  margin: 14px 0;
+  padding: 12px 14px;
+  background: var(--bg-elev2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.signal-hero-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.signal-hero-value { display: flex; align-items: baseline; gap: 4px; }
+.signal-hero-num {
+  font-size: 2.05rem; font-weight: 800; line-height: 1;
+  font-variant-numeric: tabular-nums;
+  display: inline-block;
+}
+.signal-hero-unit { font-size: .78rem; color: var(--muted); font-weight: 600; }
+.signal-hero-meta { text-align: right; }
+.signal-hero-quality {
+  display: inline-block; font-size: .70rem; font-weight: 800;
+  padding: 3px 9px; border-radius: 999px;
+  text-transform: uppercase; letter-spacing: .04em;
+}
+.signal-hero-quality.m-good { background: rgba(52,211,153,.15); color: var(--good); }
+.signal-hero-quality.m-ok   { background: rgba(96,165,250,.15); color: var(--m-ok); }
+.signal-hero-quality.m-warn { background: rgba(251,191,36,.15); color: var(--warn); }
+.signal-hero-quality.m-bad  { background: rgba(248,113,113,.15); color: var(--bad); }
+
+@keyframes numRoll {
+  0%   { transform: scale(1.22); opacity: .55; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.signal-hero-num.roll { animation: numRoll .45s cubic-bezier(.34,1.56,.64,1); }
+
+.place-info { margin: 12px 0; }
+.place-loc  { font-size: .95rem; font-weight: 700; color: var(--text); }
+.place-desc { font-size: .82rem; color: var(--muted); margin-top: 2px; }
+.place-note { font-size: .78rem; color: var(--muted); margin-top: 2px; font-style: italic; }
+.place-empty{ font-size: .84rem; color: var(--muted); }
+
+.photo-thumbs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.pthumb {
+  position: relative; width: 76px; height: 76px;
+  border-radius: var(--radius-sm); overflow: hidden;
+  border: 1px solid var(--line); background: var(--bg-elev2);
+  flex-shrink: 0;
+}
+.pthumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pthumb-x {
+  position: absolute; top: 2px; right: 2px;
+  width: 20px; height: 20px; border-radius: 50%;
+  background: rgba(0,0,0,.65); color: #fff; border: none;
+  font-size: .85rem; line-height: 1; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* Mini photo strip on Overview cards (endowment/IKEA — "your collection") */
+.photo-strip { display: flex; gap: 4px; margin-top: 6px; }
+.photo-strip img {
+  width: 26px; height: 26px; border-radius: 6px; object-fit: cover;
+  border: 1px solid var(--line);
+}
+
+/* =================================================================
+   COLLAPSIBLE (details/summary) — nested (e.g. Vicki, History, Customize)
+   ================================================================= */
+
+.coll { border-top: 1px solid var(--line); margin-top: 12px; }
+.coll > summary {
+  font-size: 0.78rem; font-weight: 600; color: var(--muted);
+  cursor: pointer; list-style: none;
+  display: flex; align-items: center; gap: 6px;
+  padding: 10px 0 0; user-select: none;
+}
+.coll > summary::before { content: '▶'; font-size: .58rem; transition: transform var(--t-fast); }
+details[open].coll > summary::before { transform: rotate(90deg); }
+.coll .db { padding-top: 10px; }
+
+/* =================================================================
+   FORMS
+   ================================================================= */
+
+.f {
+  display: flex; flex-direction: column;
+  gap: 4px; margin-bottom: 10px;
+}
+.f label {
+  font-size: 0.69rem; font-weight: 700;
+  color: var(--muted); text-transform: uppercase; letter-spacing: .07em;
+}
+.f input, .f select {
+  background: var(--bg-elev2); border: 1px solid var(--line);
+  border-radius: var(--radius-sm); color: var(--text);
+  font-size: 0.90rem; padding: 9px 10px; width: 100%;
+  outline: none; min-height: 44px; transition: border-color var(--t-fast), box-shadow var(--t-fast);
+}
+.f input:focus, .f select:focus { border-color: var(--accent1); box-shadow: 0 0 0 3px rgba(34,211,238,.15); }
+.f2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+/* =================================================================
+   BUTTONS
+   ================================================================= */
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+  padding: 11px 16px; border-radius: var(--radius-sm);
+  border: 1px solid transparent; cursor: pointer;
+  font-size: 0.86rem; font-weight: 700; min-height: 46px;
+  transition: opacity var(--t-fast), background var(--t-fast), border-color var(--t-fast), color var(--t-fast), transform var(--t-fast), box-shadow var(--t-fast);
+  white-space: nowrap; text-decoration: none;
+}
+.btn:disabled { opacity: .36; cursor: not-allowed; }
+.btn:active:not(:disabled) { transform: scale(.97); }
+
+.btn-p { background: var(--accent-grad); color: #06131a; }
+.btn-p:hover:not(:disabled) { box-shadow: 0 4px 18px rgba(34,211,238,.35); }
+
+.btn-d { background: var(--bad); color: #fff; }
+.btn-d:hover:not(:disabled) { background: #ef4444; }
+
+.btn-s { background: linear-gradient(135deg, #10b981, #34d399); color: #052e1f; }
+.btn-s:hover:not(:disabled) { box-shadow: 0 4px 18px rgba(52,211,153,.35); }
+
+.btn-o { background: transparent; border-color: var(--line); color: var(--text); }
+.btn-o:hover:not(:disabled) { border-color: var(--accent-light); color: var(--accent-light); }
+
+.btn-g { background: transparent; border: none; color: var(--muted); font-size: .80rem; padding: 4px 8px; min-height: 0; font-weight: 600; }
+.btn-g:hover { color: var(--text); }
+
+.brow { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+
+/* =================================================================
+   ANTENNA TOGGLE (reused in the placement sheet)
+   ================================================================= */
+
+.ant-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 6px; }
+.abtn {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 3px; padding: 16px 8px;
+  border: 2px solid var(--line); border-radius: var(--radius-sm);
+  background: var(--bg-elev2); cursor: pointer; min-height: 74px;
+  transition: border-color var(--t-fast), background var(--t-fast), transform var(--t-fast);
+}
+.abtn .av { font-size: 1.25rem; font-weight: 800; color: var(--text); transition: color var(--t-fast); }
+.abtn .as { font-size: 0.70rem; color: var(--muted); }
+.abtn.active { border-color: var(--accent1); background: var(--accent-dim); }
+.abtn.active .av { color: var(--accent-light); }
+.abtn:active { transform: scale(.97); }
+
+/* =================================================================
+   DASHBOARD — NODE CARDS (Overview)
+   ================================================================= */
+
+#node-grid {
+  display: grid; grid-template-columns: 1fr; gap: 10px;
+}
+@media (min-width: 520px) { #node-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 860px) { #node-grid { grid-template-columns: repeat(3, 1fr); } }
+
+.node-card {
+  position: relative;
+  background: var(--bg-elev2); border: 1px solid var(--line);
+  border-radius: var(--radius-sm); padding: 13px;
+  cursor: pointer;
+  transition: border-color var(--t-med), box-shadow var(--t-med), transform var(--t-fast);
+}
+.node-card:active { transform: scale(.98); }
+.node-card.selected { border-color: var(--accent-light); box-shadow: var(--glow); }
+.node-card.running   { border-color: var(--bad); }
+.node-card.flash { animation: card-flash .7s ease-out forwards, card-pulse .4s ease-out; }
+@keyframes card-flash {
+  0%   { border-color: var(--accent-light); box-shadow: var(--glow); }
+  100% { border-color: var(--line); box-shadow: none; }
+}
+@keyframes card-pulse {
+  0%  { transform: scale(1); }
+  35% { transform: scale(1.018); }
+  100%{ transform: scale(1); }
+}
+
+/* One-shot "fertig ✓" celebration */
+@keyframes celebrate-pop {
+  0%   { transform: scale(1); }
+  45%  { transform: scale(1.14); }
+  70%  { transform: scale(.96); }
+  100% { transform: scale(1); }
+}
+.celebrate { animation: celebrate-pop .6s cubic-bezier(.34,1.56,.64,1); }
+@keyframes celebrate-glow-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(52,211,153,.55); }
+  70%  { box-shadow: 0 0 0 20px rgba(52,211,153,0); }
+  100% { box-shadow: 0 0 0 0 rgba(52,211,153,0); }
+}
+.celebrate-glow { animation: celebrate-glow-pulse 1.1s ease-out; }
+
+.nc-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 6px; margin-bottom: 6px; }
+.nc-name { font-size: .92rem; font-weight: 700; color: var(--text); }
+.nc-run  { font-size: .66rem; font-weight: 700; color: var(--muted); white-space: nowrap; }
+.nc-run.on { color: var(--bad); }
+.nc-done {
+  font-size: .64rem; font-weight: 800; color: var(--good); white-space: nowrap;
+  background: rgba(52,211,153,.14); border-radius: 999px; padding: 2px 8px;
+  display: inline-block;
+}
+.nc-loc { font-size: .78rem; color: var(--muted); margin-bottom: 4px; }
+.nc-packets { font-size: .72rem; color: var(--accent-light); margin-bottom: 8px; font-variant-numeric: tabular-nums; }
+.nc-metrics { display: flex; gap: 10px; flex-wrap: wrap; font-size: .74rem; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--muted); }
+
+/* Letztes Paket / Sendeintervall — small muted metadata line on each card */
+.nc-meta {
+  font-size: .66rem; color: var(--muted); margin-top: 5px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* Gateway card — same base as .node-card, distinct accent + a small tag */
+.node-card.gw-card { border-color: rgba(34,211,238,.4); background: linear-gradient(135deg, rgba(34,211,238,.08), rgba(99,102,241,.08)); }
+.nc-tag {
+  font-size: .60rem; font-weight: 800; letter-spacing: .06em;
+  color: var(--accent-light); background: var(--bg-elev);
+  border: 1px solid var(--accent1); border-radius: 4px; padding: 2px 6px;
+  white-space: nowrap; flex-shrink: 0;
+}
+
+/* =================================================================
+   SF-SWEEP TIMELINE — glowing segmented bar (wow factor + anchoring)
+   ================================================================= */
+
+.sweep-timeline { display: flex; gap: 4px; margin-top: 10px; }
+.sweep-seg { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.sweep-seg-track {
+  height: 6px; border-radius: 3px; background: var(--bg-elev3);
+  overflow: hidden; position: relative;
+}
+.sweep-seg-fill {
+  height: 100%; width: 0%; border-radius: 3px;
+  background: var(--muted);
+  transition: width .8s cubic-bezier(.4,0,.2,1);
+}
+.sweep-seg.done .sweep-seg-fill    { background: var(--good); }
+.sweep-seg.current .sweep-seg-fill { background: var(--accent-grad); }
+/* current segment stays clearly marked by its accent fill — no pulsing glow */
+.sweep-seg-label {
+  font-size: .62rem; font-weight: 700; color: var(--muted);
+  text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.sweep-seg.done .sweep-seg-label    { color: var(--good); }
+.sweep-seg.current .sweep-seg-label { color: var(--text); }
+
+.sweep-timeline.compact { gap: 3px; margin-top: 8px; }
+.sweep-timeline.compact .sweep-seg-track { height: 4px; }
+.sweep-timeline.compact .sweep-seg-label { font-size: .56rem; }
+
+.run-progress-label {
+  font-size: .68rem; color: var(--muted); margin-top: 6px;
+  font-variant-numeric: tabular-nums;
+}
+.run-progress-label strong { color: var(--text); }
+.run-progress-label.done { color: var(--good); font-weight: 700; }
+
+/* =================================================================
+   SELECTED-NODE COMPACT METRICS — reuses .nc-metrics' flex-row look
+   (SNR/SF only; RSSI stays hero-only, see #signal-hero; PDR lives in
+   the "PDR pro SF" headline block below, see .pdr-sf-*)
+   ================================================================= */
+
+#sel-metrics { margin: 2px 0 14px; }
+
+.m-good { color: var(--good); }
+.m-ok   { color: var(--m-ok); }
+.m-warn { color: var(--warn); }
+.m-bad  { color: var(--bad); }
+
+/* =================================================================
+   PDR PRO SF — HEADLINE block: delivery reliability per SF is the
+   coverage metric that actually matters (RSSI barely changes with SF,
+   PDR does). Flat cards, no glow — reuses the .m-good/.m-ok/.m-warn/
+   .m-bad tiers already used everywhere else for signal quality.
+   ================================================================= */
+
+.pdr-sf-wrap {
+  margin: 14px 0; padding: 12px 14px;
+  background: var(--bg-elev2); border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.pdr-sf-hdr {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; margin-bottom: 10px;
+}
+.pdr-sf-title {
+  font-size: .67rem; font-weight: 800; text-transform: uppercase;
+  letter-spacing: .10em; color: var(--muted);
+}
+.pdr-sf-overall {
+  font-size: .74rem; font-weight: 700; color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.pdr-sf-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+@media (max-width: 480px) {
+  .pdr-sf-grid { grid-template-columns: 1fr; }
+}
+.pdr-sf-cell {
+  padding: 8px 10px;
+  background: var(--bg-elev); border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.pdr-sf-sf { font-size: .78rem; font-weight: 800; color: var(--text); margin-bottom: 4px; }
+.pdr-sf-row {
+  display: flex; justify-content: space-between; align-items: baseline;
+  gap: 6px; font-size: .74rem; padding: 2px 0;
+}
+.pdr-sf-lbl { color: var(--muted); font-weight: 700; }
+/* No color on .pdr-sf-val itself — JS always appends an m-good/m-ok/m-warn/
+   m-bad class alongside it (equal specificity; the later-declared rule
+   would otherwise win regardless of the tier, same pitfall as
+   .dstatus-value above). Falls back to inherited var(--text) for the "—"
+   (unknown) case — the em dash itself already reads as "no data". */
+.pdr-sf-val { font-weight: 800; font-variant-numeric: tabular-nums; }
+.pdr-sf-val small { font-weight: 600; opacity: .8; }
+.pdr-sf-sub {
+  margin-top: 4px; font-size: .68rem; color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Downlink-Test toggle on run start */
+.run-dltest-toggle {
+  display: flex; align-items: center; gap: 8px;
+  margin-top: 10px; padding: 2px 0;
+  font-size: .78rem; color: var(--muted); cursor: pointer;
+}
+.run-dltest-toggle input[type="checkbox"] {
+  width: 16px; height: 16px; accent-color: var(--accent1); flex-shrink: 0;
+}
+
+/* =================================================================
+   DEVICE STATUS — "is the configuration working?" (Trust & visibility)
+   ================================================================= */
+
+.dstatus {
+  margin: 14px 0; padding: 12px 14px;
+  background: var(--bg-elev2); border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.dstatus-row {
+  display: flex; justify-content: space-between; align-items: baseline;
+  gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--line);
+}
+.dstatus-row:last-child { border-bottom: none; }
+.dstatus-label {
+  font-size: .68rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .06em; color: var(--muted); flex-shrink: 0;
+}
+.dstatus-value {
+  font-size: .86rem; font-weight: 700; text-align: right;
+  font-variant-numeric: tabular-nums;
+  /* No color here on purpose: JS always appends an m-good/m-ok/m-warn/m-bad
+     class alongside this one (equal specificity, so whichever sets color
+     wins ambiguously by source order) — inherits var(--text) by default,
+     same visual result, but lets the tier class win unambiguously. */
+}
+.dstatus-hint { font-size: .72rem; color: var(--muted); margin-top: 10px; line-height: 1.5; }
+
+/* =================================================================
+   RF ENVIRONMENT — always-on own/foreign totals + the spectrum-survey
+   sections below (heatmap, band busyness, networks, devices, vendors).
+   Flat/clean throughout — a single accent color at varying opacity for
+   the heatmap, thin flat bars elsewhere, no gradients/glow.
+   ================================================================= */
+
+.coex-totals { display: flex; gap: 10px; margin: 2px 0 4px; }
+.coex-total-box {
+  flex: 1; text-align: center; padding: 10px 8px;
+  background: var(--bg-elev2); border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.coex-total-num {
+  display: block; font-size: 1.3rem; font-weight: 800;
+  font-variant-numeric: tabular-nums; color: var(--text);
+}
+.coex-total-lbl {
+  display: block; font-size: .66rem; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .05em; margin-top: 2px;
+}
+.coex-total-box.own .coex-total-num { color: var(--accent-light); }
+
+.rf-sec { margin-top: 16px; }
+.rf-sec:first-of-type { margin-top: 4px; }
+.rf-sec-title {
+  font-size: .68rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .07em; color: var(--muted); margin-bottom: 8px;
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+}
+.rf-sec-count { color: var(--accent-light); font-weight: 800; text-transform: none; letter-spacing: normal; }
+
+/* Two-up pairing — heatmap+timeline, then SF+RSSI distribution — stacked on
+   mobile, side by side once there's room. Reuses the same min-width
+   breakpoint as #node-grid for consistency. */
+.rf-pair-grid { display: grid; grid-template-columns: 1fr; gap: 14px; align-items: start; }
+@media (min-width: 520px) {
+  .rf-pair-grid.rf-heat-pair { grid-template-columns: auto 1fr; }
+  .rf-pair-grid.rf-dist-pair { grid-template-columns: 1fr 1fr; }
+}
+
+/* Channel x SF heatmap — fixed, tight cell size (not 1fr) so the matrix
+   reads as a small, dense grid instead of stretching to the panel width. */
+.rf-heat-grid { display: grid; grid-template-columns: 26px repeat(6, 24px); gap: 1px; }
+.rf-heat-hdr {
+  font-size: .56rem; font-weight: 700; color: var(--muted);
+  text-align: center; padding: 2px 0;
+}
+.rf-heat-rowhdr { text-align: right; padding-right: 3px; }
+.rf-heat-cell {
+  width: 24px; height: 24px;
+  border: 1px solid var(--line); border-radius: 3px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: .56rem; font-weight: 700; color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.rf-heat-legend { display: flex; align-items: center; gap: 5px; margin-top: 6px; font-size: .6rem; color: var(--muted); }
+.rf-heat-legend-bar {
+  flex: 0 1 140px; height: 6px; border-radius: 3px; border: 1px solid var(--line);
+  background: linear-gradient(90deg, rgba(34,211,238,.08), rgba(34,211,238,.9));
+}
+
+/* Traffic timeline — 24 hourly bars, pairs with the heatmap (where/what-SF
+   vs. when). Same flat inline-SVG-bars pattern as the busyness sparkline. */
+.rf-timeline-svg { width: 100%; height: 44px; display: block; }
+.rf-timeline-bar { fill: var(--accent1); }
+.rf-timeline-axis {
+  display: flex; justify-content: space-between;
+  font-size: .6rem; color: var(--muted); margin-top: 2px;
+}
+
+/* Band busyness */
+.rf-busy-row { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+.rf-busy-rate { display: flex; align-items: baseline; gap: 4px; flex-shrink: 0; }
+.rf-busy-rate span { font-size: 1.3rem; font-weight: 800; color: var(--text); font-variant-numeric: tabular-nums; }
+.rf-busy-rate small { font-size: .66rem; color: var(--muted); }
+.rf-sparkline { flex: 1; height: 24px; }
+.rf-spark-bar { fill: var(--accent1); }
+
+.rf-mtype { display: flex; gap: 6px; flex-wrap: wrap; }
+.rf-mtype-chip {
+  font-size: .68rem; font-weight: 700; color: var(--muted);
+  background: var(--bg-elev); border: 1px solid var(--line);
+  border-radius: 999px; padding: 3px 9px;
+}
+
+/* Networks */
+.rf-net-row { margin-bottom: 8px; }
+.rf-net-hdr { display: flex; justify-content: space-between; gap: 8px; font-size: .74rem; margin-bottom: 3px; }
+.rf-net-label { font-weight: 700; color: var(--text); }
+.rf-net-count { color: var(--muted); font-variant-numeric: tabular-nums; }
+.rf-net-bar-track { height: 6px; border-radius: 3px; background: var(--bg-elev3); overflow: hidden; }
+.rf-net-bar-fill { height: 100%; background: var(--accent1); border-radius: 3px; }
+
+/* Foreign devices */
+.rf-devices-list { max-height: 220px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+.rf-dev-row {
+  display: grid; grid-template-columns: 1fr auto auto auto auto; gap: 8px;
+  align-items: center; font-size: .72rem; padding: 5px 0;
+  border-bottom: 1px solid var(--line);
+}
+.rf-dev-row:last-child { border-bottom: none; }
+.rf-dev-net { color: var(--muted); font-size: .66rem; }
+
+/* Vendors */
+.rf-vendor-row {
+  display: flex; justify-content: space-between; gap: 8px;
+  font-size: .74rem; padding: 4px 0; border-bottom: 1px solid var(--line);
+}
+.rf-vendor-row:last-child { border-bottom: none; }
+
+/* SF / RSSI distribution — small horizontal bar rows, same flat look as
+   the network bars above. */
+.rf-dist-row {
+  display: grid; grid-template-columns: minmax(58px, auto) 1fr 24px; gap: 6px;
+  align-items: center; font-size: .72rem; padding: 3px 0;
+}
+.rf-dist-label { color: var(--text); font-weight: 700; white-space: nowrap; }
+.rf-dist-bar-track { height: 6px; border-radius: 3px; background: var(--bg-elev3); overflow: hidden; }
+.rf-dist-bar-fill { height: 100%; background: var(--accent1); border-radius: 3px; }
+.rf-dist-count { color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+
+/* Live frame log — compact, scrollable, newest on top. */
+.rf-frame-log { max-height: 200px; overflow-y: auto; font-size: .72rem; }
+.rf-log-row {
+  display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap;
+  padding: 4px 0; border-bottom: 1px solid var(--line);
+}
+.rf-log-row:last-child { border-bottom: none; }
+.rf-log-time { color: var(--muted); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.rf-log-addr { flex-shrink: 0; }
+.rf-log-net { color: var(--muted); font-size: .66rem; flex-shrink: 0; }
+.rf-log-sf { flex-shrink: 0; }
+.rf-log-rssi { flex-shrink: 0; font-variant-numeric: tabular-nums; }
+
+/* =================================================================
+   GENERIC TABLE (device list, run history)
+   ================================================================= */
+
+.dtbl { width: 100%; border-collapse: collapse; font-size: .78rem; }
+.dtbl th {
+  text-align: left; padding: 5px 6px;
+  font-size: .67rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .06em; color: var(--muted); border-bottom: 1px solid var(--line);
+}
+.dtbl td { padding: 6px 6px; border-bottom: 1px solid var(--line); }
+.dtbl tr:last-child td { border-bottom: none; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .75rem; color: var(--accent-light); }
+
+.hist-running { color: var(--bad); font-weight: 700; }
+.hist-done    { color: var(--good); font-weight: 700; }
+.hist-aborted { color: var(--muted);  font-weight: 700; }
+
+/* =================================================================
+   VERLAUF LINE CHART — inline SVG, no chart library (flat/clean)
+   ================================================================= */
+
+.hist-chart-row td { padding: 4px 6px 12px; border-bottom: 1px solid var(--line); }
+.hist-chart { margin: 2px 0 0; }
+
+/* Always-visible chart in the selected-device panel — framed like the other
+   flat info boxes (.signal-hero/.dstatus), so it reads as its own section. */
+#sel-chart-wrap {
+  margin: 14px 0;
+  padding: 10px 12px 4px;
+  background: var(--bg-elev2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+#sel-chart-wrap .hist-chart { margin: 0; }
+
+.rc-svg { width: 100%; height: auto; display: block; }
+.rc-grid { stroke: var(--line); stroke-width: 1; }
+.rc-axis-label { font-size: 9px; fill: var(--muted); font-family: var(--font); }
+.rc-line-rssi { stroke-width: 2; stroke-linecap: round; fill: none; }
+.rc-line-snr  { stroke: var(--muted); stroke-width: 1.2; fill: none; opacity: .8; }
+
+.rc-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 6px; }
+.rc-legend .lgrow { margin-bottom: 0; font-size: .72rem; color: var(--muted); }
+.rc-legend-swatch { display: inline-block; width: 14px; height: 0; border-top: 2px solid var(--text); flex-shrink: 0; }
+.rc-legend-swatch.snr { border-top: 1px solid var(--muted); opacity: .8; }
+
+/* =================================================================
+   LOSS AVERSION — gateway-move conflict + stop-run confirm
+   ================================================================= */
+
+.loss-title {
+  font-size: 1rem; font-weight: 800; color: var(--bad);
+  display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
+}
+.loss-row {
+  padding: 10px 0; border-bottom: 1px solid var(--line);
+  font-size: .84rem;
+}
+.loss-row:last-child { border-bottom: none; }
+.loss-row .loss-name { font-weight: 700; color: var(--text); margin-bottom: 2px; }
+.loss-row .loss-detail { color: var(--muted); font-size: .78rem; }
+.loss-row .loss-missing { color: var(--warn); font-weight: 600; }
+
+/* Kept for backward-compat: earlier round's simple conflict-row layout,
+   still used as a light wrapper before the loss-row detail is filled in. */
+.conflict-row {
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--line);
+  font-size: .84rem;
+}
+.conflict-row:last-child { border-bottom: none; }
+
+/* =================================================================
+   CONFIRM MODAL (generic — stop-run / gateway-move loss aversion)
+   ================================================================= */
+
+.confirm-panel { max-width: 480px; margin: 0 auto; }
+.confirm-body { padding: 8px 20px 24px; }
+.confirm-icon { font-size: 1.8rem; text-align: center; margin-bottom: 6px; }
+.confirm-body h3 { font-size: 1.05rem; font-weight: 800; text-align: center; margin-bottom: 12px; }
+.confirm-body p { font-size: .86rem; color: var(--muted); line-height: 1.6; margin-bottom: 8px; }
+.confirm-body p strong { color: var(--text); }
+.confirm-actions { justify-content: center; }
+
+/* =================================================================
+   MISC
+   ================================================================= */
+
+.msg { font-size: .80rem; margin-top: 8px; color: var(--muted); min-height: 1.1em; line-height: 1.4; }
+.msg.err { color: var(--bad); }
+.msg.ok  { color: var(--good); }
+.hint { font-size: .74rem; color: var(--muted); line-height: 1.5; }
+.sep { border: none; border-top: 1px solid var(--line); margin: 14px 0; }
+.between { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+
+/* =================================================================
+   SLIDE-UP SHEET / OVERLAY (shared by Hilfe, Platzieren/Umsetzen, Confirm)
+   ================================================================= */
+
+.sheet-ov {
+  position: fixed; inset: 0; z-index: 500;
+  background: rgba(4,6,10,.78);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+  display: flex; align-items: flex-end;
+  opacity: 0; pointer-events: none;
+  transition: opacity var(--t-med);
+}
+.sheet-ov.open { opacity: 1; pointer-events: auto; }
+
+.sheet-panel {
+  width: 100%; max-height: 88vh; overflow-y: auto;
+  background: var(--bg-elev); border-top: 1px solid var(--line);
+  border-radius: 20px 20px 0 0;
+  box-shadow: 0 -8px 40px rgba(0,0,0,.6);
+  transform: translateY(100%);
+  transition: transform var(--t-med) cubic-bezier(.25,.8,.25,1);
+  -webkit-overflow-scrolling: touch;
+}
+.sheet-ov.open .sheet-panel { transform: translateY(0); }
+
+.h-handle { display: flex; justify-content: center; padding: 12px 0 4px; }
+.h-handle::before { content:''; display:block; width:36px; height:4px; background:var(--line); border-radius:2px; }
+
+.h-hdr {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 20px 12px; border-bottom: 1px solid var(--line);
+}
+.h-hdr h2 { font-size: 1rem; font-weight: 800; }
+.sheet-x { background:none; border:none; cursor:pointer; color:var(--muted); font-size:1.4rem; line-height:1; padding:2px 6px; transition: color var(--t-fast); }
+.sheet-x:hover { color: var(--text); }
+
+.h-body { padding: 16px 20px 40px; max-width: 680px; margin: 0 auto; }
+.h-sec  { margin-bottom: 24px; }
+.h-sec h3 {
+  font-size: .71rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .10em; color: var(--accent-light); margin-bottom: 10px;
+}
+.h-sec p, .h-sec li { font-size: .86rem; line-height: 1.65; }
+.h-sec ul, .h-sec ol { padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
+
+.lgrow { display: flex; align-items: center; gap: 8px; font-size: .82rem; margin-bottom: 5px; }
+.lgdot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+
+/* =================================================================
+   TOAST
+   ================================================================= */
+
+#toast {
+  position: fixed; bottom: 24px; left: 50%;
+  transform: translateX(-50%) translateY(12px);
+  background: var(--bg-elev3); color: var(--text);
+  padding: 10px 18px; border-radius: 999px;
+  font-size: .84rem; font-weight: 600;
+  opacity: 0; pointer-events: none; z-index: 400;
+  white-space: nowrap; box-shadow: 0 4px 24px rgba(0,0,0,.6), 0 0 0 1px var(--line);
+  transition: opacity var(--t-fast), transform var(--t-fast);
+  border: 1px solid var(--line);
+}
+#toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* =================================================================
+   HISTORY / ANALYSIS VIEW (F-0007, Phase 1) — browse past measurements.
+   #main (Live) and #history-view share the same viewport; only one is
+   visible at a time (see switchView() in app.js). Mobile-first: single
+   column everywhere, a 2-up grid for the run detail once there's room.
+   ================================================================= */
+
+#history-view { max-width: 980px; margin: 0 auto; padding: 12px 12px 40px; }
+
+.hist-filter-row {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 12px;
+}
+.hist-filter-row select {
+  flex: 1; max-width: 260px;
+  background: var(--bg-elev2); border: 1px solid var(--line); color: var(--text);
+  border-radius: var(--radius-sm); padding: 7px 10px; font-size: .82rem;
+}
+
+/* List — one compact row per run, no table (avoids horizontal scroll on
+   narrow screens; wraps instead). */
+.hist-row {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: 6px 12px; padding: 10px 4px; border-bottom: 1px solid var(--line);
+  cursor: pointer; transition: background var(--t-fast);
+}
+.hist-row:last-child { border-bottom: none; }
+.hist-row:hover { background: var(--bg-elev2); }
+.hist-row-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.hist-row-device { font-weight: 700; color: var(--text); font-size: .86rem; }
+.hist-row-loc { font-size: .74rem; color: var(--muted); }
+.hist-row-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: .74rem; color: var(--muted); }
+.hist-row-time { font-variant-numeric: tabular-nums; }
+.hist-badge {
+  font-size: .64rem; font-weight: 800; text-transform: uppercase; letter-spacing: .04em;
+  border-radius: 999px; padding: 2px 8px; border: 1px solid currentColor;
+}
+.hist-row-pdr { font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* Detail — left (device) / right (gateway), stacked on mobile. */
+.hist-detail-grid { display: grid; grid-template-columns: 1fr; gap: 20px; margin-top: 4px; }
+@media (min-width: 720px) {
+  .hist-detail-grid { grid-template-columns: 1fr 1fr; }
+}
+.hist-detail-col { min-width: 0; }
+.hist-detail-subtitle {
+  font-size: .68rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .07em; color: var(--muted); margin-bottom: 8px;
+}
+.hist-detail-meta {
+  margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line);
+  font-size: .76rem; color: var(--muted); display: flex; flex-direction: column; gap: 3px;
+}
+.hist-detail-meta strong { color: var(--text); }
