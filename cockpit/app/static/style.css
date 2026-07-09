@@ -611,7 +611,8 @@ details[open].coll > summary::before { transform: rotate(90deg); }
 
 /* =================================================================
    SELECTED-NODE COMPACT METRICS — reuses .nc-metrics' flex-row look
-   (SNR/SF/PDR only; RSSI stays hero-only, see #signal-hero)
+   (SNR/SF only; RSSI stays hero-only, see #signal-hero; PDR lives in
+   the "PDR pro SF" headline block below, see .pdr-sf-*)
    ================================================================= */
 
 #sel-metrics { margin: 2px 0 14px; }
@@ -620,6 +621,67 @@ details[open].coll > summary::before { transform: rotate(90deg); }
 .m-ok   { color: var(--m-ok); }
 .m-warn { color: var(--warn); }
 .m-bad  { color: var(--bad); }
+
+/* =================================================================
+   PDR PRO SF — HEADLINE block: delivery reliability per SF is the
+   coverage metric that actually matters (RSSI barely changes with SF,
+   PDR does). Flat cards, no glow — reuses the .m-good/.m-ok/.m-warn/
+   .m-bad tiers already used everywhere else for signal quality.
+   ================================================================= */
+
+.pdr-sf-wrap {
+  margin: 14px 0; padding: 12px 14px;
+  background: var(--bg-elev2); border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.pdr-sf-hdr {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; margin-bottom: 10px;
+}
+.pdr-sf-title {
+  font-size: .67rem; font-weight: 800; text-transform: uppercase;
+  letter-spacing: .10em; color: var(--muted);
+}
+.pdr-sf-overall {
+  font-size: .74rem; font-weight: 700; color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.pdr-sf-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+@media (max-width: 480px) {
+  .pdr-sf-grid { grid-template-columns: 1fr; }
+}
+.pdr-sf-cell {
+  padding: 8px 10px;
+  background: var(--bg-elev); border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.pdr-sf-sf { font-size: .78rem; font-weight: 800; color: var(--text); margin-bottom: 4px; }
+.pdr-sf-row {
+  display: flex; justify-content: space-between; align-items: baseline;
+  gap: 6px; font-size: .74rem; padding: 2px 0;
+}
+.pdr-sf-lbl { color: var(--muted); font-weight: 700; }
+/* No color on .pdr-sf-val itself — JS always appends an m-good/m-ok/m-warn/
+   m-bad class alongside it (equal specificity; the later-declared rule
+   would otherwise win regardless of the tier, same pitfall as
+   .dstatus-value above). Falls back to inherited var(--text) for the "—"
+   (unknown) case — the em dash itself already reads as "no data". */
+.pdr-sf-val { font-weight: 800; font-variant-numeric: tabular-nums; }
+.pdr-sf-val small { font-weight: 600; opacity: .8; }
+.pdr-sf-sub {
+  margin-top: 4px; font-size: .68rem; color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Downlink-Test toggle on run start */
+.run-dltest-toggle {
+  display: flex; align-items: center; gap: 8px;
+  margin-top: 10px; padding: 2px 0;
+  font-size: .78rem; color: var(--muted); cursor: pointer;
+}
+.run-dltest-toggle input[type="checkbox"] {
+  width: 16px; height: 16px; accent-color: var(--accent1); flex-shrink: 0;
+}
 
 /* =================================================================
    GERÄTE-STATUS — "arbeitet die Konfiguration?" (Trust & Sichtbarkeit)
@@ -641,7 +703,11 @@ details[open].coll > summary::before { transform: rotate(90deg); }
 }
 .dstatus-value {
   font-size: .86rem; font-weight: 700; text-align: right;
-  font-variant-numeric: tabular-nums; color: var(--text);
+  font-variant-numeric: tabular-nums;
+  /* No color here on purpose: JS always appends an m-good/m-ok/m-warn/m-bad
+     class alongside this one (equal specificity, so whichever sets color
+     wins ambiguously by source order) — inherits var(--text) by default,
+     same visual result, but lets the tier class win unambiguously. */
 }
 .dstatus-hint { font-size: .72rem; color: var(--muted); margin-top: 10px; line-height: 1.5; }
 

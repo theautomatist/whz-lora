@@ -325,6 +325,7 @@ function renderSelectedNode() {
     histDetails.style.display = 'none';
     if (devStatusBlock) devStatusBlock.style.display = 'none';
     loadSelectedChart();
+    loadSelectedPdrStats();
     return;
   }
 
@@ -394,6 +395,7 @@ function renderSelectedNode() {
   }
 
   loadSelectedChart();
+  loadSelectedPdrStats();
   setMsg(document.getElementById('selected-msg'), '');
 }
 
@@ -416,13 +418,14 @@ function updateHeaderPills(node) {
   }
 }
 
-/** Compact, muted single line under the signal hero — SNR/SF/PDR only; the
- * big number in #signal-hero is the one and only place RSSI is shown. */
+/** Compact, muted single line under the signal hero — SNR/SF only; the big
+ * number in #signal-hero is the one and only place RSSI is shown, and PDR
+ * now lives in the "PDR pro SF" headline block (per-SF, not this single
+ * always-empty legacy figure — see renderPdrSfBlock). */
 function selMetricsHtml(m) {
   return `
     <span class="${snrClass(m.snr)}">SNR&nbsp;${fmtNum(m.snr)}&nbsp;dB</span>
     <span>${m.sf != null ? 'SF' + m.sf : '—'}</span>
-    <span class="${pdrClass(m.pdr)}">PDR&nbsp;${m.pdr != null ? (m.pdr * 100).toFixed(1) + ' %' : '—'}</span>
   `;
 }
 
@@ -764,6 +767,13 @@ const RUN_PRESETS = {
   sf12:         [12],
 };
 
+/** Whether the "Downlink-Test" toggle is checked — read fresh on every run
+ * start (the checkbox itself isn't reset between renders, see index.html). */
+function isDownlinkTestEnabled() {
+  const el = document.getElementById('run-downlink-test');
+  return el ? el.checked : true;
+}
+
 /** Primary one-tap button: 24 h sweep SF7 -> SF9 -> SF12, 5-min interval. */
 async function startSweepDefault() {
   const totalSeconds = 24 * 3600;
@@ -777,6 +787,7 @@ async function startSweepDefault() {
     duration_seconds: totalSeconds,
     sf_schedule: schedule,
     interval_minutes: 5,
+    downlink_test: isDownlinkTestEnabled(),
   });
 }
 
@@ -798,6 +809,7 @@ async function startSweepCustom() {
     duration_seconds: totalSeconds,
     sf_schedule: schedule,
     interval_minutes: intervalMin,
+    downlink_test: isDownlinkTestEnabled(),
   });
 }
 
@@ -1194,15 +1206,16 @@ async function loadRunChart(runId) {
 
 let _selChartDebounce = null;
 
-/** Debounced re-fetch of the selected-device chart — called on every SSE
- * 'uplink' event for that device, so a burst of near-simultaneous events
- * (e.g. several devices reporting close together) collapses into a single
- * request instead of one per event. */
-function scheduleSelectedChartRefresh() {
+/** Debounced re-fetch of the selected-device chart AND PDR-per-SF block —
+ * called on every SSE 'uplink' event for that device, so a burst of near-
+ * simultaneous events (e.g. several devices reporting close together)
+ * collapses into a single pair of requests instead of one per event. */
+function scheduleSelectedRunRefresh() {
   if (_selChartDebounce) clearTimeout(_selChartDebounce);
   _selChartDebounce = setTimeout(() => {
     _selChartDebounce = null;
     loadSelectedChart();
+    loadSelectedPdrStats();
   }, 1500);
 }
 
@@ -1211,7 +1224,7 @@ function scheduleSelectedChartRefresh() {
  * to the "no packets yet" empty state when it has never run at all.
  * Called directly (not debounced) from renderSelectedNode() so switching
  * devices feels instant; SSE-driven refreshes go through the debounced
- * scheduleSelectedChartRefresh() above. */
+ * scheduleSelectedRunRefresh() above. */
 async function loadSelectedChart() {
   const wrap = document.getElementById('sel-chart-wrap');
   const container = document.getElementById('sel-chart');
@@ -1236,6 +1249,98 @@ async function loadSelectedChart() {
     if (_selectedNodeId !== nodeId) return;
     container.innerHTML = `<p class="hint">Fehler: ${esc(e.message)}</p>`;
   }
+}
+
+// ---------------------------------------------------------------------------
+// PDR pro SF — HEADLINE: delivery reliability per SF is the coverage metric
+// that actually matters (RSSI barely changes with SF, PDR does). Uplink-PDR
+// from the run's CSV vs. its commanded interval; Downlink-PDR from confirmed
+// downlink ACKs (GET /api/run/{id}/stats). Same active/last-run resolution
+// and staleness guard as loadSelectedChart() above.
+// ---------------------------------------------------------------------------
+
+async function loadSelectedPdrStats() {
+  const block = document.getElementById('pdr-sf-block');
+  if (!block) return;
+
+  const node = _nodesById[_selectedNodeId];
+  if (!node || node.kind !== 'device') { block.style.display = 'none'; return; }
+
+  const run = node.active_run || node.last_run;
+  if (!run) { block.style.display = 'none'; return; }
+  block.style.display = '';
+
+  const nodeId = node.id;
+  try {
+    const data = await apiJSON(`/api/run/${run.id}/stats`);
+    if (_selectedNodeId !== nodeId) return; // selection changed while awaiting
+    renderPdrSfBlock(data);
+  } catch (e) {
+    if (_selectedNodeId !== nodeId) return;
+    const grid = document.getElementById('pdr-sf-grid');
+    if (grid) grid.innerHTML = `<p class="hint">Fehler: ${esc(e.message)}</p>`;
+  }
+}
+
+function renderPdrSfBlock(data) {
+  const grid = document.getElementById('pdr-sf-grid');
+  const overallEl = document.getElementById('pdr-sf-overall');
+  const hintEl = document.getElementById('pdr-sf-hint');
+  if (!grid) return;
+
+  if (!data.sf_stats || !data.sf_stats.length) {
+    grid.innerHTML = '<p class="hint">Kein SF-Sweep in diesem Run — kein SF-Vergleich verfügbar.</p>';
+    if (overallEl) overallEl.textContent = '';
+    if (hintEl) hintEl.textContent = '';
+    return;
+  }
+
+  grid.innerHTML = data.sf_stats.map(pdrSfCellHtml).join('');
+
+  const o = data.overall;
+  if (overallEl) {
+    overallEl.textContent = o.expected ? `Gesamt ${Math.round(o.pdr * 100)} %` : '';
+  }
+  if (hintEl) {
+    hintEl.textContent = data.downlink_test
+      ? ''
+      : 'Downlink-Test war für diesen Run deaktiviert — keine Downlink-PDR.';
+  }
+}
+
+/** One SF's card: Uplink-PDR (empfangen/erwartet) and Downlink-PDR
+ * (ACK-Rate), both colored via the shared pdrClass tiers; Ø RSSI/Ø SNR as
+ * small secondary context. "—" (not 0 %) while a segment hasn't started
+ * yet or no downlink test has fired for it. */
+function pdrSfCellHtml(s) {
+  const upKnown = s.expected > 0;
+  const upText = upKnown
+    ? `${Math.round(s.pdr * 100)} % <small>(${s.received}/${s.expected})</small>`
+    : '—';
+  const upCls = upKnown ? pdrClass(s.pdr) : '';
+
+  const dlKnown = s.dl_sent > 0;
+  const dlText = dlKnown
+    ? `${Math.round(s.dl_pdr * 100)} % <small>(${s.dl_acked}/${s.dl_sent})</small>`
+    : '—';
+  const dlCls = dlKnown ? pdrClass(s.dl_pdr) : '';
+
+  return `
+    <div class="pdr-sf-cell">
+      <div class="pdr-sf-sf">SF${s.sf}</div>
+      <div class="pdr-sf-row">
+        <span class="pdr-sf-lbl">Uplink</span>
+        <span class="pdr-sf-val ${upCls}">${upText}</span>
+      </div>
+      <div class="pdr-sf-row">
+        <span class="pdr-sf-lbl">Downlink</span>
+        <span class="pdr-sf-val ${dlCls}">${dlText}</span>
+      </div>
+      <div class="pdr-sf-sub">
+        <span class="${rssiClass(s.rssi_avg)}">Ø&nbsp;${fmtNum(s.rssi_avg)}&nbsp;dBm</span>
+        · <span class="${snrClass(s.snr_avg)}">Ø&nbsp;${fmtNum(s.snr_avg)}&nbsp;dB</span>
+      </div>
+    </div>`;
 }
 
 /** Build the inline-SVG chart + legend markup for one run's series response
@@ -1722,7 +1827,7 @@ function handleEvent(ev) {
       updateSelectedMetrics(eui);
       const selNode = _nodesById[_selectedNodeId];
       if (selNode && selNode.kind === 'device' && selNode.eui === eui) {
-        scheduleSelectedChartRefresh();
+        scheduleSelectedRunRefresh();
       }
       break;
     }

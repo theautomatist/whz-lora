@@ -93,10 +93,27 @@
       </div>
     </div>
 
-    <!-- Compact secondary line — SNR/SF/PDR only, RSSI stays hero-only -->
+    <!-- Compact secondary line — SNR/SF only, RSSI stays hero-only; PDR now
+         lives in the "PDR pro SF" headline block below (per-SF, not a
+         single always-empty legacy figure). -->
     <div class="nc-metrics" id="sel-metrics" style="display:none"></div>
 
-    <!-- Always-visible RSSI/SNR chart for the active (or most recent) run —
+    <!-- HEADLINE: delivery reliability per SF (coverage that actually
+         matters — RSSI barely changes with SF, PDR does). Uplink-PDR from
+         the run's CSV vs. its commanded interval; Downlink-PDR from
+         confirmed-downlink ACKs (see GET /api/run/{id}/stats). -->
+    <div id="pdr-sf-block" style="display:none">
+      <div class="pdr-sf-wrap">
+        <div class="pdr-sf-hdr">
+          <span class="pdr-sf-title">PDR pro SF</span>
+          <span class="pdr-sf-overall" id="pdr-sf-overall"></span>
+        </div>
+        <div class="pdr-sf-grid" id="pdr-sf-grid"></div>
+        <div class="hint" id="pdr-sf-hint"></div>
+      </div>
+    </div>
+
+    <!-- Context: RSSI-over-time chart for the active (or most recent) run —
          inline SVG, live via SSE 'up' events for the selected device. The
          SAME run's chart is excluded from Verlauf below while it's active
          (renderHistory only lists past/completed runs). -->
@@ -147,6 +164,10 @@
       <div class="brow" style="margin-top:4px">
         <button class="btn btn-s" id="btn-run-start" onclick="startSweepDefault()" style="width:100%">Run starten — 24 h · SF7→SF9→SF12 · 5-min-Intervall</button>
       </div>
+      <label class="run-dltest-toggle">
+        <input type="checkbox" id="run-downlink-test" checked>
+        <span>Downlink-Test (bestätigte Downlinks zur Rückkanal-Prüfung)</span>
+      </label>
       <details class="coll" id="run-adjust-details">
         <summary>Anpassen</summary>
         <div class="db">
