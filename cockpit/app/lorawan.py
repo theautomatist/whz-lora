@@ -114,6 +114,114 @@ def parse_devaddr(phy_payload: bytes) -> Optional[str]:
 
 
 # ---------------------------------------------------------------------------
+# MType decode (RF-environment survey — F-0006)
+# ---------------------------------------------------------------------------
+
+MTYPE_NAMES: dict[int, str] = {
+    0: "join_request",
+    1: "join_accept",
+    2: "unconfirmed_data_up",
+    3: "unconfirmed_data_down",
+    4: "confirmed_data_up",
+    5: "confirmed_data_down",
+    6: "rejoin_request",
+    7: "proprietary",
+}
+
+
+def mtype_name(mtype: int) -> str:
+    """Canonical name for a parse_mhdr() result. 'unknown' for anything
+    outside 0–7 (e.g. parse_mhdr's -1 for an empty payload) — never raises.
+    """
+    return MTYPE_NAMES.get(mtype, "unknown")
+
+
+# ---------------------------------------------------------------------------
+# Network classification (RF-environment survey — F-0006)
+#
+# Best-effort, DevAddr TOP BYTE only — this is deliberately NOT a full
+# NetID/NwkID decode (LoRaWAN 1.0.x's NetIdType prefix is variable-length,
+# 1–7 MSBs depending on NetID class); it just flags the well-known ranges
+# relevant to a field test: TTN's public community-network prefix and the
+# private/experimental range.
+# ---------------------------------------------------------------------------
+
+
+def classify_network(dev_addr_hex: Optional[str]) -> dict:
+    """Best-effort network label from a DevAddr's top byte:
+    0x26/0x27 -> "The Things Network" (its public community-network prefix),
+    0x00/0x01 -> "private/experimental", else "other".
+
+    Returns {"label": str, "top_byte": Optional[int]}; never raises.
+    """
+    if not dev_addr_hex or len(dev_addr_hex) < 2:
+        return {"label": "unknown", "top_byte": None}
+    try:
+        top_byte = int(dev_addr_hex[0:2], 16)
+    except ValueError:
+        return {"label": "unknown", "top_byte": None}
+    if top_byte in (0x26, 0x27):
+        label = "The Things Network"
+    elif top_byte in (0x00, 0x01):
+        label = "private/experimental"
+    else:
+        label = "other"
+    return {"label": label, "top_byte": top_byte}
+
+
+# ---------------------------------------------------------------------------
+# Join-request parsing (RF-environment survey — F-0006)
+# ---------------------------------------------------------------------------
+
+
+def parse_join_request(phy_payload: bytes) -> Optional[dict]:
+    """Parse a Join-Request PHY payload:
+    MHDR(1) | JoinEUI(8, LE) | DevEUI(8, LE) | DevNonce(2) | MIC(4) = 23 bytes.
+
+    Returns {"dev_eui", "join_eui"} as big-endian hex strings (the same
+    display convention as parse_devaddr), or None if the payload is too
+    short/empty. Only meaningful when parse_mhdr(phy_payload) == 0 (a
+    join-request) — never raises.
+    """
+    if not phy_payload or len(phy_payload) < 23:
+        return None
+    join_eui_le = phy_payload[1:9]
+    dev_eui_le = phy_payload[9:17]
+    return {
+        "dev_eui": dev_eui_le[::-1].hex(),
+        "join_eui": join_eui_le[::-1].hex(),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Vendor OUI lookup (RF-environment survey — F-0006)
+#
+# Best-effort — NOT verified against the IEEE OUI registry, just a small,
+# hand-curated set for common field-test hardware (Dragino, Milesight are
+# reasonably well attested in public product documentation; 70B3D5 is a
+# widely shared/reused block, not one vendor). Elsys/Browan/Adeunis/MClimate
+# are intentionally NOT guessed here — add their OUIs once confirmed rather
+# than risk a wrong vendor label. Unknown OUIs fall back to their raw hex,
+# which is the expected common case for a field survey near campus/urban RF.
+# ---------------------------------------------------------------------------
+
+_VENDOR_OUIS: dict[str, str] = {
+    "70b3d5": "LoRa Alliance shared (70B3D5)",  # large shared/reused block, many vendors
+    "a84041": "Dragino",
+    "24e124": "Milesight",
+}
+
+
+def vendor_for_oui(oui_hex: str) -> dict:
+    """{"name", "oui"} for a DevEUI's first 3 bytes (6 hex chars, lowercase).
+    Unknown OUIs fall back to name=f"OUI {oui_hex}" — never raises.
+    """
+    oui_hex = (oui_hex or "").lower()
+    name = _VENDOR_OUIS.get(oui_hex, f"OUI {oui_hex}" if oui_hex else "unknown")
+    return {"name": name, "oui": oui_hex}
+
+
+# ---------------------------------------------------------------------------
 # EU868 channel plan
 # ---------------------------------------------------------------------------
 

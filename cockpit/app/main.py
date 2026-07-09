@@ -13,6 +13,8 @@ Routes:
   POST /api/antenna            toggle antenna type tag
   POST /api/coex               no-op (kept for API compat) — "Funkumgebung" is
                                 always-on; see /api/state's coex_* fields
+  GET  /api/rf-environment     full RF-environment / spectrum survey snapshot (foreign
+                                traffic: devices/networks/vendors/MType/heatmap/rate)
   POST /api/phase              switch all devices to a fixed-SF or ADR device profile
   GET  /api/events             SSE stream of live events (uplink/join/ack/nack/coex/state/nodes)
 
@@ -699,6 +701,16 @@ async def toggle_coex(req: CoexRequest):
     live coex_frames/coex_own_frames/coex_foreign_frames counts.
     """
     return {"coex": True}
+
+
+@app.get("/api/rf-environment", dependencies=[Depends(_require_auth)])
+async def rf_environment():
+    """Full RF-environment / spectrum survey snapshot (F-0006) — foreign-
+    traffic detail (per-device, per-network, per-vendor from joins, MType
+    breakdown, foreign-only per-(channel,SF) matrix, frames/min + a short
+    sparkline) on top of the always-on coex classification. See
+    CampaignState.get_rf_environment for the aggregation."""
+    return campaign.get_rf_environment()
 
 
 # ---------------------------------------------------------------------------

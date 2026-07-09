@@ -247,7 +247,8 @@ class MQTTIngest:
         # have raised TypeError on every real gateway uplink once this path
         # started running unconditionally.)
         rssi = frame.rx_info.rssi if frame.HasField("rx_info") else 0
+        snr = frame.rx_info.snr if frame.HasField("rx_info") else 0.0
         phy = bytes(frame.phy_payload)
 
         if sf and freq:
-            self._state.process_coex_frame(sf, freq, rssi, phy)
+            self._state.process_coex_frame(sf, freq, rssi, phy, snr)
