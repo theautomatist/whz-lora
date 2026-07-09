@@ -205,62 +205,67 @@
   </section>
 
   <!-- RF Environment — full spectrum survey of the foreign LoRaWAN traffic
-       the gateway overhears (always-on, passive); secondary, collapsed by
-       default. Live via SSE 'coex' events, throttled re-fetch of
+       the gateway overhears (always-on, passive); recorded continuously to
+       the persistent rf_frame log (see db.py), so it accumulates over the
+       whole campaign and survives a cockpit restart — always expanded, the
+       last content panel. Live via SSE 'coex' events, throttled re-fetch of
        /api/rf-environment — see loadRfEnvironment()/scheduleRfEnvironmentRefresh(). -->
-  <details class="card coll-card" id="card-coex">
-    <summary class="card-title"><span class="ti">◎</span> RF Environment</summary>
-    <div class="card-body">
-      <p class="hint" style="margin-bottom:10px">This is what the gateway overhears in range — sparse if the area is RF-quiet. CAF = foreign airtime fraction.</p>
+  <section class="card full" id="card-coex">
+    <div class="card-title">
+      <span class="ti">◎</span>
+      <span>RF Environment</span>
+      <a class="btn btn-g" id="rf-csv-link" href="/api/rf-environment/csv" target="_blank" style="margin-left:auto">↓ Download CSV</a>
+    </div>
+    <p class="hint" style="margin-bottom:10px">This is what the gateway overhears in range, recorded continuously — sparse if the area is RF-quiet. CAF = foreign airtime fraction.</p>
 
-      <div class="coex-totals">
-        <div class="coex-total-box own">
-          <span class="coex-total-num" id="coex-own-count">0</span>
-          <span class="coex-total-lbl">our frames</span>
-        </div>
-        <div class="coex-total-box foreign">
-          <span class="coex-total-num" id="coex-foreign-count">0</span>
-          <span class="coex-total-lbl">foreign frames</span>
-        </div>
+    <div class="coex-totals">
+      <div class="coex-total-box own">
+        <span class="coex-total-num" id="coex-own-count">0</span>
+        <span class="coex-total-lbl">our frames</span>
       </div>
-
-      <div class="rf-sec">
-        <div class="rf-sec-title">Channel × SF heatmap (foreign frames)</div>
-        <div id="rf-heatmap"><p class="hint">No data yet.</p></div>
-        <div class="rf-heat-legend">
-          <span>low</span>
-          <div class="rf-heat-legend-bar"></div>
-          <span>high</span>
-        </div>
-      </div>
-
-      <div class="rf-sec">
-        <div class="rf-sec-title">Band busyness</div>
-        <div class="rf-busy-row">
-          <div class="rf-busy-rate"><span id="rf-frames-per-min">0</span><small>frames/min</small></div>
-          <svg id="rf-sparkline" class="rf-sparkline" viewBox="0 0 100 24" preserveAspectRatio="none" aria-hidden="true"></svg>
-        </div>
-        <div id="rf-mtype-breakdown" class="rf-mtype"></div>
-      </div>
-
-      <div class="rf-sec">
-        <div class="rf-sec-title">Networks</div>
-        <div id="rf-networks"><p class="hint">No data yet.</p></div>
-      </div>
-
-      <div class="rf-sec">
-        <div class="rf-sec-title">Foreign devices <span id="rf-device-count" class="rf-sec-count"></span></div>
-        <div id="rf-devices" class="rf-devices-list"><p class="hint">No data yet.</p></div>
-      </div>
-
-      <div class="rf-sec">
-        <div class="rf-sec-title">Vendors nearby <span class="hint">(from joins, best-effort)</span></div>
-        <div id="rf-vendors"><p class="hint">No data yet.</p></div>
+      <div class="coex-total-box foreign">
+        <span class="coex-total-num" id="coex-foreign-count">0</span>
+        <span class="coex-total-lbl">foreign frames</span>
       </div>
     </div>
-  </details>
 
-  <!-- Device registration — secondary, collapsed by default -->
+    <div class="rf-sec">
+      <div class="rf-sec-title">Channel × SF heatmap (foreign frames)</div>
+      <div id="rf-heatmap"><p class="hint">No data yet.</p></div>
+      <div class="rf-heat-legend">
+        <span>low</span>
+        <div class="rf-heat-legend-bar"></div>
+        <span>high</span>
+      </div>
+    </div>
+
+    <div class="rf-sec">
+      <div class="rf-sec-title">Band busyness</div>
+      <div class="rf-busy-row">
+        <div class="rf-busy-rate"><span id="rf-frames-per-min">0</span><small>frames/min</small></div>
+        <svg id="rf-sparkline" class="rf-sparkline" viewBox="0 0 100 24" preserveAspectRatio="none" aria-hidden="true"></svg>
+      </div>
+      <div id="rf-mtype-breakdown" class="rf-mtype"></div>
+    </div>
+
+    <div class="rf-sec">
+      <div class="rf-sec-title">Networks</div>
+      <div id="rf-networks"><p class="hint">No data yet.</p></div>
+    </div>
+
+    <div class="rf-sec">
+      <div class="rf-sec-title">Foreign devices <span id="rf-device-count" class="rf-sec-count"></span></div>
+      <div id="rf-devices" class="rf-devices-list"><p class="hint">No data yet.</p></div>
+    </div>
+
+    <div class="rf-sec">
+      <div class="rf-sec-title">Vendors nearby <span class="hint">(from joins, best-effort)</span></div>
+      <div id="rf-vendors"><p class="hint">No data yet.</p></div>
+    </div>
+  </section>
+
+  <!-- Device registration — secondary, collapsed by default; the very last
+       panel on the page. -->
   <details class="card coll-card" id="card-devices">
     <summary class="card-title"><span class="ti">◉</span> Device registration</summary>
     <div class="card-body">

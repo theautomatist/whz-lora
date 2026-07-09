@@ -245,7 +245,7 @@ body {
 .hero-sub { font-size: .80rem; color: var(--muted); line-height: 1.5; }
 
 /* =================================================================
-   COLLAPSIBLE CARD (secondary panels: RF Environment, Device registration)
+   COLLAPSIBLE CARD (secondary panel: Device registration)
    <details class="card coll-card"><summary class="card-title">…</summary>
    <div class="card-body">…</div></details>  — collapsed by default.
    ================================================================= */
