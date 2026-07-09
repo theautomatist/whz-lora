@@ -244,6 +244,20 @@ body {
 .hero-title { font-size: 1.02rem; font-weight: 800; margin-bottom: 5px; }
 .hero-sub { font-size: .80rem; color: var(--muted); line-height: 1.5; }
 
+/* Per-device progress breakdown — compact, one thin row per device (see
+   renderHeroDeviceList in app.js). */
+.hero-devices {
+  margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line);
+  display: flex; flex-direction: column; gap: 7px;
+}
+.hdev-hdr { display: flex; justify-content: space-between; gap: 8px; font-size: .74rem; margin-bottom: 3px; }
+.hdev-name { font-weight: 700; color: var(--text); }
+.hdev-label { color: var(--muted); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.hdev-bar-track { height: 5px; border-radius: 3px; background: var(--bg-elev3); overflow: hidden; }
+.hdev-bar-fill { height: 100%; border-radius: 3px; background: var(--accent1); transition: width .6s ease; }
+.hdev-done .hdev-bar-fill { background: var(--m-good); }
+.hdev-not-placed .hdev-name, .hdev-not-placed .hdev-label { color: var(--muted); }
+
 /* =================================================================
    COLLAPSIBLE CARD (secondary panel: Device registration)
    <details class="card coll-card"><summary class="card-title">…</summary>
@@ -698,23 +712,24 @@ details[open].coll > summary::before { transform: rotate(90deg); }
 }
 .rf-sec-count { color: var(--accent-light); font-weight: 800; text-transform: none; letter-spacing: normal; }
 
-/* Channel x SF heatmap */
-.rf-heat-grid { display: grid; grid-template-columns: 32px repeat(6, 1fr); gap: 2px; }
+/* Channel x SF heatmap — fixed, tight cell size (not 1fr) so the matrix
+   reads as a small, dense grid instead of stretching to the panel width. */
+.rf-heat-grid { display: grid; grid-template-columns: 26px repeat(6, 24px); gap: 1px; }
 .rf-heat-hdr {
-  font-size: .62rem; font-weight: 700; color: var(--muted);
-  text-align: center; padding: 3px 0;
+  font-size: .56rem; font-weight: 700; color: var(--muted);
+  text-align: center; padding: 2px 0;
 }
-.rf-heat-rowhdr { text-align: right; padding-right: 4px; }
+.rf-heat-rowhdr { text-align: right; padding-right: 3px; }
 .rf-heat-cell {
-  aspect-ratio: 1; min-height: 22px;
-  border: 1px solid var(--line); border-radius: 4px;
+  width: 24px; height: 24px;
+  border: 1px solid var(--line); border-radius: 3px;
   display: flex; align-items: center; justify-content: center;
-  font-size: .62rem; font-weight: 700; color: var(--text);
+  font-size: .56rem; font-weight: 700; color: var(--text);
   font-variant-numeric: tabular-nums;
 }
-.rf-heat-legend { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: .64rem; color: var(--muted); }
+.rf-heat-legend { display: flex; align-items: center; gap: 5px; margin-top: 6px; font-size: .6rem; color: var(--muted); }
 .rf-heat-legend-bar {
-  flex: 1; height: 8px; border-radius: 4px; border: 1px solid var(--line);
+  flex: 0 1 140px; height: 6px; border-radius: 3px; border: 1px solid var(--line);
   background: linear-gradient(90deg, rgba(34,211,238,.08), rgba(34,211,238,.9));
 }
 
