@@ -1793,25 +1793,51 @@ function renderHistoryList() {
       : '<p class="hint">No measurements recorded yet — place a device and start a run.</p>';
     return;
   }
-  body.innerHTML = runs.map(historyRowHtml).join('');
+  const sortSel = document.getElementById('hist-sort');
+  const sorted = sortHistoryRuns(runs, sortSel ? sortSel.value : 'start_desc');
+  body.innerHTML = sorted.map(historyRowHtml).join('');
 }
 
-/** One row: device · location · date/time · status · packets · PDR
- * summary. Tap -> openHistoryDetail(). */
+/** field: 'start'|'end' from a "<field>_<dir>" sort key; dir: 'desc'
+ * (newest first, the default) or 'asc' (oldest first). A still-running
+ * run (no ended_at) sorts as "now" when sorting by End — a single,
+ * consistent rule that puts it first newest-first, last oldest-first,
+ * without a special case. Array.prototype.sort is stable (ES2019), so
+ * equal timestamps keep their existing relative order. */
+function sortHistoryRuns(runs, sortKey) {
+  const [field, dir] = sortKey.split('_');
+  const timeOf = r => {
+    if (field === 'end') return r.ended_at ? new Date(r.ended_at).getTime() : Date.now();
+    return new Date(r.started_at).getTime();
+  };
+  const sorted = runs.slice();
+  sorted.sort((a, b) => (dir === 'asc' ? timeOf(a) - timeOf(b) : timeOf(b) - timeOf(a)));
+  return sorted;
+}
+
+/** One row: device · location · Started/Ended (or a "Running" badge in
+ * place of the end time) · status · packets · PDR summary. Tap ->
+ * openHistoryDetail(). */
 function historyRowHtml(r) {
   const o = r.overall || {};
   const pdrKnown = o.expected != null && o.expected > 0;
   const pdrText = pdrKnown ? `${Math.round(o.pdr * 100)}% PDR` : '—';
   const pdrCls = pdrKnown ? pdrClass(o.pdr) : '';
   const deviceName = r.device ? r.device.name : '—';
+  const endedHtml = r.ended_at
+    ? `<span class="hist-row-time-lbl">Ended</span>${fmtDateTime(r.ended_at)}`
+    : `<span class="hist-badge hist-running">Running</span>`;
   return `
     <div class="hist-row" onclick="openHistoryDetail(${r.run_id})">
       <div class="hist-row-main">
         <span class="hist-row-device">${esc(deviceName)}</span>
         <span class="hist-row-loc">${esc(r.floor || '—')} · ${esc(r.room || '—')}</span>
       </div>
+      <div class="hist-row-times">
+        <span class="hist-row-time"><span class="hist-row-time-lbl">Started</span>${fmtDateTime(r.started_at)}</span>
+        <span class="hist-row-time">${endedHtml}</span>
+      </div>
       <div class="hist-row-meta">
-        <span class="hist-row-time">${fmtTime(r.started_at)}</span>
         <span class="hist-badge hist-${esc(r.status)}">${histStatusLabel(r.status)}</span>
         <span>${r.packets} pkts</span>
         <span class="hist-row-pdr ${pdrCls}">${pdrText}</span>
@@ -1885,7 +1911,7 @@ function renderHistoryDetail(detail, stats, series) {
   const gatewayPlacement = detail.gateway_placement;
 
   document.getElementById('hist-detail-title').textContent =
-    device ? `${device.name} — ${fmtTime(run.started_at)}` : `Run #${run.id}`;
+    device ? `${device.name} — ${fmtDateTime(run.started_at)}` : `Run #${run.id}`;
 
   document.getElementById('hist-detail-device-place').innerHTML =
     placeInfoHtml(devicePlacement, { showAntenna: true });
@@ -1904,8 +1930,8 @@ function renderHistoryDetail(detail, stats, series) {
 
   document.getElementById('hist-detail-meta').innerHTML = `
     <div><strong>Status:</strong> ${histStatusLabel(run.status)}</div>
-    <div><strong>Started:</strong> ${fmtTime(run.started_at)}</div>
-    <div><strong>Ended:</strong> ${run.ended_at ? fmtTime(run.ended_at) : '—'}</div>
+    <div><strong>Started:</strong> ${fmtDateTime(run.started_at)}</div>
+    <div><strong>Ended:</strong> ${run.ended_at ? fmtDateTime(run.ended_at) : '—'}</div>
     <div><strong>Packets:</strong> ${run.packets}</div>`;
 }
 
@@ -2767,6 +2793,17 @@ function fmtNum(v) { return v != null ? Number(v).toFixed(1) : '—'; }
 function fmtTime(iso) {
   if (!iso) return '—';
   return String(iso).replace('T', ' ').substring(0, 16);
+}
+
+/** "YYYY-MM-DD HH:MM" in the browser's LOCAL timezone (unlike fmtTime
+ * above, which shows the raw stored UTC string as-is) — for the History
+ * list/detail, where the operator needs a real wall-clock start/end time. */
+function fmtDateTime(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '—';
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 function esc(s) {

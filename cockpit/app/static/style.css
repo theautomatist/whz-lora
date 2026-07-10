@@ -999,28 +999,38 @@ details[open].coll > summary::before { transform: rotate(90deg); }
 #history-view { max-width: 980px; margin: 0 auto; padding: 12px 12px 40px; }
 
 .hist-filter-row {
-  display: flex; align-items: center; gap: 8px; margin-bottom: 12px;
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; margin-bottom: 12px;
 }
 .hist-filter-row select {
-  flex: 1; max-width: 260px;
+  flex: 1 1 140px; max-width: 220px;
   background: var(--bg-elev2); border: 1px solid var(--line); color: var(--text);
   border-radius: var(--radius-sm); padding: 7px 10px; font-size: .82rem;
 }
 
 /* List — one compact row per run, no table (avoids horizontal scroll on
-   narrow screens; wraps instead). */
+   narrow screens; wraps instead). Three stacked lines: device/location,
+   Started/Ended, status/packets/PDR — the timestamps get their own line
+   so they stay clearly labelled and legible instead of competing for
+   space with everything else. */
 .hist-row {
-  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
-  gap: 6px 12px; padding: 10px 4px; border-bottom: 1px solid var(--line);
+  display: flex; flex-direction: column; gap: 5px;
+  padding: 10px 4px; border-bottom: 1px solid var(--line);
   cursor: pointer; transition: background var(--t-fast);
 }
 .hist-row:last-child { border-bottom: none; }
 .hist-row:hover { background: var(--bg-elev2); }
-.hist-row-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.hist-row-main {
+  display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px;
+}
 .hist-row-device { font-weight: 700; color: var(--text); font-size: .86rem; }
 .hist-row-loc { font-size: .74rem; color: var(--muted); }
-.hist-row-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: .74rem; color: var(--muted); }
+.hist-row-times { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; font-size: .78rem; color: var(--text); }
 .hist-row-time { font-variant-numeric: tabular-nums; }
+.hist-row-time-lbl {
+  color: var(--muted); font-weight: 700; text-transform: uppercase;
+  font-size: .62rem; letter-spacing: .05em; margin-right: 5px;
+}
+.hist-row-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: .74rem; color: var(--muted); }
 .hist-badge {
   font-size: .64rem; font-weight: 800; text-transform: uppercase; letter-spacing: .04em;
   border-radius: 999px; padding: 2px 8px; border: 1px solid currentColor;

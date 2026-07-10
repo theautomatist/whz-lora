@@ -377,6 +377,13 @@
         <select id="hist-device-filter" onchange="renderHistoryList()">
           <option value="">All devices</option>
         </select>
+        <label for="hist-sort" class="hint">Sort</label>
+        <select id="hist-sort" onchange="renderHistoryList()">
+          <option value="start_desc">Start ↓ (newest)</option>
+          <option value="start_asc">Start ↑ (oldest)</option>
+          <option value="end_desc">End ↓ (newest)</option>
+          <option value="end_asc">End ↑ (oldest)</option>
+        </select>
       </div>
       <div id="history-list-body"><p class="hint">Loading…</p></div>
     </section>
@@ -661,7 +668,7 @@
 
       <div class="h-sec">
         <h3>History</h3>
-        <p>The <strong>Live | History | Map</strong> switch at the top swaps this whole view for a browsable log of every measurement — filterable by device, newest first, with the PDR summary right in the list. Tap a row for the full detail: the device's location/photos/PDR-per-SF/RSSI chart/CSV on the left, and the gateway's position <em>during that run</em> on the right — useful once the gateway has moved since.</p>
+        <p>The <strong>Live | History | Map</strong> switch at the top swaps this whole view for a browsable log of every measurement — filterable by device and sortable by Start/End (newest or oldest first; a still-running measurement counts as "now"). Each row shows its Started/Ended time in your device's local timezone, plus the PDR summary. Tap a row for the full detail: the device's location/photos/PDR-per-SF/RSSI chart/CSV on the left, and the gateway's position <em>during that run</em> on the right — useful once the gateway has moved since.</p>
       </div>
 
       <div class="h-sec">
