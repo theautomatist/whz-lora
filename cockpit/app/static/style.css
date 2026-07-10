@@ -1098,3 +1098,45 @@ details[open].coll > summary::before { transform: rotate(90deg); }
 .map-unplaced-chip:hover { border-color: var(--accent-light); color: var(--accent-light); }
 .map-unplaced-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent1); flex-shrink: 0; }
 .map-unplaced-dot.gw { background: var(--accent2); }
+
+/* Compact "Position on floor plan" preview in the Place/Relocate sheet —
+   one marker, tap-to-place/move (a tap fires a plain 'click' for both
+   mouse and touch, no drag machinery needed here). */
+#sheet-map-stage {
+  position: relative;
+  width: 100%;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: var(--bg-elev2);
+  cursor: crosshair;
+  touch-action: none;
+}
+#sheet-map-image { display: block; width: 100%; height: auto; }
+#sheet-map-marker {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 22px; height: 22px; border-radius: 50%;
+  background: var(--accent1);
+  border: 2px solid var(--bg-elev);
+  box-shadow: 0 2px 6px rgba(0,0,0,.4);
+  pointer-events: none;
+}
+#sheet-map-marker.gateway { background: var(--accent2); }
+
+/* History detail's small read-only map thumbnail (device left / gateway
+   right) — same visual language, no interaction. */
+.map-thumb {
+  position: relative; width: 100%; max-width: 280px;
+  margin-top: 10px; border-radius: var(--radius-sm); overflow: hidden;
+  border: 1px solid var(--line);
+}
+.map-thumb img { display: block; width: 100%; height: auto; }
+.map-marker-sm {
+  position: absolute; transform: translate(-50%, -50%);
+  width: 16px; height: 16px; border-radius: 50%;
+  background: var(--accent1);
+  border: 2px solid var(--bg-elev);
+  box-shadow: 0 2px 6px rgba(0,0,0,.4);
+}
+.map-marker-sm.gateway { background: var(--accent2); }
