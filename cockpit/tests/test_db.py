@@ -1404,7 +1404,7 @@ def test_get_rf_environment_shape_includes_new_fields():
 
 
 # ---------------------------------------------------------------------------
-# floorplan / map_marker — Map / Placement Editor (F-0008 PoC)
+# floorplan + placement map position — Map / Placement Editor (F-0008)
 # ---------------------------------------------------------------------------
 
 
@@ -1442,86 +1442,163 @@ def test_get_floorplan_unknown_returns_none():
     assert d.get_floorplan(999) is None
 
 
-def test_upsert_marker_creates_then_updates_position():
+def test_create_placement_stores_map_position():
     d = _new_db()
     fp = d.create_floorplan("Building A", "a.jpg")
     node_id, _ = d.upsert_node("device", "d1", "aaaa000000000001")
 
-    d.upsert_marker(fp["id"], node_id, 0.25, 0.5)
-    markers = d.list_markers(fp["id"])
-    assert len(markers) == 1
-    assert markers[0]["x"] == 0.25
-    assert markers[0]["y"] == 0.5
+    d.create_placement(node_id, "3OG", "R301", "", "", "3dbi", floorplan_id=fp["id"], map_x=0.25, map_y=0.5)
 
-    d.upsert_marker(fp["id"], node_id, 0.9, 0.1)  # drag it elsewhere
-    markers = d.list_markers(fp["id"])
-    assert len(markers) == 1  # still just one row for this node
-    assert markers[0]["x"] == 0.9
-    assert markers[0]["y"] == 0.1
+    p = d.get_active_placement(node_id)
+    assert p["floorplan_id"] == fp["id"]
+    assert p["map_x"] == 0.25
+    assert p["map_y"] == 0.5
 
 
-def test_upsert_marker_independent_per_node():
+def test_create_placement_without_map_position_leaves_it_null():
     d = _new_db()
-    fp = d.create_floorplan("Building A", "a.jpg")
-    n1, _ = d.upsert_node("device", "d1", "aaaa000000000001")
-    n2, _ = d.upsert_node("device", "d2", "bbbb000000000002")
-    d.upsert_marker(fp["id"], n1, 0.1, 0.1)
-    d.upsert_marker(fp["id"], n2, 0.9, 0.9)
-    assert len(d.list_markers(fp["id"])) == 2
+    node_id, _ = d.upsert_node("device", "d1", "aaaa000000000001")
+    d.create_placement(node_id, "3OG", "R301", "", "", "3dbi")
+
+    p = d.get_active_placement(node_id)
+    assert p["floorplan_id"] is None
+    assert p["map_x"] is None
+    assert p["map_y"] is None
 
 
-def test_delete_marker_removes_it():
+def test_set_active_placement_map_position_updates_the_active_placement():
     d = _new_db()
     fp = d.create_floorplan("Building A", "a.jpg")
     node_id, _ = d.upsert_node("device", "d1", "aaaa000000000001")
-    d.upsert_marker(fp["id"], node_id, 0.5, 0.5)
+    d.create_placement(node_id, "3OG", "R301", "", "", "3dbi")
 
-    d.delete_marker(fp["id"], node_id)
-    assert d.list_markers(fp["id"]) == []
+    ok = d.set_active_placement_map_position(node_id, fp["id"], 0.25, 0.5)
+    assert ok is True
+
+    p = d.get_active_placement(node_id)
+    assert p["floorplan_id"] == fp["id"]
+    assert p["map_x"] == 0.25
+    assert p["map_y"] == 0.5
 
 
-def test_delete_marker_noop_when_absent():
+def test_set_active_placement_map_position_drag_overwrites_previous_value():
     d = _new_db()
     fp = d.create_floorplan("Building A", "a.jpg")
     node_id, _ = d.upsert_node("device", "d1", "aaaa000000000001")
-    d.delete_marker(fp["id"], node_id)  # never placed — must not raise
-    assert d.list_markers(fp["id"]) == []
+    d.create_placement(node_id, "3OG", "R301", "", "", "3dbi")
+
+    d.set_active_placement_map_position(node_id, fp["id"], 0.1, 0.1)
+    d.set_active_placement_map_position(node_id, fp["id"], 0.9, 0.2)  # dragged elsewhere
+
+    p = d.get_active_placement(node_id)
+    assert p["map_x"] == 0.9
+    assert p["map_y"] == 0.2
 
 
-def test_list_markers_joins_node_name_and_kind():
+def test_set_active_placement_map_position_does_not_create_a_new_placement():
+    d = _new_db()
+    fp = d.create_floorplan("Building A", "a.jpg")
+    node_id, _ = d.upsert_node("device", "d1", "aaaa000000000001")
+    original = d.create_placement(node_id, "3OG", "R301", "", "", "3dbi")
+
+    d.set_active_placement_map_position(node_id, fp["id"], 0.5, 0.5)
+
+    p = d.get_active_placement(node_id)
+    assert p["id"] == original  # same placement row, just updated in place
+
+
+def test_set_active_placement_map_position_false_when_no_active_placement():
+    d = _new_db()
+    fp = d.create_floorplan("Building A", "a.jpg")
+    node_id, _ = d.upsert_node("device", "d1", "aaaa000000000001")  # never placed
+    assert d.set_active_placement_map_position(node_id, fp["id"], 0.5, 0.5) is False
+
+
+def test_clear_active_placement_map_position_clears_it():
+    d = _new_db()
+    fp = d.create_floorplan("Building A", "a.jpg")
+    node_id, _ = d.upsert_node("device", "d1", "aaaa000000000001")
+    d.create_placement(node_id, "3OG", "R301", "", "", "3dbi", floorplan_id=fp["id"], map_x=0.5, map_y=0.5)
+
+    ok = d.clear_active_placement_map_position(node_id)
+    assert ok is True
+
+    p = d.get_active_placement(node_id)
+    assert p["floorplan_id"] is None
+    assert p["map_x"] is None
+    assert p["map_y"] is None
+
+
+def test_clear_active_placement_map_position_false_when_no_active_placement():
+    d = _new_db()
+    node_id, _ = d.upsert_node("device", "d1", "aaaa000000000001")  # never placed
+    assert d.clear_active_placement_map_position(node_id) is False
+
+
+def test_clear_active_placement_map_position_noop_when_nothing_set():
+    d = _new_db()
+    node_id, _ = d.upsert_node("device", "d1", "aaaa000000000001")
+    d.create_placement(node_id, "3OG", "R301", "", "", "3dbi")  # no map position
+    assert d.clear_active_placement_map_position(node_id) is True  # still "success"
+
+
+def test_list_active_map_positions_joins_node_name_and_kind():
     d = _new_db()
     fp = d.create_floorplan("Building A", "a.jpg")
     gw_id, _ = d.upsert_node("gateway", "gw", "7076ff0064071a3d")
     dev_id, _ = d.upsert_node("device", "d1", "aaaa000000000001")
-    d.upsert_marker(fp["id"], gw_id, 0.5, 0.5)
-    d.upsert_marker(fp["id"], dev_id, 0.2, 0.3)
+    d.create_placement(gw_id, "EG", "flur", "", "", "", floorplan_id=fp["id"], map_x=0.5, map_y=0.5)
+    d.create_placement(dev_id, "3OG", "R301", "", "", "3dbi", floorplan_id=fp["id"], map_x=0.2, map_y=0.3)
 
-    markers = {m["node_id"]: m for m in d.list_markers(fp["id"])}
+    markers = {m["node_id"]: m for m in d.list_active_map_positions(fp["id"])}
     assert markers[gw_id]["name"] == "gw"
     assert markers[gw_id]["kind"] == "gateway"
     assert markers[dev_id]["name"] == "d1"
     assert markers[dev_id]["kind"] == "device"
+    assert markers[dev_id]["x"] == 0.2
+    assert markers[dev_id]["y"] == 0.3
 
 
-def test_list_markers_empty_for_unknown_floorplan():
+def test_list_active_map_positions_empty_for_unknown_floorplan():
     d = _new_db()
-    assert d.list_markers(999) == []
+    assert d.list_active_map_positions(999) == []
 
 
-def test_list_markers_scoped_to_its_own_floorplan():
-    """A marker on an older (no-longer-current) floorplan must not leak
-    into another floorplan's marker list."""
+def test_list_active_map_positions_excludes_placements_without_a_position():
+    d = _new_db()
+    fp = d.create_floorplan("Building A", "a.jpg")
+    node_id, _ = d.upsert_node("device", "d1", "aaaa000000000001")
+    d.create_placement(node_id, "3OG", "R301", "", "", "3dbi")  # no map position
+
+    assert d.list_active_map_positions(fp["id"]) == []
+
+
+def test_list_active_map_positions_excludes_no_longer_active_placements():
+    """Relocating (superseding the placement) must drop the old position
+    from the map — only the CURRENT active placement counts."""
+    d = _new_db()
+    fp = d.create_floorplan("Building A", "a.jpg")
+    node_id, _ = d.upsert_node("device", "d1", "aaaa000000000001")
+    d.create_placement(node_id, "3OG", "R301", "", "", "3dbi", floorplan_id=fp["id"], map_x=0.5, map_y=0.5)
+    d.create_placement(node_id, "1OG", "R2", "", "", "3dbi")  # relocate, no position this time
+
+    assert d.list_active_map_positions(fp["id"]) == []
+
+
+def test_list_active_map_positions_scoped_to_its_own_floorplan():
+    """A position captured against an older (no-longer-current) floorplan
+    must not leak into another floorplan's marker list."""
     d = _new_db()
     fp1 = d.create_floorplan("Old map", "old.jpg")
     fp2 = d.create_floorplan("New map", "new.jpg")
     node_id, _ = d.upsert_node("device", "d1", "aaaa000000000001")
-    d.upsert_marker(fp1["id"], node_id, 0.5, 0.5)
+    d.create_placement(node_id, "3OG", "R301", "", "", "3dbi", floorplan_id=fp1["id"], map_x=0.5, map_y=0.5)
 
-    assert len(d.list_markers(fp1["id"])) == 1
-    assert d.list_markers(fp2["id"]) == []
+    assert len(d.list_active_map_positions(fp1["id"])) == 1
+    assert d.list_active_map_positions(fp2["id"]) == []
 
 
-def test_floorplan_and_markers_survive_a_simulated_restart():
+def test_map_position_survives_a_simulated_restart():
     """Re-opening a NEW Database instance against the SAME file must see
     everything the previous instance wrote."""
     path = os.path.join(tempfile.mkdtemp(), "test.db")
@@ -1529,7 +1606,7 @@ def test_floorplan_and_markers_survive_a_simulated_restart():
     d1.init_schema()
     fp = d1.create_floorplan("Building A", "a.jpg")
     node_id, _ = d1.upsert_node("device", "d1", "aaaa000000000001")
-    d1.upsert_marker(fp["id"], node_id, 0.4, 0.6)
+    d1.create_placement(node_id, "3OG", "R301", "", "", "3dbi", floorplan_id=fp["id"], map_x=0.4, map_y=0.6)
 
     d2 = Database(path)  # simulates a fresh process re-opening /data/cockpit.db
     d2.init_schema()
@@ -1537,7 +1614,7 @@ def test_floorplan_and_markers_survive_a_simulated_restart():
     current = d2.get_current_floorplan()
     assert current is not None
     assert current["name"] == "Building A"
-    markers = d2.list_markers(current["id"])
+    markers = d2.list_active_map_positions(current["id"])
     assert len(markers) == 1
     assert markers[0]["x"] == 0.4
     assert markers[0]["y"] == 0.6
