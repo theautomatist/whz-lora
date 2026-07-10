@@ -42,13 +42,17 @@ Routes:
                                 as they stood during the run; measurement data itself stays on
                                 the /series, /stats, /csv, and /api/photo/{id} endpoints above
 
-  F-0008 Map / Placement Editor (PoC) — drag node markers onto an uploaded map
-  image; positions are image-relative fractions, not real-world coordinates:
+  F-0008 Map / Placement Editor — position a node on an uploaded map image;
+  positions are image-relative fractions, not real-world coordinates. The
+  position is a PLACEMENT attribute (captured with floor/room/photos via
+  /api/placement, /api/relocate, /api/gateway/move[/force] — map_x/map_y
+  params) or dragged directly here (edits the CURRENT ACTIVE placement):
   POST   /api/floorplan            upload a map image (multipart), becomes current
-  GET    /api/floorplan            the current floorplan + its markers
+  GET    /api/floorplan            the current floorplan + one marker per node with
+                                    an active-placement map position on it
   GET    /api/floorplan/{id}/image serve a floorplan image
-  PUT    /api/marker               upsert a node's marker position on the current floorplan
-  DELETE /api/marker/{node_id}     remove a node's marker from the current floorplan
+  PUT    /api/marker               drag: set a node's active placement's map position
+  DELETE /api/marker/{node_id}     clear a node's active placement's map position
 
   F-0006 Phase B — timed per-device SF-sweep on top of /api/run/start:
   optional duration_seconds/sf_schedule/interval_minutes switch the device
@@ -497,6 +501,11 @@ class PlacementRequest(BaseModel):
     description: str = ""
     note: str = ""
     antenna: str = ""
+    # F-0008 Map / Placement Editor — optional map position, captured WITH
+    # the placement (like floor/room/photos); fractions 0..1 of the current
+    # floorplan image, not real-world coordinates. Both or neither.
+    map_x: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    map_y: Optional[float] = Field(default=None, ge=0.0, le=1.0)
 
 
 class SFSegment(BaseModel):
@@ -552,6 +561,8 @@ class RelocateRequest(BaseModel):
     description: str = ""
     note: str = ""
     antenna: str = ""
+    map_x: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    map_y: Optional[float] = Field(default=None, ge=0.0, le=1.0)
 
 
 class GatewayMoveRequest(BaseModel):
@@ -559,6 +570,11 @@ class GatewayMoveRequest(BaseModel):
     room: str = ""
     description: str = ""
     note: str = ""
+    # Same "Position on floor plan" control as the device sheet — the
+    # gateway is a node with a placement too, so it can be positioned the
+    # same way (needed for History's device+gateway map thumbnail).
+    map_x: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    map_y: Optional[float] = Field(default=None, ge=0.0, le=1.0)
 
 
 class SetIntervalRequest(BaseModel):
@@ -575,13 +591,35 @@ class SetIntervalRequest(BaseModel):
 
 
 class MarkerUpsertRequest(BaseModel):
-    """F-0008 Map / Placement Editor (PoC) — PUT /api/marker. x/y are
-    fractions (0..1) of the current floorplan image, not real-world
-    coordinates — see the floorplan/map_marker table comments in db.py."""
+    """F-0008 Map / Placement Editor — PUT /api/marker. x/y are fractions
+    (0..1) of the current floorplan image, not real-world coordinates.
+    Updates the node's CURRENT ACTIVE PLACEMENT's map position (see
+    db.Database.set_active_placement_map_position) — dragging a marker on
+    the Map view does not create a new placement, only Place/Relocate
+    does."""
 
     node_id: int
     x: float = Field(ge=0.0, le=1.0)
     y: float = Field(ge=0.0, le=1.0)
+
+
+def _resolve_map_position(
+    d: Database, map_x: Optional[float], map_y: Optional[float]
+) -> tuple[Optional[int], Optional[float], Optional[float]]:
+    """A map position is only meaningful together with a floorplan
+    reference — resolve the CURRENT floorplan's id when x/y were given, so
+    create_placement freezes "which map version" alongside the coordinates.
+    Returns (floorplan_id, map_x, map_y) — all three None together when
+    x/y are absent, or when no floorplan has ever been uploaded (the
+    frontend hides the position control in that case, but this stays
+    defensive either way: never store a position with no floorplan to
+    make sense of it)."""
+    if map_x is None or map_y is None:
+        return None, None, None
+    fp = d.get_current_floorplan()
+    if fp is None:
+        return None, None, None
+    return fp["id"], map_x, map_y
 
 
 # Map logical phase names to ChirpStack device-profile names
@@ -909,8 +947,10 @@ async def create_placement(req: PlacementRequest):
     node = d.get_node(req.node_id)
     if node is None:
         raise HTTPException(status_code=404, detail="node not found")
+    floorplan_id, map_x, map_y = _resolve_map_position(d, req.map_x, req.map_y)
     placement_id = d.create_placement(
-        req.node_id, req.floor, req.room, req.description, req.note, req.antenna
+        req.node_id, req.floor, req.room, req.description, req.note, req.antenna,
+        floorplan_id=floorplan_id, map_x=map_x, map_y=map_y,
     )
     campaign.broadcast_event({"type": "nodes"})
     return {"placement_id": placement_id}
@@ -962,14 +1002,23 @@ async def get_photo(photo_id: int):
 
 
 # ---------------------------------------------------------------------------
-# F-0008 Map / Placement Editor (PoC) — drag node markers onto an uploaded
-# map image. Explicitly a placeholder: the first real map is an isometric
-# building view whose perspective distorts real coordinates, so x/y are
-# fractions (0..1) of the image, not real-world positions — this is about
-# the editor UX + persistence, not accurate positioning yet. A new upload
-# simply becomes the current floorplan (the most recently uploaded row);
-# older floorplans/markers are kept, not surfaced. Reboot-safe: same
-# SQLite DB as everything else, images under /data/floorplans/.
+# F-0008 Map / Placement Editor — position a node on an uploaded map image.
+# Explicitly a placeholder: the first real map is an isometric building view
+# whose perspective distorts real coordinates, so x/y are fractions (0..1)
+# of the image, not real-world positions — this is about the editor UX +
+# persistence, not accurate positioning yet. A new upload simply becomes the
+# current floorplan (the most recently uploaded row); older floorplans are
+# kept, not surfaced. Reboot-safe: same SQLite DB as everything else, images
+# under /data/floorplans/.
+#
+# The map position is a PLACEMENT attribute (floorplan_id/map_x/map_y on
+# `placement`, alongside floor/room/photos) — captured either at Place/
+# Relocate time (POST /api/placement, /api/relocate, /api/gateway/move[/
+# force] — see _resolve_map_position above) or, on the Map view
+# itself, by dragging a marker (PUT /api/marker below, which edits the
+# node's CURRENT ACTIVE placement in place — it does NOT create a new one).
+# This is what lets History freeze "where this node stood, on which map,
+# during this specific run" instead of a single live/floating marker.
 # ---------------------------------------------------------------------------
 
 
@@ -994,9 +1043,10 @@ async def upload_floorplan(file: UploadFile = File(...), name: str = Form("")):
 
 @app.get("/api/floorplan", dependencies=[Depends(_require_auth)])
 async def get_current_floorplan():
-    """The current floorplan (most recently uploaded) + its markers, joined
-    with each node's name/kind. {"floorplan": null, "markers": []} when
-    nothing has been uploaded yet."""
+    """The current floorplan (most recently uploaded) + "markers": one per
+    node whose CURRENT ACTIVE placement has a map position on it (joined
+    with the node's name/kind — see db.list_active_map_positions).
+    {"floorplan": null, "markers": []} when nothing has been uploaded yet."""
     d = _dbh()
     fp = d.get_current_floorplan()
     if fp is None:
@@ -1007,7 +1057,7 @@ async def get_current_floorplan():
             "name": fp["name"],
             "image_url": f"/api/floorplan/{fp['id']}/image",
         },
-        "markers": d.list_markers(fp["id"]),
+        "markers": d.list_active_map_positions(fp["id"]),
     }
 
 
@@ -1026,27 +1076,33 @@ async def get_floorplan_image(floorplan_id: int):
 
 @app.put("/api/marker", dependencies=[Depends(_require_auth)])
 async def upsert_marker(req: MarkerUpsertRequest):
-    """Upsert a node's marker position (x,y as fractions 0..1) on the
-    current floorplan — one marker per node, unique per (floorplan, node)."""
+    """Drag a marker on the Map view — updates the node's CURRENT ACTIVE
+    placement's map position (against the current floorplan); does not
+    create a new placement. 404 if there is no current floorplan, or the
+    node has no active placement to attach a position to (place it first)."""
     d = _dbh()
     fp = d.get_current_floorplan()
     if fp is None:
         raise HTTPException(status_code=404, detail="no floorplan uploaded yet")
     if d.get_node(req.node_id) is None:
         raise HTTPException(status_code=404, detail="node not found")
-    d.upsert_marker(fp["id"], req.node_id, req.x, req.y)
+    ok = d.set_active_placement_map_position(req.node_id, fp["id"], req.x, req.y)
+    if not ok:
+        raise HTTPException(status_code=404, detail="node has no active placement")
     return {"ok": True}
 
 
 @app.delete("/api/marker/{node_id}", dependencies=[Depends(_require_auth)])
 async def remove_marker(node_id: int):
-    """Remove a node's marker from the current floorplan — a no-op (still
-    200) if it wasn't on the map."""
+    """Clear a node's current active placement's map position — a no-op
+    (still 200) if it had none. 404 if the node has no active placement at
+    all (nothing to clear)."""
     d = _dbh()
-    fp = d.get_current_floorplan()
-    if fp is None:
-        raise HTTPException(status_code=404, detail="no floorplan uploaded yet")
-    d.delete_marker(fp["id"], node_id)
+    if d.get_node(node_id) is None:
+        raise HTTPException(status_code=404, detail="node not found")
+    ok = d.clear_active_placement_map_position(node_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="node has no active placement")
     return {"ok": True}
 
 
@@ -1243,8 +1299,10 @@ def relocate(req: RelocateRequest):
         )
 
     d.stop_active_run_for_device(req.device_node_id, status="done", reason="relocated")
+    floorplan_id, map_x, map_y = _resolve_map_position(d, req.map_x, req.map_y)
     placement_id = d.create_placement(
-        req.device_node_id, req.floor, req.room, req.description, req.note, req.antenna
+        req.device_node_id, req.floor, req.room, req.description, req.note, req.antenna,
+        floorplan_id=floorplan_id, map_x=map_x, map_y=map_y,
     )
     run = d.start_run(
         req.device_node_id,
@@ -1285,8 +1343,10 @@ async def gateway_move(req: GatewayMoveRequest):
             status_code=409,
             detail={"open_runs": _open_runs_payload(running)},
         )
+    floorplan_id, map_x, map_y = _resolve_map_position(d, req.map_x, req.map_y)
     placement_id = d.create_placement(
-        _gateway_node_id, req.floor, req.room, req.description, req.note, ""
+        _gateway_node_id, req.floor, req.room, req.description, req.note, "",
+        floorplan_id=floorplan_id, map_x=map_x, map_y=map_y,
     )
     campaign.broadcast_event({"type": "nodes"})
     return {"placement_id": placement_id}
@@ -1302,8 +1362,10 @@ async def gateway_move_force(req: GatewayMoveRequest):
         raise HTTPException(status_code=503, detail="gateway node not provisioned yet")
 
     d.abort_running_runs(reason="gateway-move")
+    floorplan_id, map_x, map_y = _resolve_map_position(d, req.map_x, req.map_y)
     placement_id = d.create_placement(
-        _gateway_node_id, req.floor, req.room, req.description, req.note, ""
+        _gateway_node_id, req.floor, req.room, req.description, req.note, "",
+        floorplan_id=floorplan_id, map_x=map_x, map_y=map_y,
     )
     campaign.broadcast_event({"type": "nodes"})
     return {"placement_id": placement_id}
@@ -1367,7 +1429,8 @@ async def run_detail(run_id: int):
     run row (+ sweep summary, via _run_entry), the device and gateway node
     identities, and both placements as they stood during this run (floor/
     room/description/note[/antenna for the device]/started_at/ended_at/
-    photo_ids)."""
+    photo_ids/map_x/map_y + the floorplan {id, image_url} the position is
+    relative to, for a small History map thumbnail — F-0008)."""
     d = _dbh()
     run = d.get_run(run_id)
     if run is None:
@@ -1389,7 +1452,14 @@ async def run_detail(run_id: int):
             "started_at": p["started_at"],
             "ended_at": p["ended_at"],
             "photo_ids": [ph["id"] for ph in d.list_photos(p["id"])],
+            "map_x": p["map_x"],
+            "map_y": p["map_y"],
+            "floorplan": None,
         }
+        if p["floorplan_id"] is not None:
+            fp = d.get_floorplan(p["floorplan_id"])
+            if fp is not None:
+                out["floorplan"] = {"id": fp["id"], "image_url": f"/api/floorplan/{fp['id']}/image"}
         if include_antenna:
             out["antenna"] = p["antenna"]
         return out
