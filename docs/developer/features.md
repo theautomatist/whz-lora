@@ -26,7 +26,7 @@ records what was removed and why. The entry format is defined in
 - User-facing behavior: Der Betreiber konfiguriert sein Gateway laut
   Anleitung; das Gateway erscheint in der ChirpStack-UI als `online`
   und liefert empfangene Frames. Anleitung:
-  [docs/user/kerlink-ifemtocell-bring-up.md](kerlink-ifemtocell-bring-up.md).
+  [docs/user/kerlink-ifemtocell-bring-up.md](https://github.com/theautomatist/whz-lora/blob/main/docs/user/kerlink-ifemtocell-bring-up.md).
 - Acceptance criteria:
   - **CI (Simulator-Modus)**: Das Smoke-Test-Skript registriert ein
     virtuelles Gateway in ChirpStack und sendet über UDP-Port 1700
