@@ -136,6 +136,17 @@ async def _lifespan(app: FastAPI):
             "set a real password in .env before exposing this service on any network."
         )
 
+    # Say which ChirpStack auth path is in use.  Both are fine: the admin-login
+    # JWT expires after 24 h but is renewed automatically (finding B-1), an API
+    # key does not expire at all.
+    logger.info(
+        "ChirpStack auth: %s",
+        "API key (no expiry)"
+        if cs.uses_api_key()
+        else "admin login, JWT renewed automatically "
+        "(set CHIRPSTACK_API_KEY in .env to skip the login round-trip)",
+    )
+
     # F-0006 persistence — local SQLite, no network dependency, so this
     # never needs a retry loop like the ChirpStack gRPC connect below.
     _db = Database(config.DB_PATH)
@@ -398,13 +409,28 @@ def _require_auth(
 
 
 def _grpc() -> tuple:
-    """Return (channel, token, tenant_id, app_id) or raise 503."""
+    """Return (channel, token, tenant_id, app_id) or raise 503.
+
+    The token is fetched through cs.get_token() on every call instead of
+    reusing the one captured at start-up.  It is cached until shortly before
+    it expires, so this costs nothing in the normal case — but it means a
+    cockpit that has been running for more than a day still reaches
+    ChirpStack.  See docs/developer/analysis/pi-field-diagnosis-2026-08-01.md,
+    finding B-1.
+    """
     if not all([_grpc_channel, _grpc_token, _tenant_id, _app_id]):
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="ChirpStack gRPC not available; check logs.",
         )
-    return _grpc_channel, _grpc_token, _tenant_id, _app_id
+    try:
+        token = cs.get_token(_grpc_channel)
+    except grpc.RpcError as e:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"ChirpStack authentication failed: {e.details()}",
+        )
+    return _grpc_channel, token, _tenant_id, _app_id
 
 
 def _dbh() -> Database:
@@ -1192,10 +1218,11 @@ def _switch_device_profile_best_effort(dev_eui: str, sf: int) -> None:
         logger.warning("SF-sweep: no profile mapped for SF%s", sf)
         return
     try:
+        token = cs.get_token(_grpc_channel)
         profile_id = cs.find_profile_id_by_name(
-            _grpc_channel, _grpc_token, _tenant_id, profile_name
+            _grpc_channel, token, _tenant_id, profile_name
         )
-        cs.set_device_profile(_grpc_channel, _grpc_token, dev_eui, profile_id)
+        cs.set_device_profile(_grpc_channel, token, dev_eui, profile_id)
     except (ValueError, grpc.RpcError) as e:
         logger.warning(
             "SF-sweep: could not switch %s to SF%s (%s): %s", dev_eui, sf, profile_name, e
@@ -1217,7 +1244,13 @@ def _apply_sweep_start_side_effects(dev_eui: str, first_sf: int, interval_minute
     if not (_grpc_channel and _grpc_token):
         return
     try:
-        cs.enqueue_downlink(_grpc_channel, _grpc_token, dev_eui, 1, f"02{interval_minutes:02x}")
+        cs.enqueue_downlink(
+            _grpc_channel,
+            cs.get_token(_grpc_channel),
+            dev_eui,
+            1,
+            f"02{interval_minutes:02x}",
+        )
     except grpc.RpcError as e:
         logger.warning("SF-sweep: could not enqueue interval downlink for %s: %s", dev_eui, e)
 
@@ -1768,7 +1801,9 @@ def device_config_status(node_id: int):
     queued: list[dict] = []
     if _grpc_channel and _grpc_token:
         try:
-            queued = cs.get_device_queue(_grpc_channel, _grpc_token, node["eui"])
+            queued = cs.get_device_queue(
+                _grpc_channel, cs.get_token(_grpc_channel), node["eui"]
+            )
         except grpc.RpcError as e:
             logger.warning(
                 "config-status: GetQueue failed for %s: %s", node["eui"], e.details()
