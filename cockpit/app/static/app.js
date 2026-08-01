@@ -28,6 +28,13 @@ let _gatewayForce = false; // set by onMoveGatewayClick() before opening the gat
                             // submitSheet() must call /api/gateway/move/force, not the
                             // plain /api/gateway/move. Reset on sheet open (device mode)
                             // and close — see openPlaceSheet()/closeSheet().
+// F-0008 Map / Placement Editor — the sheet's optional "Position on floor
+// plan" control. _sheetFloorplan is the current floorplan (or null — hides
+// the control), fetched fresh on every sheet open; _sheetMapPosition is
+// the pending {x,y} tap (or null — no position), submitted as map_x/map_y
+// alongside floor/room/photos. See loadSheetMapPosition()/onSheetMapTap().
+let _sheetFloorplan    = null;
+let _sheetMapPosition  = null;
 
 // ---------------------------------------------------------------------------
 // Toast
@@ -1045,6 +1052,15 @@ function openPlaceSheet(mode) {
   // it can never leak a stale 'true' into an unrelated device placement.
   if (mode !== 'gateway') _gatewayForce = false;
 
+  // F-0008 — hide the map-position control until loadSheetMapPosition()
+  // (async) resolves, so a re-open never briefly shows the previous node's
+  // state; it also decides whether to show the control at all (hidden with
+  // no current floorplan).
+  _sheetMapPosition = null;
+  const mapFieldEl = document.getElementById('sheet-map-field');
+  if (mapFieldEl) mapFieldEl.style.display = 'none';
+  loadSheetMapPosition();
+
   document.getElementById('sheet-conflict').style.display = 'none';
   document.getElementById('sheet-form').style.display = '';
   setMsg(document.getElementById('sheet-msg'), '');
@@ -1108,6 +1124,7 @@ function closeSheet() {
   document.getElementById('place-ov').classList.remove('open');
   document.body.style.overflow = '';
   _gatewayForce = false;
+  _sheetMapPosition = null;
 }
 
 function closeSheetBackdrop(e) {
@@ -1149,6 +1166,73 @@ function renderSheetPhotoThumbs() {
   if (capHint) capHint.style.display = atCap ? '' : 'none';
 }
 
+// --- Position on floor plan (F-0008) — optional, alongside photos. A
+// compact embedded floorplan preview; tap it to drop/move this node's
+// marker (touch and mouse both fire a regular 'click'). Submitted as
+// map_x/map_y with the placement/relocate/gateway-move call in
+// submitSheet() — captured WITH the placement, not a live marker. ---
+
+/** Fetch the current floorplan and decide whether to show the control at
+ * all; when shown, pre-fill from the node's previous placement position —
+ * but only if that position was captured against this SAME floorplan
+ * image (an older position from a since-replaced map would be
+ * meaningless overlaid on the new one). */
+async function loadSheetMapPosition() {
+  const fieldEl = document.getElementById('sheet-map-field');
+  if (!fieldEl) return;
+  try {
+    const data = await apiJSON('/api/floorplan');
+    _sheetFloorplan = data.floorplan;
+  } catch (e) {
+    _sheetFloorplan = null;
+  }
+
+  if (!_sheetFloorplan) {
+    fieldEl.style.display = 'none';
+    return;
+  }
+  fieldEl.style.display = '';
+
+  const node = _nodesById[_selectedNodeId];
+  const p = node ? node.placement : null;
+  _sheetMapPosition = (p && p.map_x != null && p.map_y != null && p.floorplan_id === _sheetFloorplan.id)
+    ? { x: p.map_x, y: p.map_y }
+    : null;
+  renderSheetMap();
+}
+
+function renderSheetMap() {
+  const img = document.getElementById('sheet-map-image');
+  if (img && _sheetFloorplan) img.src = _sheetFloorplan.image_url;
+
+  const markerEl = document.getElementById('sheet-map-marker');
+  if (!markerEl) return;
+  markerEl.classList.toggle('gateway', _sheetMode === 'gateway');
+  if (_sheetMapPosition) {
+    markerEl.style.display = '';
+    markerEl.style.left = `${(_sheetMapPosition.x * 100).toFixed(2)}%`;
+    markerEl.style.top = `${(_sheetMapPosition.y * 100).toFixed(2)}%`;
+  } else {
+    markerEl.style.display = 'none';
+  }
+}
+
+function onSheetMapTap(e) {
+  const stage = document.getElementById('sheet-map-stage');
+  if (!stage) return;
+  const rect = stage.getBoundingClientRect();
+  if (!rect.width || !rect.height) return;
+  const x = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+  const y = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
+  _sheetMapPosition = { x, y };
+  renderSheetMap();
+}
+
+function clearSheetMapPosition() {
+  _sheetMapPosition = null;
+  renderSheetMap();
+}
+
 // --- Submit ---
 
 async function submitSheet() {
@@ -1157,6 +1241,9 @@ async function submitSheet() {
   const room        = document.getElementById('sheet-room').value.trim();
   const description = document.getElementById('sheet-desc').value.trim();
   const note        = document.getElementById('sheet-note').value.trim();
+  // F-0008 — optional map position, merged into whichever request body
+  // below; {} (no keys added) when the control is hidden/untouched.
+  const mapPos = _sheetMapPosition ? { map_x: _sheetMapPosition.x, map_y: _sheetMapPosition.y } : {};
 
   const btn = document.getElementById('sheet-submit-btn');
   btn.disabled = true;
@@ -1170,7 +1257,7 @@ async function submitSheet() {
       const endpoint = _gatewayForce ? '/api/gateway/move/force' : '/api/gateway/move';
       const res = await apiFetch(endpoint, {
         method: 'POST',
-        body: JSON.stringify({ floor, room, description, note }),
+        body: JSON.stringify(Object.assign({ floor, room, description, note }, mapPos)),
       });
       if (res.ok) {
         const result = await res.json();
@@ -1203,17 +1290,19 @@ async function submitSheet() {
       if (hasRun) {
         const result = await apiJSON('/api/relocate', {
           method: 'POST',
-          body: JSON.stringify({
-            device_node_id: node.id, floor, room, description, note, antenna: _sheetAntenna,
-          }),
+          body: JSON.stringify(Object.assign(
+            { device_node_id: node.id, floor, room, description, note, antenna: _sheetAntenna },
+            mapPos,
+          )),
         });
         placementId = result.placement_id;
       } else {
         const result = await apiJSON('/api/placement', {
           method: 'POST',
-          body: JSON.stringify({
-            node_id: node.id, floor, room, description, note, antenna: _sheetAntenna,
-          }),
+          body: JSON.stringify(Object.assign(
+            { node_id: node.id, floor, room, description, note, antenna: _sheetAntenna },
+            mapPos,
+          )),
         });
         placementId = result.placement_id;
       }
@@ -1641,15 +1730,21 @@ function switchView(view) {
   _currentView = view;
   const liveBtn = document.getElementById('vsw-live');
   const histBtn = document.getElementById('vsw-history');
+  const mapBtn = document.getElementById('vsw-map');
   if (liveBtn) liveBtn.classList.toggle('active', view === 'live');
   if (histBtn) histBtn.classList.toggle('active', view === 'history');
+  if (mapBtn) mapBtn.classList.toggle('active', view === 'map');
   const mainEl = document.getElementById('main');
   const histEl = document.getElementById('history-view');
+  const mapEl = document.getElementById('map-view');
   if (mainEl) mainEl.style.display = view === 'live' ? '' : 'none';
   if (histEl) histEl.style.display = view === 'history' ? '' : 'none';
+  if (mapEl) mapEl.style.display = view === 'map' ? '' : 'none';
   if (view === 'history') {
     closeHistoryDetail(); // always land on the list, never a stale detail
     loadHistoryList();
+  } else if (view === 'map') {
+    loadMapView();
   }
 }
 
@@ -1698,25 +1793,51 @@ function renderHistoryList() {
       : '<p class="hint">No measurements recorded yet — place a device and start a run.</p>';
     return;
   }
-  body.innerHTML = runs.map(historyRowHtml).join('');
+  const sortSel = document.getElementById('hist-sort');
+  const sorted = sortHistoryRuns(runs, sortSel ? sortSel.value : 'start_desc');
+  body.innerHTML = sorted.map(historyRowHtml).join('');
 }
 
-/** One row: device · location · date/time · status · packets · PDR
- * summary. Tap -> openHistoryDetail(). */
+/** field: 'start'|'end' from a "<field>_<dir>" sort key; dir: 'desc'
+ * (newest first, the default) or 'asc' (oldest first). A still-running
+ * run (no ended_at) sorts as "now" when sorting by End — a single,
+ * consistent rule that puts it first newest-first, last oldest-first,
+ * without a special case. Array.prototype.sort is stable (ES2019), so
+ * equal timestamps keep their existing relative order. */
+function sortHistoryRuns(runs, sortKey) {
+  const [field, dir] = sortKey.split('_');
+  const timeOf = r => {
+    if (field === 'end') return r.ended_at ? new Date(r.ended_at).getTime() : Date.now();
+    return new Date(r.started_at).getTime();
+  };
+  const sorted = runs.slice();
+  sorted.sort((a, b) => (dir === 'asc' ? timeOf(a) - timeOf(b) : timeOf(b) - timeOf(a)));
+  return sorted;
+}
+
+/** One row: device · location · Started/Ended (or a "Running" badge in
+ * place of the end time) · status · packets · PDR summary. Tap ->
+ * openHistoryDetail(). */
 function historyRowHtml(r) {
   const o = r.overall || {};
   const pdrKnown = o.expected != null && o.expected > 0;
   const pdrText = pdrKnown ? `${Math.round(o.pdr * 100)}% PDR` : '—';
   const pdrCls = pdrKnown ? pdrClass(o.pdr) : '';
   const deviceName = r.device ? r.device.name : '—';
+  const endedHtml = r.ended_at
+    ? `<span class="hist-row-time-lbl">Ended</span>${fmtDateTime(r.ended_at)}`
+    : `<span class="hist-badge hist-running">Running</span>`;
   return `
     <div class="hist-row" onclick="openHistoryDetail(${r.run_id})">
       <div class="hist-row-main">
         <span class="hist-row-device">${esc(deviceName)}</span>
         <span class="hist-row-loc">${esc(r.floor || '—')} · ${esc(r.room || '—')}</span>
       </div>
+      <div class="hist-row-times">
+        <span class="hist-row-time"><span class="hist-row-time-lbl">Started</span>${fmtDateTime(r.started_at)}</span>
+        <span class="hist-row-time">${endedHtml}</span>
+      </div>
       <div class="hist-row-meta">
-        <span class="hist-row-time">${fmtTime(r.started_at)}</span>
         <span class="hist-badge hist-${esc(r.status)}">${histStatusLabel(r.status)}</span>
         <span>${r.packets} pkts</span>
         <span class="hist-row-pdr ${pdrCls}">${pdrText}</span>
@@ -1748,6 +1869,8 @@ async function loadHistoryDetail(runId) {
   document.getElementById('hist-detail-gateway-place').innerHTML = '<div class="place-empty">Loading…</div>';
   document.getElementById('hist-detail-device-photos').innerHTML = '';
   document.getElementById('hist-detail-gateway-photos').innerHTML = '';
+  document.getElementById('hist-detail-device-map').innerHTML = '';
+  document.getElementById('hist-detail-gateway-map').innerHTML = '';
   document.getElementById('hist-detail-chart').innerHTML = '<p class="hint">Loading…</p>';
   document.getElementById('hist-pdr-sf-grid').innerHTML = '';
   document.getElementById('hist-detail-meta').innerHTML = '';
@@ -1767,6 +1890,20 @@ async function loadHistoryDetail(runId) {
   }
 }
 
+/** F-0008 — small read-only floorplan thumbnail with one marker, showing
+ * where a placement stood at the time (frozen map_x/map_y + the floorplan
+ * it's relative to). '' when the placement has no map position — nothing
+ * to show, the caller's container just stays empty. */
+function mapThumbnailHtml(placement, isGateway) {
+  if (!placement || !placement.floorplan || placement.map_x == null || placement.map_y == null) return '';
+  return `
+    <div class="map-thumb">
+      <img src="${esc(placement.floorplan.image_url)}" alt="Floor plan" loading="lazy">
+      <div class="map-marker-sm${isGateway ? ' gateway' : ''}"
+           style="left:${(placement.map_x * 100).toFixed(2)}%;top:${(placement.map_y * 100).toFixed(2)}%"></div>
+    </div>`;
+}
+
 function renderHistoryDetail(detail, stats, series) {
   const run = detail.run;
   const device = detail.device;
@@ -1774,16 +1911,18 @@ function renderHistoryDetail(detail, stats, series) {
   const gatewayPlacement = detail.gateway_placement;
 
   document.getElementById('hist-detail-title').textContent =
-    device ? `${device.name} — ${fmtTime(run.started_at)}` : `Run #${run.id}`;
+    device ? `${device.name} — ${fmtDateTime(run.started_at)}` : `Run #${run.id}`;
 
   document.getElementById('hist-detail-device-place').innerHTML =
     placeInfoHtml(devicePlacement, { showAntenna: true });
   document.getElementById('hist-detail-device-photos').innerHTML =
     photoThumbsHtml(devicePlacement && devicePlacement.photo_ids);
+  document.getElementById('hist-detail-device-map').innerHTML = mapThumbnailHtml(devicePlacement, false);
 
   document.getElementById('hist-detail-gateway-place').innerHTML = placeInfoHtml(gatewayPlacement);
   document.getElementById('hist-detail-gateway-photos').innerHTML =
     photoThumbsHtml(gatewayPlacement && gatewayPlacement.photo_ids);
+  document.getElementById('hist-detail-gateway-map').innerHTML = mapThumbnailHtml(gatewayPlacement, true);
 
   renderPdrSfBlock(stats, { grid: 'hist-pdr-sf-grid', overall: 'hist-pdr-sf-overall', hint: 'hist-pdr-sf-hint' });
 
@@ -1791,9 +1930,225 @@ function renderHistoryDetail(detail, stats, series) {
 
   document.getElementById('hist-detail-meta').innerHTML = `
     <div><strong>Status:</strong> ${histStatusLabel(run.status)}</div>
-    <div><strong>Started:</strong> ${fmtTime(run.started_at)}</div>
-    <div><strong>Ended:</strong> ${run.ended_at ? fmtTime(run.ended_at) : '—'}</div>
+    <div><strong>Started:</strong> ${fmtDateTime(run.started_at)}</div>
+    <div><strong>Ended:</strong> ${run.ended_at ? fmtDateTime(run.ended_at) : '—'}</div>
     <div><strong>Packets:</strong> ${run.packets}</div>`;
+}
+
+// ---------------------------------------------------------------------------
+// F-0008 Map / Placement Editor — drag node markers onto an uploaded map
+// image. Explicitly a placeholder: the first map is an isometric building
+// view whose perspective distorts real coordinates, so x/y are fractions
+// (0..1) of the image, not real-world positions — this is about the editor
+// UX + persistence, not accurate positioning yet.
+//
+// The map position is a PLACEMENT attribute (frozen per measurement, same
+// idea as floor/room/photos — see the Place/Relocate sheet's own "Position
+// on floor plan" control above). Dragging a marker here edits the node's
+// CURRENT ACTIVE placement in place (PUT /api/marker) — it never creates
+// one, so the palette below only ever offers already-placed nodes.
+// ---------------------------------------------------------------------------
+
+let _mapFloorplan = null; // {id, name, image_url} | null
+let _mapMarkers = [];     // [{node_id, name, kind, x, y}]
+
+async function loadMapView() {
+  try {
+    const data = await apiJSON('/api/floorplan');
+    _mapFloorplan = data.floorplan;
+    _mapMarkers = data.markers || [];
+    renderMapView();
+  } catch (e) {
+    toast(`Error loading map: ${e.message}`);
+  }
+}
+
+function renderMapView() {
+  const emptyEl = document.getElementById('map-empty');
+  const withEl = document.getElementById('map-with-image');
+  if (!emptyEl || !withEl) return;
+
+  if (!_mapFloorplan) {
+    emptyEl.style.display = '';
+    withEl.style.display = 'none';
+    return;
+  }
+  emptyEl.style.display = 'none';
+  withEl.style.display = '';
+
+  const img = document.getElementById('map-image');
+  if (img) img.src = _mapFloorplan.image_url;
+  const nameEl = document.getElementById('map-name');
+  if (nameEl) nameEl.textContent = _mapFloorplan.name;
+
+  renderMapMarkers();
+  renderMapUnplacedList();
+  initMapDrag();
+}
+
+/** Upload (empty state) or replace (with a map already) — same handler,
+ * both file inputs feed it. */
+async function onMapImageSelected(e) {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = ''; // allow re-selecting the same file again
+  if (!file) return;
+
+  const msg = document.getElementById('map-upload-msg');
+  if (msg) setMsg(msg, 'Uploading…');
+  try {
+    const fd = new FormData();
+    fd.append('file', file, file.name || 'map.jpg');
+    const res = await fetch('/api/floorplan', { method: 'POST', body: fd });
+    if (res.status === 401) { toast('Not authenticated.'); return; }
+    if (!res.ok) throw new Error(await extractDetail(res));
+    if (msg) setMsg(msg, '');
+    toast('Map uploaded.');
+    await loadMapView();
+  } catch (err) {
+    toast(`Upload failed: ${err.message}`);
+    if (msg) setMsg(msg, `Error: ${err.message}`, 'err');
+  }
+}
+
+/** Gateway vs. device markers are visually distinct (dot color + icon);
+ * both carry the node name label and a small remove ("x") action. Absolute
+ * positions (left/top %) come straight from x/y (fractions of the image). */
+function renderMapMarkers() {
+  const el = document.getElementById('map-markers');
+  if (!el) return;
+  el.innerHTML = _mapMarkers.map(m => `
+    <div class="map-marker map-marker-${esc(m.kind)}" data-node-id="${m.node_id}"
+         style="left:${(m.x * 100).toFixed(2)}%;top:${(m.y * 100).toFixed(2)}%">
+      <button type="button" class="map-marker-remove" onclick="removeMapMarker(${m.node_id})" title="Remove from map">×</button>
+      <div class="map-marker-dot">${m.kind === 'gateway' ? '⌂' : '●'}</div>
+      <div class="map-marker-label">${esc(m.name)}</div>
+    </div>`).join('');
+}
+
+/** Nodes with an active placement but no map position yet — tap one to
+ * place it at the map's center (a drag then fine-tunes the position). A
+ * node with no active placement at all never appears here — placing it
+ * (Place / Relocate) is a separate step, since dragging a marker only ever
+ * edits an EXISTING placement, never creates one. */
+function renderMapUnplacedList() {
+  const el = document.getElementById('map-unplaced-list');
+  if (!el) return;
+  const placedIds = new Set(_mapMarkers.map(m => m.node_id));
+  const unplaced = _nodes.filter(n => n.placement && !placedIds.has(n.id));
+  if (!unplaced.length) {
+    el.innerHTML = '<p class="hint">All placed nodes are already on the map.</p>';
+    return;
+  }
+  el.innerHTML = unplaced.map(n => `
+    <button type="button" class="map-unplaced-chip" onclick="addNodeToMap(${n.id})">
+      <span class="map-unplaced-dot ${n.kind === 'gateway' ? 'gw' : ''}"></span>${esc(n.name)}
+    </button>`).join('');
+}
+
+async function addNodeToMap(nodeId) {
+  const ok = await saveMarkerPosition(nodeId, 0.5, 0.5); // "place at center"
+  if (ok) {
+    renderMapMarkers();
+    renderMapUnplacedList();
+  }
+}
+
+async function removeMapMarker(nodeId) {
+  try {
+    await apiJSON(`/api/marker/${nodeId}`, { method: 'DELETE' });
+    _mapMarkers = _mapMarkers.filter(m => m.node_id !== nodeId);
+    renderMapMarkers();
+    renderMapUnplacedList();
+  } catch (e) {
+    toast(`Error: ${e.message}`);
+  }
+}
+
+/** PUT /api/marker (sets the node's CURRENT ACTIVE placement's map
+ * position — never creates a placement) + keep the in-memory _mapMarkers
+ * cache in sync (adding an entry the first time a node is positioned).
+ * Returns true on success so callers can decide whether to re-render or
+ * snap back. */
+async function saveMarkerPosition(nodeId, x, y) {
+  try {
+    await apiJSON('/api/marker', {
+      method: 'PUT',
+      body: JSON.stringify({ node_id: nodeId, x, y }),
+    });
+    const existing = _mapMarkers.find(m => m.node_id === nodeId);
+    if (existing) {
+      existing.x = x;
+      existing.y = y;
+    } else {
+      const node = _nodesById[nodeId];
+      _mapMarkers.push({ node_id: nodeId, name: node ? node.name : '', kind: node ? node.kind : 'device', x, y });
+    }
+    return true;
+  } catch (e) {
+    toast(`Could not save position: ${e.message}`);
+    return false;
+  }
+}
+
+/** Mouse + touch drag via the unified Pointer Events API, delegated on the
+ * stable #map-markers container (so it keeps working across re-renders —
+ * markers are replaced wholesale on every renderMapMarkers() call). Only
+ * ever wired once (subsequent loadMapView() calls reuse it). touch-action:
+ * none (CSS) on the stage/markers keeps a drag from also scrolling the
+ * page on a phone. */
+let _mapDragInitialized = false;
+
+function initMapDrag() {
+  if (_mapDragInitialized) return;
+  const markersEl = document.getElementById('map-markers');
+  const stageEl = document.getElementById('map-stage');
+  if (!markersEl || !stageEl) return;
+  _mapDragInitialized = true;
+
+  let dragEl = null;
+  let dragNodeId = null;
+  let pendingXY = null;
+
+  markersEl.addEventListener('pointerdown', (e) => {
+    if (e.target.closest('.map-marker-remove')) return; // let its own click fire, don't drag
+    const marker = e.target.closest('.map-marker');
+    if (!marker) return;
+    dragEl = marker;
+    dragNodeId = parseInt(marker.dataset.nodeId, 10);
+    pendingXY = null;
+    marker.classList.add('dragging');
+    marker.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+
+  markersEl.addEventListener('pointermove', (e) => {
+    if (!dragEl) return;
+    const rect = stageEl.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    const x = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    const y = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
+    dragEl.style.left = `${(x * 100).toFixed(2)}%`;
+    dragEl.style.top = `${(y * 100).toFixed(2)}%`;
+    pendingXY = { x, y };
+  });
+
+  function endDrag() {
+    if (!dragEl) return;
+    dragEl.classList.remove('dragging');
+    const nodeId = dragNodeId;
+    const xy = pendingXY;
+    dragEl = null;
+    dragNodeId = null;
+    pendingXY = null;
+    if (xy) {
+      saveMarkerPosition(nodeId, xy.x, xy.y).then(ok => {
+        if (!ok) renderMapMarkers(); // snap back to the last known-good position
+      });
+    }
+  }
+
+  markersEl.addEventListener('pointerup', endDrag);
+  markersEl.addEventListener('pointercancel', endDrag);
 }
 
 // ---------------------------------------------------------------------------
@@ -2438,6 +2793,17 @@ function fmtNum(v) { return v != null ? Number(v).toFixed(1) : '—'; }
 function fmtTime(iso) {
   if (!iso) return '—';
   return String(iso).replace('T', ' ').substring(0, 16);
+}
+
+/** "YYYY-MM-DD HH:MM" in the browser's LOCAL timezone (unlike fmtTime
+ * above, which shows the raw stored UTC string as-is) — for the History
+ * list/detail, where the operator needs a real wall-clock start/end time. */
+function fmtDateTime(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '—';
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 function esc(s) {

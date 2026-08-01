@@ -999,28 +999,38 @@ details[open].coll > summary::before { transform: rotate(90deg); }
 #history-view { max-width: 980px; margin: 0 auto; padding: 12px 12px 40px; }
 
 .hist-filter-row {
-  display: flex; align-items: center; gap: 8px; margin-bottom: 12px;
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; margin-bottom: 12px;
 }
 .hist-filter-row select {
-  flex: 1; max-width: 260px;
+  flex: 1 1 140px; max-width: 220px;
   background: var(--bg-elev2); border: 1px solid var(--line); color: var(--text);
   border-radius: var(--radius-sm); padding: 7px 10px; font-size: .82rem;
 }
 
 /* List — one compact row per run, no table (avoids horizontal scroll on
-   narrow screens; wraps instead). */
+   narrow screens; wraps instead). Three stacked lines: device/location,
+   Started/Ended, status/packets/PDR — the timestamps get their own line
+   so they stay clearly labelled and legible instead of competing for
+   space with everything else. */
 .hist-row {
-  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
-  gap: 6px 12px; padding: 10px 4px; border-bottom: 1px solid var(--line);
+  display: flex; flex-direction: column; gap: 5px;
+  padding: 10px 4px; border-bottom: 1px solid var(--line);
   cursor: pointer; transition: background var(--t-fast);
 }
 .hist-row:last-child { border-bottom: none; }
 .hist-row:hover { background: var(--bg-elev2); }
-.hist-row-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.hist-row-main {
+  display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px;
+}
 .hist-row-device { font-weight: 700; color: var(--text); font-size: .86rem; }
 .hist-row-loc { font-size: .74rem; color: var(--muted); }
-.hist-row-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: .74rem; color: var(--muted); }
+.hist-row-times { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; font-size: .78rem; color: var(--text); }
 .hist-row-time { font-variant-numeric: tabular-nums; }
+.hist-row-time-lbl {
+  color: var(--muted); font-weight: 700; text-transform: uppercase;
+  font-size: .62rem; letter-spacing: .05em; margin-right: 5px;
+}
+.hist-row-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: .74rem; color: var(--muted); }
 .hist-badge {
   font-size: .64rem; font-weight: 800; text-transform: uppercase; letter-spacing: .04em;
   border-radius: 999px; padding: 2px 8px; border: 1px solid currentColor;
@@ -1042,3 +1052,101 @@ details[open].coll > summary::before { transform: rotate(90deg); }
   font-size: .76rem; color: var(--muted); display: flex; flex-direction: column; gap: 3px;
 }
 .hist-detail-meta strong { color: var(--text); }
+
+/* =================================================================
+   MAP / PLACEMENT EDITOR (F-0008, PoC) — drag node markers onto an
+   uploaded map image. Flat/clean, no glow. touch-action: none throughout
+   the drag surface so a drag never also scrolls the page on a phone.
+   ================================================================= */
+
+#map-stage {
+  position: relative;
+  width: 100%;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: var(--bg-elev2);
+  touch-action: none;
+}
+#map-image { display: block; width: 100%; height: auto; }
+#map-markers { position: absolute; inset: 0; touch-action: none; }
+
+.map-marker {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  cursor: grab; touch-action: none; user-select: none;
+}
+.map-marker.dragging { cursor: grabbing; z-index: 10; }
+.map-marker-dot {
+  width: 28px; height: 28px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--accent1); color: #0b1220; font-weight: 800; font-size: .95rem;
+  border: 2px solid var(--bg-elev); box-shadow: 0 2px 6px rgba(0,0,0,.4);
+}
+.map-marker-gateway .map-marker-dot { background: var(--accent2); color: #fff; }
+.map-marker-label {
+  font-size: .62rem; font-weight: 700; color: var(--text);
+  background: rgba(15,20,28,.85); padding: 1px 6px; border-radius: 4px;
+  white-space: nowrap; max-width: 96px; overflow: hidden; text-overflow: ellipsis;
+}
+.map-marker-remove {
+  position: absolute; top: -4px; right: -12px;
+  width: 18px; height: 18px; border-radius: 50%;
+  background: var(--bad); color: #fff; border: none; padding: 0;
+  font-size: .72rem; line-height: 1; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+
+.map-unplaced-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--bg-elev2); border: 1px solid var(--line); color: var(--text);
+  border-radius: 999px; padding: 6px 12px; margin: 0 6px 6px 0;
+  font-size: .78rem; font-weight: 700; cursor: pointer;
+  transition: border-color var(--t-fast), color var(--t-fast);
+}
+.map-unplaced-chip:hover { border-color: var(--accent-light); color: var(--accent-light); }
+.map-unplaced-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent1); flex-shrink: 0; }
+.map-unplaced-dot.gw { background: var(--accent2); }
+
+/* Compact "Position on floor plan" preview in the Place/Relocate sheet —
+   one marker, tap-to-place/move (a tap fires a plain 'click' for both
+   mouse and touch, no drag machinery needed here). */
+#sheet-map-stage {
+  position: relative;
+  width: 100%;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: var(--bg-elev2);
+  cursor: crosshair;
+  touch-action: none;
+}
+#sheet-map-image { display: block; width: 100%; height: auto; }
+#sheet-map-marker {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 22px; height: 22px; border-radius: 50%;
+  background: var(--accent1);
+  border: 2px solid var(--bg-elev);
+  box-shadow: 0 2px 6px rgba(0,0,0,.4);
+  pointer-events: none;
+}
+#sheet-map-marker.gateway { background: var(--accent2); }
+
+/* History detail's small read-only map thumbnail (device left / gateway
+   right) — same visual language, no interaction. */
+.map-thumb {
+  position: relative; width: 100%; max-width: 280px;
+  margin-top: 10px; border-radius: var(--radius-sm); overflow: hidden;
+  border: 1px solid var(--line);
+}
+.map-thumb img { display: block; width: 100%; height: auto; }
+.map-marker-sm {
+  position: absolute; transform: translate(-50%, -50%);
+  width: 16px; height: 16px; border-radius: 50%;
+  background: var(--accent1);
+  border: 2px solid var(--bg-elev);
+  box-shadow: 0 2px 6px rgba(0,0,0,.4);
+}
+.map-marker-sm.gateway { background: var(--accent2); }

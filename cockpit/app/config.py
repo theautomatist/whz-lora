@@ -33,6 +33,9 @@ DATA_DIR: str = os.environ.get("DATA_DIR", "/data")
 DB_PATH: str = os.environ.get("DB_PATH", os.path.join(DATA_DIR, "cockpit.db"))
 PHOTOS_DIR: str = os.environ.get("PHOTOS_DIR", os.path.join(DATA_DIR, "photos"))
 
+# F-0008 Map / Placement Editor (PoC) — uploaded floorplan/map images.
+FLOORPLANS_DIR: str = os.environ.get("FLOORPLANS_DIR", os.path.join(DATA_DIR, "floorplans"))
+
 # Well-known ChirpStack entities that must already exist
 TENANT_NAME: str = "whz-lora"
 APP_NAME: str = "whz-feldtest"

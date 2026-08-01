@@ -8,7 +8,13 @@ check_same_thread=False, so the class is safe to call from any thread.
 
 Schema (see _SCHEMA below):
   node       — a device or the gateway; identified by a unique EUI
-  placement  — a node's physical location over time; "active" == ended_at IS NULL
+  placement  — a node's physical location over time; "active" == ended_at IS NULL.
+               floorplan_id/map_x/map_y (F-0008) are an OPTIONAL map position
+               captured AT PLACEMENT TIME, same idea as floor/room/photos —
+               frozen per measurement (not a live/floating marker), so
+               History can reconstruct exactly where a node stood on which
+               floorplan version during a given run. NULL/NULL/NULL means
+               "no map position set for this placement".
   photo      — up to MAX_PHOTOS_PER_PLACEMENT images attached to a placement
   run        — one CSV-recording session for a device, tied to the device's
                and the gateway's placement at the time it started. Phase B
@@ -31,8 +37,20 @@ Schema (see _SCHEMA below):
   rf_stat    — small persistent key/value counter table alongside rf_frame
                (currently just "own_frames") so the own/foreign totals
                also survive a restart.
+  floorplan  — an uploaded map image (F-0008 Map / Placement Editor); the
+               most recently uploaded row is always "current" (see
+               get_current_floorplan) — older rows are kept, just no longer
+               surfaced.
+  map_marker — UNUSED / kept only for backward compatibility with early
+               F-0008 databases (a free-floating per-node marker, not tied
+               to a placement). Superseded by placement.floorplan_id/map_x/
+               map_y above — the map position is now captured WITH the
+               placement (like floor/room/photos), not as a separate live
+               marker, so it is frozen per measurement and History can show
+               "where this node stood, on which map, during this run".
 
-No GPS anywhere — placements are floor/room/description, not coordinates.
+No GPS anywhere — placements are floor/room/description, not coordinates
+(map_marker above is image-relative, same idea).
 """
 import csv
 import datetime
@@ -107,15 +125,20 @@ CREATE TABLE IF NOT EXISTS node (
 );
 
 CREATE TABLE IF NOT EXISTS placement (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    node_id     INTEGER NOT NULL REFERENCES node(id),
-    floor       TEXT NOT NULL DEFAULT '',
-    room        TEXT NOT NULL DEFAULT '',
-    description TEXT NOT NULL DEFAULT '',
-    note        TEXT NOT NULL DEFAULT '',
-    antenna     TEXT NOT NULL DEFAULT '',
-    started_at  TEXT NOT NULL,
-    ended_at    TEXT                   -- NULL == active placement
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    node_id      INTEGER NOT NULL REFERENCES node(id),
+    floor        TEXT NOT NULL DEFAULT '',
+    room         TEXT NOT NULL DEFAULT '',
+    description  TEXT NOT NULL DEFAULT '',
+    note         TEXT NOT NULL DEFAULT '',
+    antenna      TEXT NOT NULL DEFAULT '',
+    started_at   TEXT NOT NULL,
+    ended_at     TEXT,                  -- NULL == active placement
+    -- F-0008 Map / Placement Editor — optional map position, captured WITH
+    -- the placement (like floor/room/photos); NULL/NULL/NULL == not set.
+    floorplan_id INTEGER REFERENCES floorplan(id),
+    map_x        REAL,
+    map_y        REAL
 );
 CREATE INDEX IF NOT EXISTS idx_placement_node ON placement(node_id);
 
@@ -176,6 +199,23 @@ CREATE TABLE IF NOT EXISTS rf_stat (
     key   TEXT PRIMARY KEY,
     value INTEGER NOT NULL DEFAULT 0
 );
+
+CREATE TABLE IF NOT EXISTS floorplan (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    name           TEXT NOT NULL,
+    image_filename TEXT NOT NULL,
+    uploaded_at    TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS map_marker (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    floorplan_id INTEGER NOT NULL REFERENCES floorplan(id),
+    node_id      INTEGER NOT NULL REFERENCES node(id),
+    x            REAL NOT NULL,
+    y            REAL NOT NULL,
+    UNIQUE(floorplan_id, node_id)
+);
+CREATE INDEX IF NOT EXISTS idx_map_marker_floorplan ON map_marker(floorplan_id);
 """
 
 # NOTE — schema deviation from the original brief: a `packets INTEGER` column
@@ -197,6 +237,15 @@ _RUN_MIGRATION_COLUMNS: list[tuple[str, str]] = [
     ("segment_started_at", "TEXT"),
     ("downlink_test", "INTEGER NOT NULL DEFAULT 1"),
     ("dl_counts", "TEXT"),
+]
+
+# Additive F-0008 migration for databases created before the map-position
+# columns existed on `placement`. Same guarded/no-op pattern as
+# _RUN_MIGRATION_COLUMNS above.
+_PLACEMENT_MIGRATION_COLUMNS: list[tuple[str, str]] = [
+    ("floorplan_id", "INTEGER REFERENCES floorplan(id)"),
+    ("map_x", "REAL"),
+    ("map_y", "REAL"),
 ]
 
 
@@ -234,6 +283,7 @@ class Database:
         with self._lock:
             self._conn.executescript(_SCHEMA)
             self._migrate_run_columns()
+            self._migrate_placement_columns()
             self._conn.commit()
 
     def _migrate_run_columns(self) -> None:
@@ -246,6 +296,16 @@ class Database:
         for name, decl in _RUN_MIGRATION_COLUMNS:
             if name not in existing:
                 self._conn.execute(f"ALTER TABLE run ADD COLUMN {name} {decl}")
+
+    def _migrate_placement_columns(self) -> None:
+        """Additive `ALTER TABLE placement ADD COLUMN` for F-0008's map
+        position, same guarded/no-op pattern as _migrate_run_columns."""
+        existing = {
+            row["name"] for row in self._conn.execute("PRAGMA table_info(placement)").fetchall()
+        }
+        for name, decl in _PLACEMENT_MIGRATION_COLUMNS:
+            if name not in existing:
+                self._conn.execute(f"ALTER TABLE placement ADD COLUMN {name} {decl}")
 
     def close(self) -> None:
         with self._lock:
@@ -323,8 +383,16 @@ class Database:
         description: str,
         note: str,
         antenna: str,
+        floorplan_id: Optional[int] = None,
+        map_x: Optional[float] = None,
+        map_y: Optional[float] = None,
     ) -> int:
-        """Close the node's current active placement (if any) and open a new one."""
+        """Close the node's current active placement (if any) and open a new
+        one. floorplan_id/map_x/map_y (F-0008) are an optional map position,
+        captured WITH the placement — same idea as floor/room/photos, so it
+        is frozen per measurement rather than a live/floating marker. All
+        three are None together, or all three set (see main.py, which only
+        ever passes a floorplan_id when it also has an x/y to go with it)."""
         with self._lock:
             now = self._now()
             self._conn.execute(
@@ -333,9 +401,10 @@ class Database:
             )
             cur = self._conn.execute(
                 "INSERT INTO placement "
-                "(node_id, floor, room, description, note, antenna, started_at, ended_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, NULL)",
-                (node_id, floor, room, description, note, antenna, now),
+                "(node_id, floor, room, description, note, antenna, started_at, ended_at, "
+                " floorplan_id, map_x, map_y) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?)",
+                (node_id, floor, room, description, note, antenna, now, floorplan_id, map_x, map_y),
             )
             self._conn.commit()
             return cur.lastrowid
@@ -346,6 +415,56 @@ class Database:
                 "SELECT * FROM placement WHERE id = ?", (placement_id,)
             ).fetchone()
             return dict(row) if row else None
+
+    def set_active_placement_map_position(
+        self, node_id: int, floorplan_id: int, x: float, y: float
+    ) -> bool:
+        """F-0008 Map view — drag a marker: update the node's CURRENT
+        active placement's map position (against *floorplan_id*), not a
+        separate marker row. Returns False if the node has no active
+        placement — the caller (PUT /api/marker) maps that to 404."""
+        with self._lock:
+            placement = self.get_active_placement(node_id)
+            if placement is None:
+                return False
+            self._conn.execute(
+                "UPDATE placement SET floorplan_id = ?, map_x = ?, map_y = ? WHERE id = ?",
+                (floorplan_id, x, y, placement["id"]),
+            )
+            self._conn.commit()
+            return True
+
+    def clear_active_placement_map_position(self, node_id: int) -> bool:
+        """F-0008 Map view — "remove from map": clear the node's current
+        active placement's map position. Returns False if the node has no
+        active placement (404); still True — a harmless no-op — if it had
+        no map position to begin with."""
+        with self._lock:
+            placement = self.get_active_placement(node_id)
+            if placement is None:
+                return False
+            self._conn.execute(
+                "UPDATE placement SET floorplan_id = NULL, map_x = NULL, map_y = NULL WHERE id = ?",
+                (placement["id"],),
+            )
+            self._conn.commit()
+            return True
+
+    def list_active_map_positions(self, floorplan_id: int) -> list[dict]:
+        """Every node whose CURRENT active placement has a map position on
+        *floorplan_id* — this is what GET /api/floorplan's "markers" are now
+        (the source of truth moved from the old map_marker table to the
+        placement itself, see the module docstring)."""
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT n.id AS node_id, n.name, n.kind, p.map_x AS x, p.map_y AS y "
+                "FROM placement p JOIN node n ON n.id = p.node_id "
+                "WHERE p.ended_at IS NULL AND p.floorplan_id = ? "
+                "AND p.map_x IS NOT NULL AND p.map_y IS NOT NULL "
+                "ORDER BY n.id",
+                (floorplan_id,),
+            ).fetchall()
+            return [dict(r) for r in rows]
 
     # ------------------------------------------------------------------
     # photo
@@ -1026,3 +1145,41 @@ class Database:
                 "sf_distribution": sf_distribution,
                 "rssi_distribution": rssi_distribution,
             }
+
+    # ------------------------------------------------------------------
+    # floorplan — Map / Placement Editor (F-0008). Marker positions
+    # themselves live on `placement` now (see set_active_placement_map_
+    # position/clear_active_placement_map_position/list_active_map_
+    # positions above, next to create_placement) — a floorplan is just the
+    # uploaded image + which one is "current".
+    # ------------------------------------------------------------------
+
+    def create_floorplan(self, name: str, image_filename: str) -> dict:
+        """Insert a new floorplan row. The most recently uploaded one is
+        always "current" (see get_current_floorplan) — no separate flag to
+        keep in sync; older floorplans are simply left behind, still in the
+        DB but no longer surfaced by GET /api/floorplan."""
+        with self._lock:
+            cur = self._conn.execute(
+                "INSERT INTO floorplan (name, image_filename, uploaded_at) VALUES (?, ?, ?)",
+                (name, image_filename, self._now()),
+            )
+            self._conn.commit()
+            row = self._conn.execute(
+                "SELECT * FROM floorplan WHERE id = ?", (cur.lastrowid,)
+            ).fetchone()
+            return dict(row)
+
+    def get_current_floorplan(self) -> Optional[dict]:
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT * FROM floorplan ORDER BY id DESC LIMIT 1"
+            ).fetchone()
+            return dict(row) if row else None
+
+    def get_floorplan(self, floorplan_id: int) -> Optional[dict]:
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT * FROM floorplan WHERE id = ?", (floorplan_id,)
+            ).fetchone()
+            return dict(row) if row else None

@@ -15,13 +15,14 @@ MQTT is never touched by this module.
 import asyncio
 import csv
 import datetime
+import io
 import json
 import os
 import tempfile
 
 import grpc
 import pytest
-from fastapi import HTTPException
+from fastapi import HTTPException, UploadFile
 
 from app import config, main
 from app.db import CSV_COLUMNS, Database
@@ -491,6 +492,9 @@ def test_run_detail_returns_run_device_gateway_and_placements(workflow):
     assert dp["note"] == "note-dev"
     assert dp["antenna"] == "3dbi"
     assert dp["photo_ids"] == []
+    assert dp["map_x"] is None  # no map position captured for this placement
+    assert dp["map_y"] is None
+    assert dp["floorplan"] is None
 
     gp = result["gateway_placement"]
     assert gp["floor"] == "EG"
@@ -498,6 +502,8 @@ def test_run_detail_returns_run_device_gateway_and_placements(workflow):
     assert gp["description"] == "site office"
     assert gp["note"] == "note-gw"
     assert "antenna" not in gp  # gateway has no antenna concept
+    assert gp["map_x"] is None
+    assert gp["floorplan"] is None
 
 
 def test_run_detail_includes_photo_ids(workflow):
@@ -511,6 +517,30 @@ def test_run_detail_includes_photo_ids(workflow):
     result = _run(main.run_detail(run["id"]))
     assert len(result["device_placement"]["photo_ids"]) == 1
     assert result["gateway_placement"]["photo_ids"] == []
+
+
+def test_run_detail_includes_map_position(workflow, monkeypatch):
+    """F-0008 — the History detail's mini-map: each placement's frozen
+    map_x/map_y plus the floorplan {id, image_url} it is relative to."""
+    d, gw_id = workflow
+    monkeypatch.setattr(config, "FLOORPLANS_DIR", tempfile.mkdtemp())
+    fp = _run(main.upload_floorplan(file=_fake_upload("a.jpg"), name="Map"))
+    d.create_placement(gw_id, "EG", "flur", "", "", "", floorplan_id=fp["id"], map_x=0.8, map_y=0.9)
+    node_id, _ = d.upsert_node("device", "d1", "aaaa000000000001")
+    d.create_placement(node_id, "3OG", "R301", "", "", "3dbi", floorplan_id=fp["id"], map_x=0.2, map_y=0.4)
+    run = main.start_run(main.RunStartRequest(device_node_id=node_id))
+
+    result = _run(main.run_detail(run["id"]))
+
+    dp = result["device_placement"]
+    assert dp["map_x"] == 0.2
+    assert dp["map_y"] == 0.4
+    assert dp["floorplan"] == {"id": fp["id"], "image_url": f"/api/floorplan/{fp['id']}/image"}
+
+    gp = result["gateway_placement"]
+    assert gp["map_x"] == 0.8
+    assert gp["map_y"] == 0.9
+    assert gp["floorplan"] == {"id": fp["id"], "image_url": f"/api/floorplan/{fp['id']}/image"}
 
 
 def test_run_detail_404_for_unknown_run(workflow):
@@ -1555,3 +1585,298 @@ def test_rf_environment_csv_endpoint(workflow, fresh_campaign):
     body = response.body.decode("utf-8")
     assert "dev_addr" in body.splitlines()[0]  # header row
     assert "26ccbbaa" in body
+
+
+# ---------------------------------------------------------------------------
+# F-0008 Map / Placement Editor — position a node on an uploaded map image.
+# x/y are image-relative fractions, not real-world coordinates. The map
+# position is a PLACEMENT attribute (frozen per measurement, like floor/
+# room/photos) — PUT/DELETE /api/marker edit the node's CURRENT ACTIVE
+# placement in place, they never create one (see db.py's
+# set_active_placement_map_position/clear_active_placement_map_position).
+# ---------------------------------------------------------------------------
+
+
+def _fake_upload(filename: str, content: bytes = b"fake-image-bytes") -> UploadFile:
+    return UploadFile(file=io.BytesIO(content), filename=filename)
+
+
+def test_upload_floorplan_creates_current_floorplan(workflow, monkeypatch):
+    d, _ = workflow
+    tmp_dir = tempfile.mkdtemp()
+    monkeypatch.setattr(config, "FLOORPLANS_DIR", tmp_dir)
+
+    result = _run(main.upload_floorplan(file=_fake_upload("map.jpg"), name="Building A"))
+
+    assert result["name"] == "Building A"
+    assert result["image_url"] == f"/api/floorplan/{result['id']}/image"
+    current = d.get_current_floorplan()
+    assert current["id"] == result["id"]
+    assert os.path.exists(os.path.join(tmp_dir, current["image_filename"]))  # written to disk
+
+
+def test_upload_floorplan_defaults_name_to_original_filename(workflow, monkeypatch):
+    monkeypatch.setattr(config, "FLOORPLANS_DIR", tempfile.mkdtemp())
+    result = _run(main.upload_floorplan(file=_fake_upload("iso-view.png"), name=""))
+    assert result["name"] == "iso-view.png"
+
+
+def test_upload_floorplan_replaces_current(workflow, monkeypatch):
+    monkeypatch.setattr(config, "FLOORPLANS_DIR", tempfile.mkdtemp())
+    _run(main.upload_floorplan(file=_fake_upload("a.jpg"), name="First"))
+    second = _run(main.upload_floorplan(file=_fake_upload("b.jpg"), name="Second"))
+
+    result = _run(main.get_current_floorplan())
+    assert result["floorplan"]["id"] == second["id"]
+    assert result["floorplan"]["name"] == "Second"
+
+
+def test_get_current_floorplan_empty_when_none_uploaded(workflow):
+    result = _run(main.get_current_floorplan())
+    assert result == {"floorplan": None, "markers": []}
+
+
+def test_get_current_floorplan_includes_markers_from_active_placements(workflow, monkeypatch):
+    d, _ = workflow
+    monkeypatch.setattr(config, "FLOORPLANS_DIR", tempfile.mkdtemp())
+    fp = _run(main.upload_floorplan(file=_fake_upload("a.jpg"), name="Map"))
+    node_id, _ = d.upsert_node("device", "d1", "aaaa000000000001")
+    d.create_placement(node_id, "3OG", "R301", "", "", "3dbi", floorplan_id=fp["id"], map_x=0.3, map_y=0.4)
+
+    result = _run(main.get_current_floorplan())
+    assert result["floorplan"]["id"] == fp["id"]
+    assert len(result["markers"]) == 1
+    assert result["markers"][0]["node_id"] == node_id
+    assert result["markers"][0]["x"] == 0.3
+    assert result["markers"][0]["y"] == 0.4
+
+
+def test_get_floorplan_image_serves_the_uploaded_file(workflow, monkeypatch):
+    d, _ = workflow
+    tmp_dir = tempfile.mkdtemp()
+    monkeypatch.setattr(config, "FLOORPLANS_DIR", tmp_dir)
+    fp = _run(main.upload_floorplan(file=_fake_upload("a.jpg"), name="Map"))
+
+    response = _run(main.get_floorplan_image(fp["id"]))
+    assert response.path == os.path.join(tmp_dir, d.get_floorplan(fp["id"])["image_filename"])
+
+
+def test_get_floorplan_image_404_for_unknown_id(workflow):
+    with pytest.raises(HTTPException) as exc_info:
+        _run(main.get_floorplan_image(999))
+    assert exc_info.value.status_code == 404
+
+
+def test_get_floorplan_image_404_when_file_missing_on_disk(workflow, monkeypatch):
+    d, _ = workflow
+    tmp_dir = tempfile.mkdtemp()
+    monkeypatch.setattr(config, "FLOORPLANS_DIR", tmp_dir)
+    fp = _run(main.upload_floorplan(file=_fake_upload("a.jpg"), name="Map"))
+    os.remove(os.path.join(tmp_dir, d.get_floorplan(fp["id"])["image_filename"]))
+
+    with pytest.raises(HTTPException) as exc_info:
+        _run(main.get_floorplan_image(fp["id"]))
+    assert exc_info.value.status_code == 404
+
+
+def test_upsert_marker_requires_a_floorplan(workflow):
+    d, _ = workflow
+    node_id, _ = d.upsert_node("device", "d1", "aaaa000000000001")
+    d.create_placement(node_id, "3OG", "R301", "", "", "3dbi")
+    with pytest.raises(HTTPException) as exc_info:
+        _run(main.upsert_marker(main.MarkerUpsertRequest(node_id=node_id, x=0.5, y=0.5)))
+    assert exc_info.value.status_code == 404
+
+
+def test_upsert_marker_requires_a_known_node(workflow, monkeypatch):
+    monkeypatch.setattr(config, "FLOORPLANS_DIR", tempfile.mkdtemp())
+    _run(main.upload_floorplan(file=_fake_upload("a.jpg"), name="Map"))
+
+    with pytest.raises(HTTPException) as exc_info:
+        _run(main.upsert_marker(main.MarkerUpsertRequest(node_id=999, x=0.5, y=0.5)))
+    assert exc_info.value.status_code == 404
+
+
+def test_upsert_marker_requires_an_active_placement(workflow, monkeypatch):
+    """Dragging a marker never creates a placement — the node must already
+    have one (Place it first)."""
+    d, _ = workflow
+    monkeypatch.setattr(config, "FLOORPLANS_DIR", tempfile.mkdtemp())
+    _run(main.upload_floorplan(file=_fake_upload("a.jpg"), name="Map"))
+    node_id, _ = d.upsert_node("device", "d1", "aaaa000000000001")  # never placed
+
+    with pytest.raises(HTTPException) as exc_info:
+        _run(main.upsert_marker(main.MarkerUpsertRequest(node_id=node_id, x=0.5, y=0.5)))
+    assert exc_info.value.status_code == 404
+
+
+def test_upsert_marker_then_visible_via_get_current_floorplan(workflow, monkeypatch):
+    d, _ = workflow
+    monkeypatch.setattr(config, "FLOORPLANS_DIR", tempfile.mkdtemp())
+    _run(main.upload_floorplan(file=_fake_upload("a.jpg"), name="Map"))
+    node_id, _ = d.upsert_node("device", "d1", "aaaa000000000001")
+    d.create_placement(node_id, "3OG", "R301", "", "", "3dbi")
+
+    _run(main.upsert_marker(main.MarkerUpsertRequest(node_id=node_id, x=0.15, y=0.85)))
+
+    result = _run(main.get_current_floorplan())
+    assert len(result["markers"]) == 1
+    assert result["markers"][0]["x"] == 0.15
+    assert result["markers"][0]["y"] == 0.85
+
+
+def test_upsert_marker_does_not_create_a_new_placement(workflow, monkeypatch):
+    d, _ = workflow
+    monkeypatch.setattr(config, "FLOORPLANS_DIR", tempfile.mkdtemp())
+    _run(main.upload_floorplan(file=_fake_upload("a.jpg"), name="Map"))
+    node_id, _ = d.upsert_node("device", "d1", "aaaa000000000001")
+    original = d.create_placement(node_id, "3OG", "R301", "", "", "3dbi")
+
+    _run(main.upsert_marker(main.MarkerUpsertRequest(node_id=node_id, x=0.15, y=0.85)))
+
+    assert d.get_active_placement(node_id)["id"] == original
+
+
+def test_upsert_marker_drag_updates_existing_position(workflow, monkeypatch):
+    d, _ = workflow
+    monkeypatch.setattr(config, "FLOORPLANS_DIR", tempfile.mkdtemp())
+    _run(main.upload_floorplan(file=_fake_upload("a.jpg"), name="Map"))
+    node_id, _ = d.upsert_node("device", "d1", "aaaa000000000001")
+    d.create_placement(node_id, "3OG", "R301", "", "", "3dbi")
+
+    _run(main.upsert_marker(main.MarkerUpsertRequest(node_id=node_id, x=0.1, y=0.1)))
+    _run(main.upsert_marker(main.MarkerUpsertRequest(node_id=node_id, x=0.7, y=0.2)))
+
+    result = _run(main.get_current_floorplan())
+    assert len(result["markers"]) == 1  # still just one marker for this node
+    assert result["markers"][0]["x"] == 0.7
+    assert result["markers"][0]["y"] == 0.2
+
+
+def test_marker_request_rejects_out_of_range_coordinates():
+    with pytest.raises(Exception):
+        main.MarkerUpsertRequest(node_id=1, x=1.5, y=0.5)
+
+
+def test_remove_marker_requires_a_known_node(workflow):
+    with pytest.raises(HTTPException) as exc_info:
+        _run(main.remove_marker(999))
+    assert exc_info.value.status_code == 404
+
+
+def test_remove_marker_requires_an_active_placement(workflow):
+    d, _ = workflow
+    node_id, _ = d.upsert_node("device", "d1", "aaaa000000000001")  # never placed
+    with pytest.raises(HTTPException) as exc_info:
+        _run(main.remove_marker(node_id))
+    assert exc_info.value.status_code == 404
+
+
+def test_remove_marker_deletes_it(workflow, monkeypatch):
+    d, _ = workflow
+    monkeypatch.setattr(config, "FLOORPLANS_DIR", tempfile.mkdtemp())
+    _run(main.upload_floorplan(file=_fake_upload("a.jpg"), name="Map"))
+    node_id, _ = d.upsert_node("device", "d1", "aaaa000000000001")
+    d.create_placement(node_id, "3OG", "R301", "", "", "3dbi")
+    _run(main.upsert_marker(main.MarkerUpsertRequest(node_id=node_id, x=0.5, y=0.5)))
+
+    _run(main.remove_marker(node_id))
+
+    result = _run(main.get_current_floorplan())
+    assert result["markers"] == []
+
+
+def test_remove_marker_noop_when_not_on_map(workflow, monkeypatch):
+    d, _ = workflow
+    monkeypatch.setattr(config, "FLOORPLANS_DIR", tempfile.mkdtemp())
+    _run(main.upload_floorplan(file=_fake_upload("a.jpg"), name="Map"))
+    node_id, _ = d.upsert_node("device", "d1", "aaaa000000000001")
+    d.create_placement(node_id, "3OG", "R301", "", "", "3dbi")  # placed, but no map position
+
+    result = _run(main.remove_marker(node_id))  # must not raise
+    assert result == {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# F-0008 — map position captured WITH /api/placement, /api/relocate,
+# /api/gateway/move[/force] (the "Position on floor plan" sheet control)
+# ---------------------------------------------------------------------------
+
+
+def test_create_placement_endpoint_persists_map_position(workflow, monkeypatch):
+    d, _ = workflow
+    monkeypatch.setattr(config, "FLOORPLANS_DIR", tempfile.mkdtemp())
+    fp = _run(main.upload_floorplan(file=_fake_upload("a.jpg"), name="Map"))
+    node_id, _ = d.upsert_node("device", "d1", "aaaa000000000001")
+
+    result = _run(main.create_placement(
+        main.PlacementRequest(node_id=node_id, floor="3OG", room="R301", map_x=0.4, map_y=0.6)
+    ))
+
+    p = d.get_placement(result["placement_id"])
+    assert p["floorplan_id"] == fp["id"]
+    assert p["map_x"] == 0.4
+    assert p["map_y"] == 0.6
+
+
+def test_create_placement_endpoint_without_map_position(workflow):
+    d, _ = workflow
+    node_id, _ = d.upsert_node("device", "d1", "aaaa000000000001")
+
+    result = _run(main.create_placement(
+        main.PlacementRequest(node_id=node_id, floor="3OG", room="R301")
+    ))
+
+    p = d.get_placement(result["placement_id"])
+    assert p["floorplan_id"] is None
+    assert p["map_x"] is None
+    assert p["map_y"] is None
+
+
+def test_create_placement_endpoint_map_position_dropped_without_a_floorplan(workflow):
+    """Defensive: if the frontend somehow still sends x/y with no floorplan
+    uploaded, the position is silently dropped rather than stored dangling."""
+    d, _ = workflow
+    node_id, _ = d.upsert_node("device", "d1", "aaaa000000000001")
+
+    result = _run(main.create_placement(
+        main.PlacementRequest(node_id=node_id, floor="3OG", room="R301", map_x=0.5, map_y=0.5)
+    ))
+
+    p = d.get_placement(result["placement_id"])
+    assert p["floorplan_id"] is None
+    assert p["map_x"] is None
+    assert p["map_y"] is None
+
+
+def test_relocate_endpoint_persists_map_position(workflow, monkeypatch):
+    d, gw_id = workflow
+    monkeypatch.setattr(config, "FLOORPLANS_DIR", tempfile.mkdtemp())
+    fp = _run(main.upload_floorplan(file=_fake_upload("a.jpg"), name="Map"))
+    d.create_placement(gw_id, "EG", "flur", "", "", "")
+    node_id, _ = d.upsert_node("device", "d1", "aaaa000000000001")
+    d.create_placement(node_id, "3OG", "R301", "", "", "3dbi")
+
+    result = main.relocate(
+        main.RelocateRequest(device_node_id=node_id, floor="1OG", room="R2", map_x=0.2, map_y=0.8)
+    )
+
+    p = d.get_placement(result["placement_id"])
+    assert p["floorplan_id"] == fp["id"]
+    assert p["map_x"] == 0.2
+    assert p["map_y"] == 0.8
+
+
+def test_gateway_move_endpoint_persists_map_position(workflow, monkeypatch):
+    d, gw_id = workflow
+    monkeypatch.setattr(config, "FLOORPLANS_DIR", tempfile.mkdtemp())
+    fp = _run(main.upload_floorplan(file=_fake_upload("a.jpg"), name="Map"))
+
+    result = _run(main.gateway_move(
+        main.GatewayMoveRequest(floor="EG", room="flur", map_x=0.5, map_y=0.5)
+    ))
+
+    p = d.get_placement(result["placement_id"])
+    assert p["floorplan_id"] == fp["id"]
+    assert p["map_x"] == 0.5
+    assert p["map_y"] == 0.5
