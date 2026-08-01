@@ -107,7 +107,7 @@ admin password is unknown:
 This *Web-UI factory reset* is the cleanest reset path.  The
 hardware-button sequence on the iFemtoCell-evolution (hold WPS during
 boot) only restores to the *currently installed* stock image, which
-may be a hardened previous-tenant variant — see [ADR-0018](../developer/decisions/adr-0018.md)
+may be a hardened previous-tenant variant — see [ADR-0018](https://github.com/theautomatist/whz-lora/blob/main/docs/developer/decisions/adr-0018.md)
 for the analysis.
 
 ## Step 4 — SSH access without typing the password every time

@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>WHZ LoRa Field Test</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<!-- ===== STICKY HEADER ===== -->
+<header id="app-header">
+  <span id="app-title">WHZ LoRa Field Test</span>
+  <!-- Top-level view switch — swaps #main (Live, unchanged) for #history-view
+       (F-0007, browse past measurements) or #map-view (F-0008, drag markers
+       onto an uploaded map). See switchView() in app.js. -->
+  <div id="view-switch">
+    <button type="button" class="vsw-btn active" id="vsw-live" onclick="switchView('live')">Live</button>
+    <button type="button" class="vsw-btn" id="vsw-history" onclick="switchView('history')">History</button>
+    <button type="button" class="vsw-btn" id="vsw-map" onclick="switchView('map')">Map</button>
+  </div>
+  <div id="status-pills">
+    <span class="pill" id="pill-node">—</span>
+    <span class="pill" id="pill-run" style="display:none">No run</span>
+    <span id="dot-sse" title="SSE connection"></span>
+  </div>
+  <button id="btn-help" onclick="openHelp()" aria-label="Help">?</button>
+</header>
+
+<!-- ===== MAIN GRID (Live) ===== -->
+<div id="main">
+
+  <!-- Campaign status — hero: goal-gradient anchor, never zero -->
+  <section class="card full hero" id="card-hero">
+    <div class="hero-inner">
+      <div class="hero-ring-wrap">
+        <svg class="hero-ring" viewBox="0 0 120 120" aria-hidden="true">
+          <defs>
+            <linearGradient id="heroGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#22d3ee"></stop>
+              <stop offset="100%" stop-color="#6366f1"></stop>
+            </linearGradient>
+          </defs>
+          <circle class="ring-track" cx="60" cy="60" r="52"></circle>
+          <circle class="ring-fill" id="hero-ring-fill" cx="60" cy="60" r="52"></circle>
+        </svg>
+        <div class="hero-ring-label">
+          <span class="hero-pct" id="hero-pct">0%</span>
+        </div>
+      </div>
+      <div class="hero-text">
+        <div class="hero-title">Your measurement campaign</div>
+        <div class="hero-sub" id="hero-sub">Loading…</div>
+      </div>
+    </div>
+    <!-- Per-device progress breakdown — see renderHeroDeviceList() in app.js -->
+    <div class="hero-devices" id="hero-devices"></div>
+  </section>
+
+  <!-- Overview — PRIMARY: first thing under the hero, entry point -->
+  <section class="card full" id="card-dashboard">
+    <div class="card-title">
+      <span class="ti">▦</span>
+      <span>Overview</span>
+      <span class="pill" id="overview-summary" style="margin-left:auto;display:none"></span>
+    </div>
+    <div id="node-grid">
+      <div class="hint" style="padding:20px 0;text-align:center">Loading…</div>
+    </div>
+  </section>
+
+  <!-- Selected device / gateway — appears directly below the overview -->
+  <section class="card full" id="card-selected">
+    <div class="card-title">
+      <span class="ti">◈</span>
+      <span>Selected device / gateway</span>
+      <select class="node-select" id="node-select" onchange="onNodeSelect()">
+        <option value="">— loading —</option>
+      </select>
+    </div>
+
+    <div class="between">
+      <div>
+        <div class="sel-name" id="sel-name">—</div>
+        <div class="sel-eui mono" id="sel-eui"></div>
+      </div>
+      <span class="pill" id="sel-run-pill" style="display:none">No run</span>
+    </div>
+
+    <!-- Reciprocity: proves itself with live signal before you do anything.
+         Big RSSI + quality live ONLY here — "Last packet"/"Send interval"
+         live ONLY in Device status below (F-0006 dedup pass). -->
+    <div class="signal-hero" id="signal-hero" style="display:none">
+      <div class="signal-hero-top">
+        <div class="signal-hero-value">
+          <span class="signal-hero-num" id="signal-hero-rssi">—</span>
+          <span class="signal-hero-unit">dBm</span>
+        </div>
+        <div class="signal-hero-meta">
+          <span class="signal-hero-quality" id="signal-hero-quality">—</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Compact secondary line — SNR/SF only, RSSI stays hero-only; PDR now
+         lives in the "PDR per SF" headline block below (per-SF, not a
+         single always-empty legacy figure). -->
+    <div class="nc-metrics" id="sel-metrics" style="display:none"></div>
+
+    <!-- HEADLINE: delivery reliability per SF (coverage that actually
+         matters — RSSI barely changes with SF, PDR does). Uplink PDR from
+         the run's CSV vs. its commanded interval; Downlink PDR from
+         confirmed-downlink ACKs (see GET /api/run/{id}/stats). -->
+    <div id="pdr-sf-block" style="display:none">
+      <div class="pdr-sf-wrap">
+        <div class="pdr-sf-hdr">
+          <span class="pdr-sf-title">PDR per SF</span>
+          <span class="pdr-sf-overall" id="pdr-sf-overall"></span>
+        </div>
+        <div class="pdr-sf-grid" id="pdr-sf-grid"></div>
+        <div class="hint" id="pdr-sf-hint"></div>
+      </div>
+    </div>
+
+    <!-- Context: RSSI-over-time chart for the active (or most recent) run —
+         inline SVG, live via SSE 'up' events for the selected device. The
+         SAME run's chart is excluded from History below while it's active
+         (renderHistory only lists past/completed runs). -->
+    <div id="sel-chart-wrap" style="display:none">
+      <div class="hist-chart" id="sel-chart"><p class="hint">Loading…</p></div>
+    </div>
+
+    <div id="sel-progress" style="display:none"></div>
+
+    <!-- Device status — "is the configuration working?" (Trust & visibility) -->
+    <div id="dev-status-block" style="display:none">
+      <div class="dstatus">
+        <div class="dstatus-row">
+          <span class="dstatus-label">Last packet</span>
+          <span class="dstatus-value" id="ds-last-packet">—</span>
+        </div>
+        <div class="dstatus-row">
+          <span class="dstatus-label">Send interval (measured)</span>
+          <span class="dstatus-value" id="ds-interval">—</span>
+        </div>
+        <div class="dstatus-row">
+          <span class="dstatus-label">Config downlink</span>
+          <span class="dstatus-value" id="ds-config-dl">—</span>
+        </div>
+        <div class="brow" style="margin-top:10px">
+          <button class="btn btn-o" onclick="setDeviceInterval5()">Set interval to 5 min</button>
+          <button class="btn btn-o" onclick="wakeDeviceTest()">Ping device (test)</button>
+        </div>
+        <div class="dstatus-hint">Config only reaches the device on its next uplink (Class A) — wake a silent device briefly at the TRV.</div>
+      </div>
+    </div>
+
+    <!-- Location -->
+    <div class="place-info" id="sel-place-info">
+      <div class="place-empty">Loading…</div>
+    </div>
+
+    <div class="photo-thumbs" id="sel-photos"></div>
+
+    <!-- Actions -->
+    <div class="brow">
+      <button class="btn btn-p" id="btn-place" onclick="onPlaceOrRelocateClick()" style="display:none">Place / Relocate</button>
+      <button class="btn btn-d" id="btn-run-stop" onclick="stopSelectedRun()" style="display:none">Stop run</button>
+      <button class="btn btn-p" id="btn-gw-move" onclick="onMoveGatewayClick()" style="display:none">Move gateway</button>
+    </div>
+
+    <div id="run-start-block" style="display:none">
+      <div class="brow" style="margin-top:4px">
+        <button class="btn btn-s" id="btn-run-start" onclick="startSweepDefault()" style="width:100%">Start run — 24 h · SF7→SF9→SF12 · 5-min interval</button>
+      </div>
+      <label class="run-dltest-toggle">
+        <input type="checkbox" id="run-downlink-test" checked>
+        <span>Downlink test (confirmed downlinks to check the return channel)</span>
+      </label>
+      <details class="coll" id="run-adjust-details">
+        <summary>Customize</summary>
+        <div class="db">
+          <div class="f2">
+            <div class="f">
+              <label>Duration (hours)</label>
+              <input id="run-duration-h" type="number" min="1" value="24">
+            </div>
+            <div class="f">
+              <label>Interval (min)</label>
+              <input id="run-interval-min" type="number" min="1" max="255" value="5">
+            </div>
+          </div>
+          <div class="f">
+            <label>SF sequence</label>
+            <select id="run-preset">
+              <option value="sf7_sf9_sf12">SF7 → SF9 → SF12</option>
+              <option value="sf9_sf12">SF9 → SF12</option>
+              <option value="sf9">fixed SF9</option>
+              <option value="sf12">fixed SF12</option>
+            </select>
+          </div>
+          <div class="brow">
+            <button class="btn btn-p" onclick="startSweepCustom()">Start run (customized)</button>
+          </div>
+        </div>
+      </details>
+    </div>
+
+    <div class="msg" id="selected-msg"></div>
+
+    <details class="coll" id="history-details" ontoggle="onHistoryToggle(this)" style="display:none">
+      <summary>History</summary>
+      <div class="db" id="history-body"><p class="hint">Loading on open.</p></div>
+    </details>
+  </section>
+
+  <!-- RF Environment — full spectrum survey of the foreign LoRaWAN traffic
+       the gateway overhears (always-on, passive); recorded continuously to
+       the persistent rf_frame log (see db.py), so it accumulates over the
+       whole campaign and survives a cockpit restart — always expanded, the
+       last content panel. Live via SSE 'coex' events, throttled re-fetch of
+       /api/rf-environment — see loadRfEnvironment()/scheduleRfEnvironmentRefresh(). -->
+  <section class="card full" id="card-coex">
+    <div class="card-title">
+      <span class="ti">◎</span>
+      <span>RF Environment</span>
+      <a class="btn btn-g" id="rf-csv-link" href="/api/rf-environment/csv" target="_blank" style="margin-left:auto">↓ Download CSV</a>
+    </div>
+    <p class="hint" style="margin-bottom:10px">This is what the gateway overhears in range, recorded continuously — sparse if the area is RF-quiet. CAF = foreign airtime fraction.</p>
+
+    <div class="coex-totals">
+      <div class="coex-total-box own">
+        <span class="coex-total-num" id="coex-own-count">0</span>
+        <span class="coex-total-lbl">our frames</span>
+      </div>
+      <div class="coex-total-box foreign">
+        <span class="coex-total-num" id="coex-foreign-count">0</span>
+        <span class="coex-total-lbl">foreign frames</span>
+      </div>
+    </div>
+
+    <div class="rf-sec">
+      <div class="rf-pair-grid rf-heat-pair">
+        <div>
+          <div class="rf-sec-title">Channel × SF heatmap (foreign frames)</div>
+          <div id="rf-heatmap"><p class="hint">No data yet.</p></div>
+          <div class="rf-heat-legend">
+            <span>low</span>
+            <div class="rf-heat-legend-bar"></div>
+            <span>high</span>
+          </div>
+        </div>
+        <div>
+          <div class="rf-sec-title">Traffic timeline (last 24 h)</div>
+          <svg id="rf-timeline" class="rf-timeline-svg" viewBox="0 0 100 32" preserveAspectRatio="none" aria-hidden="true"></svg>
+          <div class="rf-timeline-axis"><span>24 h ago</span><span>now</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="rf-sec">
+      <div class="rf-pair-grid rf-dist-pair">
+        <div>
+          <div class="rf-sec-title">SF distribution</div>
+          <div id="rf-sf-dist"><p class="hint">No data yet.</p></div>
+        </div>
+        <div>
+          <div class="rf-sec-title">RSSI distribution</div>
+          <div id="rf-rssi-dist"><p class="hint">No data yet.</p></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="rf-sec">
+      <div class="rf-sec-title">Band busyness</div>
+      <div class="rf-busy-row">
+        <div class="rf-busy-rate"><span id="rf-frames-per-min">0</span><small>frames/min</small></div>
+        <svg id="rf-sparkline" class="rf-sparkline" viewBox="0 0 100 24" preserveAspectRatio="none" aria-hidden="true"></svg>
+      </div>
+      <div id="rf-mtype-breakdown" class="rf-mtype"></div>
+    </div>
+
+    <div class="rf-sec">
+      <div class="rf-sec-title">Networks</div>
+      <div id="rf-networks"><p class="hint">No data yet.</p></div>
+    </div>
+
+    <div class="rf-sec">
+      <div class="rf-sec-title">Foreign devices <span id="rf-device-count" class="rf-sec-count"></span></div>
+      <div id="rf-devices" class="rf-devices-list"><p class="hint">No data yet.</p></div>
+    </div>
+
+    <div class="rf-sec">
+      <div class="rf-sec-title">Vendors nearby <span class="hint">(from joins, best-effort)</span></div>
+      <div id="rf-vendors"><p class="hint">No data yet.</p></div>
+    </div>
+
+    <div class="rf-sec">
+      <div class="rf-sec-title">Live frame log <span class="hint">(last 20, newest first)</span></div>
+      <div id="rf-frame-log" class="rf-frame-log"><p class="hint">No foreign frames recorded yet.</p></div>
+    </div>
+  </section>
+
+  <!-- Device registration — secondary, collapsed by default; the very last
+       panel on the page. -->
+  <details class="card coll-card" id="card-devices">
+    <summary class="card-title"><span class="ti">◉</span> Device registration</summary>
+    <div class="card-body">
+      <div class="f">
+        <label>Name</label>
+        <input id="dev-name" type="text" placeholder="sensor-01" autocorrect="off" autocapitalize="none">
+      </div>
+      <div class="f">
+        <label>DevEUI (16 hex characters)</label>
+        <input id="dev-eui" type="text" placeholder="0102030405060708" maxlength="16" autocorrect="off" autocapitalize="none">
+      </div>
+      <div class="f">
+        <label>AppKey (32 hex characters)</label>
+        <input id="dev-appkey" type="text" placeholder="0102030405060708090a0b0c0d0e0f10" autocorrect="off" autocapitalize="none">
+      </div>
+      <div class="f">
+        <label>JoinEUI (optional, 16 hex characters)</label>
+        <input id="dev-joineui" type="text" placeholder="0000000000000000" maxlength="16" autocorrect="off" autocapitalize="none">
+      </div>
+      <div class="brow">
+        <button class="btn btn-p" onclick="registerDevice()">Register</button>
+      </div>
+      <div class="msg" id="dev-msg"></div>
+      <p class="hint" style="margin-top:10px">Newly registered devices appear in the overview only after the cockpit is restarted (node sync runs at startup).</p>
+
+      <hr class="sep">
+      <div class="between" style="margin-bottom:8px">
+        <span class="hint">Registered devices (ChirpStack)</span>
+        <button class="btn btn-g" onclick="loadDevices()">⟳ Load</button>
+      </div>
+      <div style="overflow-x:auto">
+        <table class="dtbl">
+          <thead><tr><th>DevEUI</th><th>Name</th><th>Profile</th><th>Last seen</th></tr></thead>
+          <tbody id="dev-list-body">
+            <tr><td colspan="4" style="color:var(--muted);text-align:center;padding:12px 0">— not loaded yet —</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <hr class="sep">
+      <details class="coll">
+        <summary>Vicki commands (MClimate)</summary>
+        <div class="db">
+          <p class="hint">Load the device list above first. Sent to all registered devices.</p>
+          <div class="brow">
+            <button class="btn btn-o" onclick="sendVickiKeepalive()">Set interval to 5 min</button>
+            <button class="btn btn-o" onclick="sendVickiLoopback()">Read HW/SW version</button>
+          </div>
+          <div class="msg" id="vicki-msg"></div>
+        </div>
+      </details>
+    </div>
+  </details>
+
+</div><!-- #main -->
+
+<!-- ===== HISTORY / ANALYSIS VIEW (F-0007, Phase 1) — browse past
+     measurements; hidden unless the header switch is on "History". Two
+     sub-views inside: the filterable list, and the left/right run detail
+     (tap a row). See switchView()/loadHistoryList()/openHistoryDetail() in
+     app.js. ===== -->
+<div id="history-view" style="display:none">
+
+  <div id="history-list-view">
+    <section class="card full" id="card-history-list">
+      <div class="card-title">
+        <span class="ti">▤</span>
+        <span>Measurement History</span>
+      </div>
+      <div class="hist-filter-row">
+        <label for="hist-device-filter" class="hint">Device</label>
+        <select id="hist-device-filter" onchange="renderHistoryList()">
+          <option value="">All devices</option>
+        </select>
+        <label for="hist-sort" class="hint">Sort</label>
+        <select id="hist-sort" onchange="renderHistoryList()">
+          <option value="start_desc">Start ↓ (newest)</option>
+          <option value="start_asc">Start ↑ (oldest)</option>
+          <option value="end_desc">End ↓ (newest)</option>
+          <option value="end_asc">End ↑ (oldest)</option>
+        </select>
+      </div>
+      <div id="history-list-body"><p class="hint">Loading…</p></div>
+    </section>
+  </div>
+
+  <div id="history-detail-view" style="display:none">
+    <section class="card full" id="card-history-detail">
+      <div class="card-title">
+        <button type="button" class="btn btn-g" onclick="closeHistoryDetail()">← Back</button>
+        <span id="hist-detail-title">Run detail</span>
+      </div>
+
+      <div class="hist-detail-grid">
+        <!-- LEFT = device: placement + photos + the measurement itself -->
+        <div class="hist-detail-col">
+          <div class="hist-detail-subtitle">Device</div>
+          <div class="place-info" id="hist-detail-device-place"><div class="place-empty">Loading…</div></div>
+          <div class="photo-thumbs" id="hist-detail-device-photos"></div>
+          <div id="hist-detail-device-map"></div>
+
+          <div class="pdr-sf-wrap" style="margin-top:14px">
+            <div class="pdr-sf-hdr">
+              <span class="pdr-sf-title">PDR per SF</span>
+              <span class="pdr-sf-overall" id="hist-pdr-sf-overall"></span>
+            </div>
+            <div class="pdr-sf-grid" id="hist-pdr-sf-grid"></div>
+            <div class="hint" id="hist-pdr-sf-hint"></div>
+          </div>
+
+          <div class="hist-chart" id="hist-detail-chart" style="margin-top:14px"><p class="hint">Loading…</p></div>
+
+          <div class="hist-detail-meta" id="hist-detail-meta"></div>
+
+          <div class="brow" style="margin-top:10px">
+            <a class="btn btn-g" id="hist-detail-csv-link" href="#" target="_blank">↓ Download CSV</a>
+          </div>
+        </div>
+
+        <!-- RIGHT = gateway, as it stood during this run -->
+        <div class="hist-detail-col">
+          <div class="hist-detail-subtitle">Gateway position during this run</div>
+          <div class="place-info" id="hist-detail-gateway-place"><div class="place-empty">Loading…</div></div>
+          <div class="photo-thumbs" id="hist-detail-gateway-photos"></div>
+          <div id="hist-detail-gateway-map"></div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+</div><!-- #history-view -->
+
+<!-- ===== MAP / PLACEMENT EDITOR (F-0008, PoC) — drag node markers onto an
+     uploaded map image; hidden unless the header switch is on "Map". A
+     placeholder: the first map is an isometric building view whose
+     perspective distorts real coordinates — x/y are image-relative
+     fractions, not real-world positions. See switchView()/loadMapView() in
+     app.js. ===== -->
+<div id="map-view" style="display:none">
+  <section class="card full" id="card-map">
+    <div class="card-title">
+      <span class="ti">⌖</span>
+      <span>Map</span>
+    </div>
+
+    <!-- No map uploaded yet -->
+    <div id="map-empty">
+      <p class="hint">No map uploaded yet. Any image works — the isometric building view for now, a real floor plan later.</p>
+      <div class="brow">
+        <input type="file" id="map-upload-input" accept="image/*" style="display:none" onchange="onMapImageSelected(event)">
+        <button type="button" class="btn btn-p" onclick="document.getElementById('map-upload-input').click()">Upload map image</button>
+      </div>
+      <div class="msg" id="map-upload-msg"></div>
+    </div>
+
+    <!-- A map is current -->
+    <div id="map-with-image" style="display:none">
+      <p class="hint">Placeholder map — marker positions are relative to the image, not real-world coordinates.</p>
+
+      <div id="map-stage">
+        <img id="map-image" src="" alt="Map">
+        <div id="map-markers"></div>
+      </div>
+
+      <div class="between" style="margin-top:10px">
+        <span class="hint" id="map-name"></span>
+        <div class="brow" style="margin:0">
+          <input type="file" id="map-replace-input" accept="image/*" style="display:none" onchange="onMapImageSelected(event)">
+          <button type="button" class="btn btn-g" onclick="document.getElementById('map-replace-input').click()">Replace map</button>
+        </div>
+      </div>
+
+      <div class="rf-sec">
+        <div class="rf-sec-title">Not on the map yet</div>
+        <div id="map-unplaced-list"><p class="hint">All nodes are placed.</p></div>
+      </div>
+    </div>
+  </section>
+</div><!-- #map-view -->
+
+<!-- ===== PLACE / RELOCATE SHEET (device + gateway) ===== -->
+<div id="place-ov" class="sheet-ov" onclick="closeSheetBackdrop(event)">
+  <div class="sheet-panel">
+    <div class="h-handle"></div>
+    <div class="h-hdr">
+      <h2 id="sheet-title">Place</h2>
+      <button class="sheet-x" onclick="closeSheet()">✕</button>
+    </div>
+    <div class="h-body">
+
+      <div id="sheet-form">
+        <div class="f2">
+          <div class="f">
+            <label>Floor</label>
+            <input id="sheet-floor" type="text" placeholder="3rd floor" autocorrect="off">
+          </div>
+          <div class="f">
+            <label>Room</label>
+            <input id="sheet-room" type="text" placeholder="R301" autocorrect="off">
+          </div>
+        </div>
+        <div class="f">
+          <label>Description</label>
+          <input id="sheet-desc" type="text" placeholder="e.g. by the window, end of hallway, basement room" autocorrect="off">
+        </div>
+        <div class="f">
+          <label>Note</label>
+          <input id="sheet-note" type="text" placeholder="optional" autocorrect="off">
+        </div>
+
+        <div class="f" id="sheet-antenna-field">
+          <label>Antenna</label>
+          <div class="ant-grid">
+            <button type="button" class="abtn" id="sheet-ant-3dbi" onclick="selectSheetAntenna('3dbi')">
+              <span class="av">3 dBi</span>
+              <span class="as">Short antenna</span>
+            </button>
+            <button type="button" class="abtn" id="sheet-ant-12dbi" onclick="selectSheetAntenna('12dbi')">
+              <span class="av">12 dBi</span>
+              <span class="as">Long antenna</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="f" id="sheet-photo-field">
+          <label>Photos (max. 3)</label>
+          <div id="sheet-photo-thumbs" class="photo-thumbs"></div>
+          <input type="file" id="sheet-photo-upload-input" accept="image/*" multiple style="display:none" onchange="onSheetPhotoSelected(event)">
+          <input type="file" id="sheet-photo-camera-input" accept="image/*" capture="environment" style="display:none" onchange="onSheetPhotoSelected(event)">
+          <div class="brow" id="sheet-photo-btn-row">
+            <button type="button" class="btn btn-o" id="sheet-photo-upload-btn" onclick="document.getElementById('sheet-photo-upload-input').click()">Upload photo</button>
+            <button type="button" class="btn btn-o" id="sheet-photo-camera-btn" onclick="document.getElementById('sheet-photo-camera-input').click()">Take Picture</button>
+          </div>
+          <p class="hint" id="sheet-photo-cap-hint" style="display:none">3/3 photos</p>
+        </div>
+
+        <!-- F-0008 — optional map position, alongside photos; hidden when
+             no floorplan has been uploaded yet (Map view). See
+             loadSheetMapPosition()/onSheetMapTap() in app.js. -->
+        <div class="f" id="sheet-map-field" style="display:none">
+          <label>Position on floor plan <span class="hint">(optional)</span></label>
+          <div id="sheet-map-stage" onclick="onSheetMapTap(event)">
+            <img id="sheet-map-image" src="" alt="Floor plan">
+            <div id="sheet-map-marker" style="display:none"></div>
+          </div>
+          <div class="between" style="margin-top:6px">
+            <span class="hint">Tap the plan to place or move the marker.</span>
+            <button type="button" class="btn btn-g" onclick="clearSheetMapPosition()">Clear</button>
+          </div>
+        </div>
+
+        <div class="brow">
+          <button type="button" class="btn btn-p" id="sheet-submit-btn" onclick="submitSheet()">Save</button>
+        </div>
+        <div class="msg" id="sheet-msg"></div>
+      </div>
+
+      <div id="sheet-conflict" style="display:none">
+        <div class="loss-title"><span>⚠️</span><span id="sheet-conflict-title">Running measurements will be lost</span></div>
+        <div id="sheet-conflict-list"></div>
+        <div class="brow">
+          <button type="button" class="btn btn-o" onclick="closeSheet()">Cancel</button>
+          <button type="button" class="btn btn-d" onclick="forceGatewayMove()">Move anyway — end measurements</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ===== CONFIRM MODAL (generic — loss-aversion prompts) ===== -->
+<div id="confirm-ov" class="sheet-ov" onclick="closeConfirmBackdrop(event)">
+  <div class="sheet-panel confirm-panel">
+    <div class="h-handle"></div>
+    <div class="confirm-body">
+      <div class="confirm-icon" id="confirm-icon">⚠️</div>
+      <h3 id="confirm-title">Really continue?</h3>
+      <div id="confirm-message"></div>
+      <div id="confirm-list"></div>
+      <div class="brow confirm-actions">
+        <button class="btn btn-o" id="confirm-cancel-btn" onclick="_resolveConfirm(false)">Cancel</button>
+        <button class="btn btn-d" id="confirm-ok-btn" onclick="_resolveConfirm(true)">Confirm</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== HELP OVERLAY ===== -->
+<div id="help-ov" class="sheet-ov" onclick="closeHelpBdrop(event)">
+  <div class="sheet-panel">
+    <div class="h-handle"></div>
+    <div class="h-hdr">
+      <h2>Guide &amp; field-measurement workflow</h2>
+      <button class="sheet-x" onclick="closeHelp()">✕</button>
+    </div>
+    <div class="h-body">
+
+      <div class="h-sec">
+        <h3>How the workflow works</h3>
+        <ul>
+          <li>At the top, the <strong>campaign ring</strong> shows overall progress — setup already counts, so the ring never starts at 0%.</li>
+          <li>In the <strong>Overview</strong>, tap the device you're currently holding (or the gateway) — this opens "Selected device / gateway" right below it and shows the <strong>live signal</strong> immediately, even without a running run.</li>
+          <li><strong>Place:</strong> floor/room are pre-filled (last known location, or the gateway's floor), and the antenna remembers your last choice. Optionally take up to 3 photos — your own photo collection grows with every location.</li>
+          <li><strong>Start run — 24 h · SF7→SF9→SF12 · 5-min interval</strong> — one tap starts the full sweep; under "Customize" you can change the duration, interval and SF sequence. Only possible once both the device <em>and</em> the gateway are placed.</li>
+          <li>The <strong>glowing SF bar</strong> shows the sweep live: completed stages ✓, the current stage pulses, future stages stay dark. Progress is always shown relative to the overall plan (e.g. "14 h of 24 h"), never in isolation.</li>
+          <li>Live <strong>PDR per SF</strong> shows delivery reliability for each spreading factor — both uplink (received/expected) and downlink (ACK rate from confirmed test downlinks) — the coverage metric that actually matters, since RSSI barely changes with SF.</li>
+          <li>When the planned duration elapses, the run ends automatically — the card briefly celebrates with a pulse and shows <strong>"done ✓"</strong>.</li>
+          <li><strong>Relocate:</strong> moving to the next spot? Tap "Place / Relocate" again — if a measurement is still running it first asks you to confirm, then closes it and starts a new one right away.</li>
+          <li>Done early? <strong>"Stop run"</strong> asks for confirmation and shows exactly which SF stages would still be missing — so data loss is never a surprise.</li>
+          <li><strong>Moving the gateway</strong> while measurements are still running first shows a warning with exactly what would be lost per device — confirm "Move anyway" to end them in a controlled way (data is kept) and continue to the move dialog.</li>
+        </ul>
+      </div>
+
+      <div class="h-sec">
+        <h3>Step by step</h3>
+        <ol>
+          <li>Tap a device in the Overview (or pick one in the selector at the top) — the live signal appears immediately.</li>
+          <li>"Place / Relocate" → check/adjust the pre-filled fields, pick the antenna, optionally add photos → Save.</li>
+          <li>"Start run — 24 h · SF7→SF9→SF12 · 5-min interval" (the gateway must be placed too), or pick a custom duration/interval/SF sequence under "Customize".</li>
+          <li>The sweep runs automatically through SF7 → SF9 → SF12 (or your chosen sequence) — the glowing bar shows progress, always relative to the total duration.</li>
+          <li>Device moved? Tap "Place / Relocate" again — confirm stopping the running measurement, and it closes the run and starts a new one right away.</li>
+          <li>Done early? "Stop run" (with a confirmation prompt). If the duration runs out, the run ends by itself and the card shows "done ✓". Each run's CSV is available for download in History.</li>
+        </ol>
+      </div>
+
+      <div class="h-sec">
+        <h3>Metrics &amp; color legend</h3>
+
+        <p style="margin:0 0 6px"><strong>RSSI (dBm) — received signal strength at the gateway</strong></p>
+        <div class="lgrow"><span class="lgdot" style="background:var(--m-good)"></span>&gt; −80 dBm: <strong>excellent</strong></div>
+        <div class="lgrow"><span class="lgdot" style="background:var(--m-ok)"></span>−80 to −110 dBm: <strong>good</strong></div>
+        <div class="lgrow"><span class="lgdot" style="background:var(--m-warn)"></span>−110 to −120 dBm: <strong>marginal</strong></div>
+        <div class="lgrow" style="margin-bottom:14px"><span class="lgdot" style="background:var(--m-bad)"></span>&lt; −120 dBm: <strong>poor</strong> (floor −140 dBm)</div>
+
+        <p style="margin:0 0 6px"><strong>SNR (dB) — how far LoRa receives below the noise floor</strong></p>
+        <div class="lgrow"><span class="lgdot" style="background:var(--m-good)"></span>≥ 0 dB: comfortable</div>
+        <div class="lgrow"><span class="lgdot" style="background:var(--m-ok)"></span>−10 to 0 dB: good</div>
+        <div class="lgrow"><span class="lgdot" style="background:var(--m-warn)"></span>−15 to −10 dB: tight</div>
+        <div class="lgrow" style="margin-bottom:14px"><span class="lgdot" style="background:var(--m-bad)"></span>&lt; −15 dB (demod floor −20 dB)</div>
+
+        <p style="margin:0 0 6px"><strong>PDR — packet delivery ratio (per SF, uplink &amp; downlink)</strong></p>
+        <div class="lgrow"><span class="lgdot" style="background:var(--m-good)"></span>≥ 99 %: excellent</div>
+        <div class="lgrow"><span class="lgdot" style="background:var(--m-ok)"></span>≥ 80 %: adequate for heating control</div>
+        <div class="lgrow"><span class="lgdot" style="background:var(--m-warn)"></span>50–80 %: problematic</div>
+        <div class="lgrow" style="margin-bottom:14px"><span class="lgdot" style="background:var(--m-bad)"></span>&lt; 50 %: coverage gap</div>
+
+        <p style="margin:0 0 6px"><strong>CAF — foreign airtime fraction (RF coexistence)</strong></p>
+        <div class="lgrow"><span class="lgdot" style="background:var(--m-good)"></span>&lt; 2 %: green — uncritical</div>
+        <div class="lgrow"><span class="lgdot" style="background:var(--m-warn)"></span>2–10 %: yellow — keep an eye on it</div>
+        <div class="lgrow"><span class="lgdot" style="background:var(--m-bad)"></span>&gt; 10 %: red — critical</div>
+      </div>
+
+      <div class="h-sec">
+        <h3>Panels at a glance</h3>
+        <ul>
+          <li><strong>Campaign status</strong> — overall progress as a ring; never at 0%, grows with every device placed/started/finished.</li>
+          <li><strong>Overview</strong> — one card per device + gateway: location, run status, packets, live values, SF-sweep bar. Tapping selects it and opens the detail panel below.</li>
+          <li><strong>Selected device / gateway</strong> — live signal visible immediately, location, photos, run status, sweep progress, PDR per SF, device status (last packet, measured send interval, config downlink); Place/Relocate, start/stop run, move gateway. The selector at the top right is an alternative to tapping the card.</li>
+          <li><strong>RF Environment</strong> — always running passively, no start/stop needed, recorded continuously; a spectrum survey of what the gateway overhears: a channel × SF heatmap of foreign traffic, detected networks (TTN/private/other), a scrollable foreign-device list, nearby vendors (from joins, best-effort), band busyness (frames/min + MType breakdown), and a CSV download of the full log.</li>
+          <li><strong>Device registration</strong> (collapsible) — register new OTAA devices in ChirpStack; also holds the bulk Vicki commands (set interval / read version) for all registered devices.</li>
+        </ul>
+      </div>
+
+      <div class="h-sec">
+        <h3>History</h3>
+        <p>The <strong>Live | History | Map</strong> switch at the top swaps this whole view for a browsable log of every measurement — filterable by device and sortable by Start/End (newest or oldest first; a still-running measurement counts as "now"). Each row shows its Started/Ended time in your device's local timezone, plus the PDR summary. Tap a row for the full detail: the device's location/photos/PDR-per-SF/RSSI chart/CSV on the left, and the gateway's position <em>during that run</em> on the right — useful once the gateway has moved since.</p>
+      </div>
+
+      <div class="h-sec">
+        <h3>Map (placeholder)</h3>
+        <p>Upload any image — the first will likely be an isometric building view — then position the gateway and devices on it. Positions are just fractions of the image, <strong>not real-world coordinates</strong>: this is an early proof-of-concept for the editor itself, not a precise site map yet.</p>
+        <p>The position is captured <strong>with the placement</strong>, same as floor/room/photos — so it's frozen per measurement and History can show exactly where a node stood during a given run. Two ways to set it: the optional "Position on floor plan" tap-to-place control right in the Place/Relocate sheet (pre-filled from the last spot on a relocate), or the Map view itself — tap an unplaced node to drop it at the center, then drag any marker to fine-tune (works with mouse or touch). The Map view's palette only lists nodes that are already placed; place a node first if it's missing there.</p>
+      </div>
+
+    </div><!-- .h-body -->
+  </div><!-- .sheet-panel -->
+</div><!-- #help-ov -->
+
+<div id="toast"></div>
+<script src="/static/app.js"></script>
+</body>
+</html>

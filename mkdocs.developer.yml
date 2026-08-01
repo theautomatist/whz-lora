@@ -35,6 +35,7 @@ nav:
       - Building Typology: analysis/building-typology.md
       - Fragenkatalog: analysis/fragenkatalog.md
       - Prozessmodell: analysis/process-model.md
+      - Störungsanalyse Pi (2026-08-01): analysis/pi-field-diagnosis-2026-08-01.md
       - Glossary: analysis/CONTEXT.md
   - Architecture:
       - System Design: architecture/system-design.md

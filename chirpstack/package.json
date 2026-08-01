@@ -1,0 +1,5 @@
+{
+  "type": "module",
+  "private": true,
+  "description": "Marks the ChirpStack ADR plugins (adr_fixed_dr*.js) as ES modules so `node --check` accepts the top-level `export` on Node 20+. ChirpStack loads these files directly; this file is inert to it."
+}
