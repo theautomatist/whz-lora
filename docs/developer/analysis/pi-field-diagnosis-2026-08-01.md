@@ -40,7 +40,7 @@ Neustarts und nachweisbare Datenkorruption.
 | **B-8** | Healthchecks im 5-Sekunden-Takt → ~17.280 MQTT-Verbindungen/Tag, Hauptquelle des Log-Volumens | **Mittel** | Belegt |
 | **B-9** | systemd-Journal ist flüchtig (`/run`) → nach jedem Neustart keine Forensik möglich | **Mittel** | Belegt |
 | **B-10** | Zwei IP-Adressen im selben Subnetz (eth0 + wlan0), WLAN-Powersave aktiv | **Mittel** | Belegt |
-| **B-11** | SQLite ohne WAL, `rf_frame` ohne Retention (55.095 Zeilen) | **Niedrig** | Belegt |
+| **B-11** | SQLite im Rollback-Journal statt WAL — Schreiber blockieren Leser | **Niedrig** | Belegt |
 | **B-12** | Deployment-Verzeichnis ist kein Git-Repository → laufender Stand nicht nachvollziehbar | **Niedrig** | Belegt |
 
 ## Untersuchungsumfang und Methodik
@@ -261,13 +261,19 @@ schreibt bei jedem Uplink einen `rf_frame`-Datensatz und liest parallel für die
 Weboberfläche.
 
 Tabellenstand: `rf_frame` **55.095 Zeilen**, `placement` 10, `run` 7, `node` 5.
-Für `rf_frame` existiert **keine Retention** — die Tabelle wächst unbegrenzt.
+
+> **Korrektur (2026-08-01, nach Prüfung des Quellcodes):** Eine frühere Fassung
+> dieses Berichts führte hier zusätzlich „`rf_frame` ohne Retention, wächst
+> unbegrenzt" auf. Das ist **falsch**. `db.py` begrenzt die Tabelle über
+> `RF_FRAME_RETENTION_MAX = 200_000` und trimmt alle 500 Einfügungen
+> (`_trim_rf_frames`). Mit 55.095 Zeilen liegt sie deutlich unter dem Limit;
+> ein Datenwachstumsproblem besteht nicht. Der Journal-Modus-Befund oben
+> bleibt davon unberührt.
 
 Belegte `database is locked`-Fehler traten im gesamten Log **nicht** auf; das
 Problem ist derzeit latent, nicht akut.
 
-**Empfehlung:** `PRAGMA journal_mode=WAL` beim Start setzen und eine
-Aufbewahrungsfrist für `rf_frame` einführen.
+**Empfehlung:** `PRAGMA journal_mode=WAL` beim Start setzen.
 
 ### B-12 — Deployment ohne Git-Bezug
 
@@ -592,7 +598,7 @@ Der Vollständigkeit halber — hier lagen **keine** Probleme vor:
 | 11 | Startwarnung bei Platzhalter-API-Key | B-1 | Direktive |
 | 12 | Healthchecks für ChirpStack und beide Gateway-Bridges ergänzen | — | Direktive |
 | 13 | MQTT-Namensauflösung robust machen | B-7 | Direktive |
-| 14 | SQLite auf WAL umstellen, Retention für `rf_frame` | B-11 | Direktive |
+| 14 | SQLite auf WAL umstellen | B-11 | Direktive |
 | 15 | Deployment auf Git-Auscheckung umstellen | B-12 | Direktive |
 
 ## Vor Ort zu prüfen
