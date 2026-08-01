@@ -109,6 +109,36 @@ services:
       timeout: 5s
       retries: 10
 
+  cockpit:
+    build: ./cockpit
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - CHIRPSTACK_HOST=chirpstack:8080
+      - MQTT_HOST=mosquitto
+      - MQTT_PORT=1883
+      - MQTT_TEST_USERNAME=${MQTT_TEST_USERNAME}
+      - MQTT_TEST_PASSWORD=${MQTT_TEST_PASSWORD}
+      - CHIRPSTACK_API_KEY=${CHIRPSTACK_API_KEY}
+      - CHIRPSTACK_ADMIN_USER=admin
+      - CHIRPSTACK_ADMIN_PASS=admin
+      - COCKPIT_USER=${COCKPIT_USER}
+      - COCKPIT_PASSWORD=${COCKPIT_PASSWORD}
+    volumes:
+      - ./cockpit-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/healthz').status==200 else 1)\""]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+    depends_on:
+      chirpstack:
+        condition: service_started
+      mosquitto:
+        condition: service_healthy
+
 volumes:
   postgresqldata:
   redisdata:
