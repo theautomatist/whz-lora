@@ -609,6 +609,62 @@ Der Vollständigkeit halber — hier lagen **keine** Probleme vor:
 
 ---
 
+# Umsetzungsstand (2026-08-01, abends)
+
+Alle Maßnahmen wurden noch am Tag der Diagnose umgesetzt und am laufenden
+System nachgemessen. Die Belege stammen aus dem Zustand **nach** einem
+vollständigen Neustart.
+
+| Befund | Vorher | Nachher | Beleg |
+|---|---|---|---|
+| **B-1** Token | Ablauf nach 24 h, dauerhafter Ausfall | Cache + automatische Erneuerung | Live-Test: abgelaufenes Token → Retry liefert 4 Geräte |
+| **B-2** WireGuard | `disabled`, falscher Unit-Name | `enabled`, überlebt Neustart | `ssh whz-pi` über `10.8.0.4` funktioniert |
+| **B-3** Strom/USB | 20+ Disconnects, 3 Unterspannungen, `0x50000` | 1 Disconnect, 0 Unterspannungen | `get_throttled` = `0x0` |
+| **B-4** Zeitsprung | Uhr auf 1970, Sprung um 23 h 21 min | Uhr auf letzte bekannte Zeit, Sprung im Sekundenbereich | `System clock time advanced to recorded timestamp` |
+| **B-5** Logs | 639 MB, keine Rotation | 11 KB, `max-size=10m max-file=3` | `docker inspect` LogConfig |
+| **B-6** Cgroup | `memory` fehlt, Limits wirkungslos | `cpuset cpu io memory pids` | `docker stats`: `3 MiB / 128 MiB` statt `0B / 0B` |
+| **B-8** Healthchecks | alle 5 s, 17.280 MQTT-Verbindungen/Tag | 30 s, `start_interval` für schnellen Boot | Compose-Konfiguration |
+| **B-9** Journal | flüchtig, keine Forensik nach Reboot | persistent, max. 200 MB | zwei Boots in `journalctl --list-boots` |
+| **B-10** WLAN | Powersave an | `Power save: off` | nach Reboot verifiziert |
+| **B-11** SQLite | Rollback-Journal | WAL | `cockpit.db-wal` / `-shm` vorhanden |
+| **B-12** Deployment | kein Git-Bezug | echter Clone auf `fix/pi-stabilisierung` | `git log` auf dem Pi |
+| — | ChirpStack + 2 Bridges ohne Healthcheck | alle 7 Container `healthy` | `docker compose ps` |
+
+## Was die Git-Umstellung zutage förderte
+
+Die Umstellung des Deployments auf Git (B-12) beantwortete zugleich die Frage,
+**was auf dem Pi eigentlich lief**. Ergebnis: eine Kombination aus zwei
+**offenen, nicht gemergten** Pull Requests —
+
+- **PR #12** (`feat/map-placement-editor`), der Cockpit-Code, und
+- **PR #9** (`fix/8-mosquitto-passwd-overwrite`), ohne den Mosquitto beim
+  zweiten Start in eine Crash-Schleife läuft (Issue #8).
+
+`main` allein hätte den Stack also **nicht lauffähig** gemacht. Die
+Zeilenenden-Unterschiede (CRLF/LF) täuschten dabei zunächst erheblich größere
+Abweichungen vor, als tatsächlich vorhanden waren — inhaltlich wich nur
+`mosquitto/entrypoint.sh` ab. Beide PRs wurden daraufhin gemergt; `main`
+entspricht seither dem Produktivstand.
+
+Das ist die eigentliche Rechtfertigung für B-12: Ohne Git-Bezug war nicht
+feststellbar, dass der laufende Betrieb von zwei unfertigen Zweigen abhing.
+
+## Offen geblieben
+
+- **B-7 (MQTT-Namensauflösung)** — bewusst *nicht* geändert. Die 1.166
+  DNS-Fehler korrelieren zeitlich mit den Stromereignissen aus B-3; da deren
+  Ursache behoben ist, wird zuerst beobachtet, statt auf Verdacht umzubauen.
+- **B-4, Hardware-Teil** — `fake-hwclock` mildert den Zeitsprung, beseitigt
+  ihn aber nicht. Die eigentliche Lösung ist eine **RTC-Pufferbatterie** am
+  dafür vorgesehenen Anschluss des Pi 5 (~5 €).
+- **B-10, Doppel-IP** — zwei Adressen im selben Subnetz bestehen weiter.
+  Welches Interface im Feldbetrieb genutzt wird, ist eine Betriebsentscheidung;
+  ein Abschalten aus der Ferne birgt zudem Aussperrungsrisiko.
+- **Sensoren** — die LoRaWAN-Geräte schweigen weiterhin seit dem 16.–21. Juli.
+  Das ist vor Ort zu klären (siehe oben).
+
+---
+
 # Anhang
 
 ## Reproduktion der Kernmessung
