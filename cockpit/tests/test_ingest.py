@@ -179,11 +179,19 @@ def test_up_event_triggers_downlink_test_when_grpc_ready():
     channel = MagicMock()
     ingest, state = _make_ingest(db=db, grpc_channel=channel, grpc_token="tok")
 
-    with patch("app.ingest.cs.enqueue_downlink") as mock_enqueue:
+    with patch("app.ingest.cs.enqueue_downlink") as mock_enqueue, patch(
+        "app.ingest.cs.get_token", return_value="fresh-tok"
+    ) as mock_get_token:
         ingest._handle_app_event("up", json.dumps(SAMPLE_UP_EVENT).encode("utf-8"))
 
     db.maybe_trigger_downlink_test.assert_called_once_with("aaaa000000000001", 3)
-    mock_enqueue.assert_called_once_with(channel, "tok", "aaaa000000000001", 1, "04")
+    # The token is fetched per call rather than reused from construction: this
+    # thread outlives the JWT's 24 h lifetime, and a stale one silently
+    # disabled every ChirpStack call for days (finding B-1).
+    mock_get_token.assert_called_once_with(channel)
+    mock_enqueue.assert_called_once_with(
+        channel, "fresh-tok", "aaaa000000000001", 1, "04"
+    )
 
 
 def test_up_event_no_downlink_test_without_grpc():

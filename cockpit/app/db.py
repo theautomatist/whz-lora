@@ -276,6 +276,16 @@ class Database:
         self._conn = sqlite3.connect(db_path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._conn.execute("PRAGMA foreign_keys = ON")
+        # WAL, not the default rollback journal: the MQTT ingest thread writes
+        # an rf_frame row per received frame while HTTP handlers read for the
+        # UI, and under the default journal those writers block the readers.
+        # It also cuts fsync traffic on the SD card. synchronous=NORMAL is the
+        # usual WAL companion — on power loss the last transactions may be
+        # lost, but the database stays consistent, which matters on a host
+        # that has taken hard resets (see the 2026-08-01 field diagnosis,
+        # findings B-3 and B-11).
+        self._conn.execute("PRAGMA journal_mode = WAL")
+        self._conn.execute("PRAGMA synchronous = NORMAL")
         self._lock = threading.RLock()
         self._rf_frame_insert_count = 0
 

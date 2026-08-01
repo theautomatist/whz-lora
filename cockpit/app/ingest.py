@@ -219,8 +219,15 @@ class MQTTIngest:
         if dl is None:
             return
         try:
+            # Fetch the token per call rather than reusing the one handed in at
+            # construction: this thread outlives the token's 24 h lifetime, and
+            # cs.get_token() caches until shortly before expiry (finding B-1).
             cs.enqueue_downlink(
-                self._grpc_channel, self._grpc_token, dl["dev_eui"], dl["f_port"], dl["data_hex"]
+                self._grpc_channel,
+                cs.get_token(self._grpc_channel),
+                dl["dev_eui"],
+                dl["f_port"],
+                dl["data_hex"],
             )
         except grpc.RpcError as e:
             logger.warning("downlink-test enqueue failed for %s: %s", dev_eui, e)

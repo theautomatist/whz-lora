@@ -2,7 +2,11 @@
 # Single-region (EU868) deployment for research sensor infrastructure at WHZ.
 
 [logging]
-  level="info"
+  # "warn", not "info": at info level ChirpStack logs every gateway stats and
+  # uplink event, which produced a 322 MB / 664k-line container log in three
+  # weeks on the field Pi — SD-card wear with no diagnostic value.
+  # See docs/developer/analysis/pi-field-diagnosis-2026-08-01.md (finding B-5).
+  level="warn"
 
 [postgresql]
   # DSN uses environment variables injected via Compose.

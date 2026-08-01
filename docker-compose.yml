@@ -22,10 +22,31 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     ports:
       - "8080:8080"
+    mem_limit: 512m
+    healthcheck:
+      # The LNS had no health check at all, so its three restart attempts on
+      # every boot went unnoticed. wget is present in the image; a plain GET on
+      # the admin UI proves the HTTP/gRPC listener is actually serving.
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
 
   chirpstack-gateway-bridge:
     image: chirpstack/chirpstack-gateway-bridge:4.1.1
     restart: unless-stopped
+    mem_limit: 128m
+    healthcheck:
+      # This bridge only listens on UDP/1700, so there is no connection to
+      # open. Check the bound socket instead: 1700 = 0x06A4 in the hex local
+      # address column. Both tables are searched because the listener binds
+      # to :: and therefore shows up in udp6, not udp.
+      test: ["CMD-SHELL", "grep -qi ':06A4 ' /proc/net/udp /proc/net/udp6 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
     ports:
       - "1700:1700/udp"
     volumes:
@@ -45,6 +66,13 @@ services:
     image: chirpstack/chirpstack-gateway-bridge:4.1.1
     restart: unless-stopped
     command: -c /etc/chirpstack-gateway-bridge/chirpstack-gateway-bridge-basicstation-eu868.toml
+    mem_limit: 128m
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 3001 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
     ports:
       - "3001:3001"
     volumes:
@@ -68,11 +96,18 @@ services:
       - POSTGRES_USER=chirpstack
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=chirpstack
+    mem_limit: 512m
     healthcheck:
+      # interval 30s, not 5s: three services probing every 5 s spawned ~50k
+      # processes a day on the Pi for no benefit. start_interval keeps the
+      # boot fast anyway — depends_on waits on these, and during start_period
+      # the probe still runs every 2 s (finding B-8).
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
-      interval: 5s
+      interval: 30s
+      start_period: 30s
+      start_interval: 2s
       timeout: 5s
-      retries: 10
+      retries: 5
 
   redis:
     image: redis:7.4.9-alpine
@@ -80,11 +115,14 @@ services:
     command: redis-server --save 300 1 --save 60 100 --appendonly no
     volumes:
       - redisdata:/data
+    mem_limit: 256m
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
+      interval: 30s
+      start_period: 30s
+      start_interval: 2s
       timeout: 5s
-      retries: 10
+      retries: 5
 
   mosquitto:
     image: eclipse-mosquitto:2.1.2-alpine
@@ -100,14 +138,19 @@ services:
     volumes:
       - ./mosquitto:/mosquitto/config/
       - mosquittodata:/mosquitto/data
+    mem_limit: 128m
     healthcheck:
       # Tiny authenticated publish round-trip — proves listener is up and
       # auth/ACL accept the credentials. $SYS topics are not retained on
       # mosquitto v2 and publish every 10 s, so probing them is unreliable.
+      # Each probe is a real MQTT connection, so it runs every 30 s rather
+      # than every 5 s (finding B-8); start_interval keeps the boot fast.
       test: ["CMD-SHELL", "mosquitto_pub -h 127.0.0.1 -p 1883 -t healthcheck -m ok -u $$CHIRPSTACK_MQTT_USERNAME -P $$CHIRPSTACK_MQTT_PASSWORD -q 1"]
-      interval: 5s
+      interval: 30s
+      start_period: 30s
+      start_interval: 2s
       timeout: 5s
-      retries: 10
+      retries: 5
 
   cockpit:
     build: ./cockpit
@@ -127,6 +170,7 @@ services:
       - COCKPIT_PASSWORD=${COCKPIT_PASSWORD}
     volumes:
       - ./cockpit-data:/data
+    mem_limit: 512m
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/healthz').status==200 else 1)\""]
       interval: 30s
