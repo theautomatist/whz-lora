@@ -18,6 +18,38 @@ This page is for operators bringing up a fresh installation.
 | `gh` CLI | Issues, PRs, and repository management |
 | `pip install -r requirements.txt` | Documentation build dependencies |
 
+## Prepare a Linux field host (Raspberry Pi)
+
+Skip this on a Windows workstation — it applies to the Raspberry Pi (or any
+Debian host) that runs the stack in the field.
+
+A Linux host needs a handful of settings that Docker Compose cannot make for
+you. Without them the host loses its logs on every reboot, cannot enforce
+container memory limits, and fills its SD card with unrotated container logs.
+Each one is there because it actually took the field host down once — see the
+[field diagnosis](https://github.com/theautomatist/whz-lora/blob/main/docs/developer/analysis/pi-field-diagnosis-2026-08-01.md).
+
+```bash
+sudo ./scripts/host-setup.sh            # apply
+sudo ./scripts/host-setup.sh --check    # report only, changes nothing
+```
+
+The script is safe to run repeatedly: it checks every item first and only
+acts when something is missing. `--check` exits non-zero when anything is
+outstanding, so it also works as a cron or monitoring probe. Both modes need
+root — an unprivileged run cannot read `/etc/wireguard` and would report
+configured items as missing.
+
+It covers the persistent journal, Docker log rotation, the memory cgroup,
+`fake-hwclock`, Wi-Fi power save and WireGuard autostart. It does **not**
+create a WireGuard configuration — private keys belong on the host, never in
+this repository; it only enables an existing one and warns when its
+`AllowedIPs` would route the host's own local subnet through the tunnel.
+
+Adding the memory cgroup edits the kernel command line and therefore needs a
+reboot to take effect. The script backs up `cmdline.txt` first and validates
+the result before writing it.
+
 ## Bring the stack up
 
 ```powershell
@@ -27,7 +59,11 @@ Copy-Item .env.example .env
 docker compose up -d --wait
 ```
 
-When all six services report `(healthy)` (~2 min on a cold pull,
+There is no API key to create by hand: leave `CHIRPSTACK_API_KEY` at its
+placeholder and the cockpit authenticates through the admin login, renewing
+its token automatically. Setting a real key only saves the login round-trip.
+
+When all seven services report `(healthy)` (~2 min on a cold pull,
 seconds on a warm one), the management UI is at
 [http://localhost:8080](http://localhost:8080).
 Default login is `admin` / `admin`; you will be forced to change it
