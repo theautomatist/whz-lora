@@ -276,6 +276,13 @@ precondition for §12's "scroll position survives back-navigation".
 
 Cut to what the data justifies, per product owner decision.
 
+> **Amended after the operational audit (§19).** The cuts below were argued
+> from "there are only 7 runs". That reasoning is sound for the *run* list
+> and wrong as a blanket statement: the RF panel's lists carry 332, 53 and
+> 55 423 rows. Everything in this section applies to the run and event
+> lists; the RF lists are governed by §19, which supersedes the decision to
+> treat that panel as "unchanged" until stage 6.
+
 **Kept:**
 - **"Load more", not infinite scroll** — infinite scroll devalues the
   scrollbar as an orientation cue. No virtualisation.
@@ -514,3 +521,69 @@ over infinite scroll, and the reasoned refusal of virtualisation. Keeping
 raw data in CSV. Distinguishing genuinely-empty from filtered-empty. And the
 observation that the stop-run confirmation already models the right
 cost-naming pattern and simply needs rolling out.
+
+---
+
+## 19. Operational audit — what reading the code missed
+
+**Process correction.** Revisions 1 and 2 of this document were produced by
+reading source and querying the database. Nobody ever *operated* the
+interface. The product owner pointed at `#rf-vendors` and was right: it is a
+very long list you cannot scroll inside its card, cannot sort, cannot filter
+and cannot search. None of the four agents that examined this codebase found
+it, because it is invisible in the source and obvious after one look.
+
+Looking is now a repeatable step: `scripts/ui_audit.py` drives a real
+browser against a running cockpit and reports overflow, list containment and
+control inventory per view, at phone and desktop widths. Re-run it after
+every UI stage.
+
+```
+python scripts/ui_audit.py --url http://localhost:8000 --user admin --password <pw>
+```
+
+### 19.1 Findings, measured
+
+**`#rf-vendors` is unbounded — 332 rows, 8885 px, 10.5 phone screenfuls.**
+It has no `max-height` and `overflow-y: visible`, so it grows to fit and
+takes up 68 % of a 13 000 px page. The damning part: **the fix already
+exists in the same panel.** Its two sibling lists are properly contained —
+`#rf-devices` (53 rows) has `max-height: 220px; overflow-y: auto`, and
+`#rf-frame-log` has `200px`. One list out of three simply never got it.
+This is the "assembled from unrelated parts" complaint, measured.
+
+**The list is mostly noise.** Sorted by join count, the informative part is
+four rows (717, 264, 44, 6 joins). The remaining ~328 rows each read
+"1 join". Worse, for the long tail the vendor name is unresolved, so the
+name column renders `OUI 18b79e` next to an OUI column reading `18b79e` —
+two columns showing the same value, 300+ times.
+
+**34 px of horizontal overflow on a 390 px phone viewport, in every view.**
+Rows are cut off at the right edge. The outermost causes are in the header:
+`#pill-node`, `#pill-run`, `#dot-sse` and `#btn-help` extend to 402–440 px.
+Everything below inherits the widened layout. Desktop is unaffected, which
+is why it survived — the primary target device is the phone.
+
+**Sorting and filtering exist exactly once in the whole application**, in
+History (`#hist-device-filter`, `#hist-sort`). **Search exists nowhere** —
+there is not a single `input[type=search]` in the interface. The lists that
+most need these controls (332 vendors, 53 foreign devices) have none.
+
+### 19.2 What follows for the plan
+
+- **Bounded height is a rule, not a per-list decision.** Any data-driven
+  list gets a cap and scrolls in place. `#card-dashboard` also exceeds a
+  screenful and is covered by §10's density cuts.
+- **Long tails collapse.** `#rf-vendors` shows its meaningful head and folds
+  the single-join remainder behind one row ("328 further vendors, 1 join
+  each"), expandable. This is information design, not pagination.
+- **Redundant columns go.** Where the vendor is unresolved, show the OUI
+  once.
+- **Sort, filter and search belong to the list component**, not to whichever
+  view someone remembered. Whatever is built in stage 2 provides them once
+  and every list inherits them — that is the whole point of "one card
+  implementation per concept" (§10).
+- **The RF panel moves out of stage 6.** Its lists are the ones with real
+  volume; deferring them was a mistake that followed from never having seen
+  them. The horizontal overflow is a defect to fix immediately, independent
+  of any redesign stage.
