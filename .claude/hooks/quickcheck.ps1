@@ -73,8 +73,42 @@ switch ($ext) {
     ".py" {
         if (Get-Command python -ErrorAction SilentlyContinue) {
             python -m py_compile $filePath 2>&1 | Out-Host
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        }
+
+        # Cockpit ships its own pytest suite: stdlib + sqlite + a temp-file
+        # DB per test, no Docker, no network, ~500 tests in well under a
+        # minute (see cockpit/README.md#tests). Run it on every cockpit/
+        # edit so it can't silently stop running again (it used to run
+        # only when someone remembered). Prefers the repo's .venv-cockpit;
+        # falls back to the ambient `python`. Missing test dependencies
+        # (cockpit/requirements-dev.txt not installed) is a warning, not a
+        # hook failure — quickcheck must stay usable without that venv.
+        if ($filePath -match '[\\/]cockpit[\\/]') {
+            $venvPython = Join-Path (Get-Location) ".venv-cockpit/Scripts/python.exe"
+            $pyExe = if (Test-Path $venvPython) {
+                $venvPython
+            } elseif (Get-Command python -ErrorAction SilentlyContinue) {
+                "python"
+            } else {
+                $null
+            }
+
+            if ($null -eq $pyExe) {
+                Write-Host "[quickcheck] WARNING: no Python interpreter found - skipping cockpit/tests."
+                exit 0
+            }
+
+            & $pyExe -c "import pytest, httpx" 2>$null
+            if ($LASTEXITCODE -ne 0) {
+                Write-Host "[quickcheck] WARNING: cockpit test dependencies (pytest/httpx) not installed for $pyExe - skipping cockpit/tests. Install with: pip install -r cockpit/requirements-dev.txt"
+                exit 0
+            }
+
+            & $pyExe -m pytest cockpit/tests -q 2>&1 | Out-Host
             exit $LASTEXITCODE
         }
+
         exit 0
     }
     ".ps1" {
