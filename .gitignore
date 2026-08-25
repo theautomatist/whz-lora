@@ -8,3 +8,4 @@ node_modules/
 mosquitto/passwd
 cockpit-data/
 .pytest_cache/
+_backup/
