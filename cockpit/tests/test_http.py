@@ -71,6 +71,7 @@ _PROTECTED_GET_PATHS = [
     "/api/runs",
     "/api/devices",
     "/api/events",
+    "/api/events/log",
 ]
 
 
@@ -704,6 +705,126 @@ def test_set_interval_503_without_chirpstack(client):
         f"/api/device/{node_id}/set-interval", json={"minutes": 5}, auth=AUTH
     )
     assert r.status_code == 503
+
+
+# ---------------------------------------------------------------------------
+# Cockpit-redesign Stage 1 — GET /api/events/log (spec §4/§14/§16). Distinct
+# from GET /api/events, the live SSE stream tested further below.
+# ---------------------------------------------------------------------------
+
+
+def test_events_log_200_empty_shape(client):
+    r = client.get("/api/events/log", auth=AUTH)
+    assert r.status_code == 200
+    assert r.json() == {"events": [], "next_cursor": None, "has_more": False}
+
+
+def test_events_log_run_start_and_stop_are_visible_with_device_name(client):
+    """§4's whole point, end to end through the real HTTP routes: a run's
+    lifecycle is durably visible in the log, with enough context (device
+    name) to read without a second request."""
+    _place_gateway(client)
+    node_id = _add_device_node(name="thermostat-katia")
+    _place_device(client, node_id)
+    run = _start_run(client, node_id)
+    client.post("/api/run/stop", json={"device_node_id": node_id}, auth=AUTH)
+
+    r = client.get("/api/events/log", auth=AUTH)
+    assert r.status_code == 200
+    # _place_gateway (above) also writes its own gateway_moved event —
+    # filter to this device's run lifecycle specifically.
+    run_events = [e for e in r.json()["events"] if e["node_id"] == node_id]
+    types = [e["type"] for e in run_events]
+    assert types == ["run_stopped", "run_started"]  # newest first
+    for event in run_events:
+        assert event["node_name"] == "thermostat-katia"
+        assert event["run_id"] == run["id"]
+        assert event["source"] == "live"
+
+
+def test_events_log_keyset_pagination(client):
+    node_id = _add_device_node()
+    for i in range(3):
+        main._db.record_event("join", node_id=node_id, payload={"i": i})
+
+    page1 = client.get("/api/events/log", params={"limit": 2}, auth=AUTH).json()
+    assert len(page1["events"]) == 2
+    assert page1["has_more"] is True
+
+    page2 = client.get(
+        "/api/events/log", params={"limit": 2, "cursor": page1["next_cursor"]}, auth=AUTH
+    ).json()
+    assert len(page2["events"]) == 1
+    assert page2["has_more"] is False
+    assert page2["next_cursor"] is None
+
+    seen_ids = {e["id"] for e in page1["events"]} | {e["id"] for e in page2["events"]}
+    assert len(seen_ids) == 3  # no overlap, none skipped
+
+
+def test_events_log_filters_by_type(client):
+    node_id = _add_device_node()
+    main._db.record_event("join", node_id=node_id)
+    main._db.record_event("gateway_moved")
+
+    r = client.get("/api/events/log", params={"type": "join"}, auth=AUTH)
+    events = r.json()["events"]
+    assert len(events) == 1
+    assert events[0]["type"] == "join"
+
+
+def test_events_log_filters_by_node_id(client):
+    n1 = _add_device_node(name="d1", eui="aaaa000000000010")
+    n2 = _add_device_node(name="d2", eui="aaaa000000000011")
+    main._db.record_event("join", node_id=n1)
+    main._db.record_event("join", node_id=n2)
+
+    r = client.get("/api/events/log", params={"node_id": n1}, auth=AUTH)
+    events = r.json()["events"]
+    assert len(events) == 1
+    assert events[0]["node_id"] == n1
+
+
+def test_relocate_writes_a_relocated_event(client):
+    _place_gateway(client)
+    node_id = _add_device_node()
+    _place_device(client, node_id)
+    client.post(
+        "/api/relocate",
+        json={"device_node_id": node_id, "floor": "3", "room": "302"},
+        auth=AUTH,
+    )
+
+    r = client.get("/api/events/log", params={"type": "relocated"}, auth=AUTH)
+    events = r.json()["events"]
+    assert len(events) == 1
+    assert events[0]["node_id"] == node_id
+    assert events[0]["payload"] == {"floor": "3", "room": "302"}
+
+
+def test_gateway_move_writes_a_gateway_moved_event(client):
+    _place_gateway(client, floor="EG", room="Flur 2")
+
+    r = client.get("/api/events/log", params={"type": "gateway_moved"}, auth=AUTH)
+    events = r.json()["events"]
+    assert len(events) == 1
+    assert events[0]["payload"] == {"floor": "EG", "room": "Flur 2"}
+
+
+def test_gateway_move_force_aborts_open_run_and_writes_both_events(client):
+    _place_gateway(client)
+    node_id = _add_device_node()
+    _place_device(client, node_id)
+    _start_run(client, node_id)
+
+    client.post(
+        "/api/gateway/move/force", json={"floor": "EG", "room": "Flur 2"}, auth=AUTH
+    )
+
+    r = client.get("/api/events/log", auth=AUTH)
+    types = {e["type"] for e in r.json()["events"]}
+    assert "gateway_moved" in types
+    assert "run_stopped" in types
 
 
 # ---------------------------------------------------------------------------

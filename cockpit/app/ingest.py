@@ -175,6 +175,23 @@ class MQTTIngest:
         elif event_type == "join":
             dev_addr = evt.get("devAddr", "")
             self._state.process_join(dev_eui, dev_addr)
+            # Cockpit-redesign Stage 1 (spec §4/§14) — persisted HERE, at the
+            # live MQTT join, deliberately NOT inside process_join itself:
+            # main.py's start-up pre-fetch calls process_join once per
+            # device just to seed the DevAddr table, and persisting there
+            # would fabricate a fresh "join" event for every device on every
+            # cockpit restart — in the very list meant to answer "did the
+            # join actually happen?".
+            if self._db is not None:
+                try:
+                    node = self._db.get_node_by_eui(dev_eui)
+                    self._db.record_event(
+                        "join",
+                        node_id=node["id"] if node else None,
+                        payload={"dev_addr": dev_addr} if dev_addr else None,
+                    )
+                except Exception as e:
+                    logger.warning("record_event(join) failed for %s: %s", dev_eui, e)
         elif event_type == "ack":
             # FIX: only count as ACK when the device actually acknowledged the
             # downlink. A confirmed downlink that timed out also triggers an
@@ -190,6 +207,19 @@ class MQTTIngest:
                 except Exception as e:
                     logger.warning(
                         "record_downlink_test_ack failed for %s: %s", dev_eui, e
+                    )
+                try:
+                    node = self._db.get_node_by_eui(dev_eui)
+                    node_id = node["id"] if node else None
+                    run = self._db.get_active_run(node_id) if node_id else None
+                    self._db.record_event(
+                        "downlink_acked" if acknowledged else "downlink_nacked",
+                        node_id=node_id,
+                        run_id=run["id"] if run else None,
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "record_event(downlink ack/nack) failed for %s: %s", dev_eui, e
                     )
             if acknowledged:
                 self._state.process_ack(dev_eui)

@@ -70,6 +70,16 @@ Routes:
   matters, not RSSI which barely varies with SF): POST /api/run/start's
   downlink_test flag + ingest.py's confirmed-downlink test feed
   GET /api/run/{id}/stats above.
+
+  Cockpit redesign Stage 1 (docs/developer/design/cockpit-redesign-spec.md
+  §4/§14/§16) — durable event log, milestones only (join/run_started/
+  run_stopped/relocated/gateway_moved/downlink_acked/downlink_nacked/
+  segment_changed/first_uplink), written at db.py/ingest.py's respective
+  trigger points:
+  GET  /api/events/log         keyset-paginated event log (?cursor=/?limit=/
+                                ?type=/?node_id=/?run_id=) — distinct from
+                                GET /api/events above, which is the live SSE
+                                stream and carries nothing durable.
 """
 import asyncio
 import base64
@@ -95,7 +105,13 @@ from pydantic import BaseModel, Field, field_validator
 from . import chirpstack as cs
 from . import config
 from . import scheduler
-from .db import MAX_PHOTOS_PER_PLACEMENT, RF_FRAME_COLUMNS, Database, parse_dl_counts
+from .db import (
+    EVENT_LOG_DEFAULT_LIMIT,
+    MAX_PHOTOS_PER_PLACEMENT,
+    RF_FRAME_COLUMNS,
+    Database,
+    parse_dl_counts,
+)
 from .ingest import MQTTIngest
 from .state import CampaignState
 
@@ -334,7 +350,9 @@ def _process_run_sweep(run: dict) -> None:
         node = _db.get_node(run["device_node_id"])
         if node:
             _switch_device_profile_best_effort(node["eui"], next_sf)
-        _db.advance_run_segment(run["id"], next_index, now.isoformat(timespec="seconds"))
+        _db.advance_run_segment(
+            run["id"], next_index, now.isoformat(timespec="seconds"), sf=next_sf
+        )
         campaign.broadcast_event({"type": "nodes"})
     elif decision["done"]:
         _db.stop_run(run["id"], status="done", reason="schedule-complete")
@@ -1345,6 +1363,15 @@ def relocate(req: RelocateRequest):
         config.DATA_DIR,
         node["eui"],
     )
+    try:
+        d.record_event(
+            "relocated",
+            node_id=req.device_node_id,
+            run_id=run["id"],
+            payload={"floor": req.floor, "room": req.room},
+        )
+    except Exception as e:
+        logger.warning("record_event(relocated) failed: %s", e)
     campaign.broadcast_event({"type": "nodes"})
     return {"placement_id": placement_id, "run_id": run["id"]}
 
@@ -1381,6 +1408,12 @@ async def gateway_move(req: GatewayMoveRequest):
         _gateway_node_id, req.floor, req.room, req.description, req.note, "",
         floorplan_id=floorplan_id, map_x=map_x, map_y=map_y,
     )
+    try:
+        d.record_event(
+            "gateway_moved", node_id=_gateway_node_id, payload={"floor": req.floor, "room": req.room}
+        )
+    except Exception as e:
+        logger.warning("record_event(gateway_moved) failed: %s", e)
     campaign.broadcast_event({"type": "nodes"})
     return {"placement_id": placement_id}
 
@@ -1400,6 +1433,12 @@ async def gateway_move_force(req: GatewayMoveRequest):
         _gateway_node_id, req.floor, req.room, req.description, req.note, "",
         floorplan_id=floorplan_id, map_x=map_x, map_y=map_y,
     )
+    try:
+        d.record_event(
+            "gateway_moved", node_id=_gateway_node_id, payload={"floor": req.floor, "room": req.room}
+        )
+    except Exception as e:
+        logger.warning("record_event(gateway_moved) failed: %s", e)
     campaign.broadcast_event({"type": "nodes"})
     return {"placement_id": placement_id}
 
@@ -1837,6 +1876,29 @@ def set_device_interval(node_id: int, req: SetIntervalRequest):
     except grpc.RpcError as e:
         raise HTTPException(status_code=502, detail=e.details())
     return {"status": "enqueued", "dev_eui": node["eui"], "minutes": req.minutes}
+
+
+# ---------------------------------------------------------------------------
+# Cockpit-redesign Stage 1 — durable event log (spec §4/§14/§16)
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/events/log", dependencies=[Depends(_require_auth)])
+async def events_log(
+    cursor: Optional[int] = None,
+    limit: int = EVENT_LOG_DEFAULT_LIMIT,
+    type: Optional[str] = None,
+    node_id: Optional[int] = None,
+    run_id: Optional[int] = None,
+):
+    """The durable milestone log GET /api/events (the SSE stream below)
+    cannot provide, because SSE messages are transient — never persisted,
+    lost on every reload. Keyset pagination (?cursor=<id>&limit=<n>,
+    WHERE id < cursor, never OFFSET), newest first; optional ?type=/
+    ?node_id=/?run_id= filters. Deliberately a different path from
+    GET /api/events — that one stays the live SSE stream."""
+    d = _dbh()
+    return d.list_events(cursor=cursor, limit=limit, type_=type, node_id=node_id, run_id=run_id)
 
 
 # ---------------------------------------------------------------------------

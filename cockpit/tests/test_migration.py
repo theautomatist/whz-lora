@@ -17,7 +17,16 @@ Existing, narrower coverage of the same migration functions already lives
 in test_db.py (`test_migration_adds_missing_columns_to_existing_db`,
 `test_init_schema_migration_is_idempotent`) against a *contiguous*,
 gap-free legacy schema; this file adds the id-gap dimension specifically.
+
+Stage 1 (event table) additions below: the id-gap fixture above doubles as
+the "one still-running run" backfill case (only run_started, no
+run_stopped, node/run ids from the same fixture), and a second fixture
+(`_build_legacy_db_with_seven_finished_runs`) mirrors the shape of the real
+7-run snapshot (6x reason='schedule-complete' + 1x NULL, all finished) to
+pin the backfill's exact output — see docs/developer/design/
+cockpit-redesign-spec.md §15.
 """
+import json
 import sqlite3
 
 import pytest
@@ -304,5 +313,199 @@ def test_migration_does_not_reset_sqlite_sequence(legacy_db_path):
             new_node_id, "1", "101", "", "", ""
         )
         assert new_placement_id > 9
+    finally:
+        db.close()
+
+
+# ---------------------------------------------------------------------------
+# Stage 1 — event table + backfill (spec §14/§15), against the id-gap
+# fixture above: run #4 is still 'running' (no ended_at), so only
+# run_started should be backfilled.
+# ---------------------------------------------------------------------------
+
+
+def test_migration_backfills_run_started_only_for_still_running_run(legacy_db_path):
+    """run #4 has no ended_at — only its run_started should be backfilled,
+    never a run_stopped for a run that (as far as the data shows) never
+    stopped."""
+    db = Database(legacy_db_path)
+    try:
+        db.init_schema()
+        events = db._conn.execute(
+            "SELECT type, node_id, run_id, source FROM event ORDER BY id"
+        ).fetchall()
+        assert len(events) == 1
+        assert events[0]["type"] == "run_started"
+        assert events[0]["node_id"] == 2  # thermostat-katia
+        assert events[0]["run_id"] == 4
+        assert events[0]["source"] == "backfill"
+    finally:
+        db.close()
+
+
+def test_migration_never_backfills_relocated_gateway_moved_or_join(legacy_db_path):
+    """Per spec §15: zero source rows exist for gateway_moved (the gateway
+    was never moved) and relocated (placement gaps in the real data are
+    form corrections, not moves); join/ack/nack were simply never
+    persisted before this table existed. None of these must ever appear
+    just because a migration ran."""
+    db = Database(legacy_db_path)
+    try:
+        db.init_schema()
+        types = {
+            row["type"] for row in db._conn.execute("SELECT DISTINCT type FROM event").fetchall()
+        }
+        assert types == {"run_started"}
+    finally:
+        db.close()
+
+
+def test_migration_sets_user_version_on_legacy_db(legacy_db_path):
+    db = Database(legacy_db_path)
+    try:
+        db.init_schema()
+        version = db._conn.execute("PRAGMA user_version").fetchone()[0]
+        assert version == 1
+    finally:
+        db.close()
+
+
+def test_migration_backfill_is_idempotent_does_not_duplicate_events(legacy_db_path):
+    """Calling init_schema() twice (two container restarts) must not
+    double-insert the backfilled events — see _run_migrations' PRAGMA
+    user_version gate."""
+    db = Database(legacy_db_path)
+    try:
+        db.init_schema()
+        db.init_schema()
+        count = db._conn.execute("SELECT COUNT(*) AS c FROM event").fetchone()["c"]
+        assert count == 1
+    finally:
+        db.close()
+
+
+# ---------------------------------------------------------------------------
+# Stage 1 — backfill against a 7-run fixture shaped like the real snapshot
+# (docs/developer/design/cockpit-redesign-spec.md §15: 6x
+# reason='schedule-complete' + 1x NULL, all 7 finished) — pins the exact
+# backfill output the build report cites.
+# ---------------------------------------------------------------------------
+
+_SEVEN_RUNS = [
+    # (run_id, device_node_id, reason, started_at, ended_at)
+    (4, 2, "schedule-complete", "2026-07-08T14:15:49+00:00", "2026-07-09T14:16:21+00:00"),
+    (5, 5, "schedule-complete", "2026-07-08T14:16:08+00:00", "2026-07-09T14:16:21+00:00"),
+    (6, 4, "schedule-complete", "2026-07-08T14:16:17+00:00", "2026-07-09T14:16:21+00:00"),
+    (7, 3, None, "2026-07-09T11:10:24+00:00", "2026-07-09T15:12:13+00:00"),
+    (8, 5, "schedule-complete", "2026-07-10T11:47:50+00:00", "2026-07-11T11:48:36+00:00"),
+    (9, 4, "schedule-complete", "2026-07-10T11:55:22+00:00", "2026-07-11T11:55:36+00:00"),
+    (10, 2, "schedule-complete", "2026-07-10T13:17:05+00:00", "2026-07-11T13:17:36+00:00"),
+]
+
+
+def _build_legacy_db_with_seven_finished_runs(path: str) -> None:
+    conn = sqlite3.connect(path)
+    conn.execute("PRAGMA foreign_keys = ON")
+    conn.executescript(_LEGACY_SCHEMA)
+
+    conn.execute(
+        "INSERT INTO node (id, kind, name, eui, created_at) VALUES "
+        "(1, 'gateway', 'whz-kerlink-ifevo', '7076ff0064071a3d', '2026-01-01T00:00:00+00:00')"
+    )
+    for node_id, name in ((2, "EVA"), (3, "HomeMatic - DNT"), (4, "thermostat-katia"), (5, "thermostat-maurice")):
+        conn.execute(
+            "INSERT INTO node (id, kind, name, eui, created_at) VALUES (?, 'device', ?, ?, "
+            "'2026-01-01T00:00:00+00:00')",
+            (node_id, name, f"{node_id:016x}"),
+        )
+    for node_id in (1, 2, 3, 4, 5):
+        conn.execute(
+            "INSERT INTO placement (id, node_id, started_at, ended_at) VALUES "
+            "(?, ?, '2026-01-01T00:00:00+00:00', NULL)",
+            (node_id, node_id),
+        )
+    for run_id, device_node_id, reason, started_at, ended_at in _SEVEN_RUNS:
+        conn.execute(
+            "INSERT INTO run (id, device_node_id, device_placement_id, gateway_placement_id, "
+            "phase, started_at, ended_at, status, reason, packets) "
+            "VALUES (?, ?, ?, 1, 'adr', ?, ?, 'done', ?, 10)",
+            (run_id, device_node_id, device_node_id, started_at, ended_at, reason),
+        )
+    conn.commit()
+    conn.close()
+
+
+@pytest.fixture
+def seven_run_db_path(tmp_path) -> str:
+    path = str(tmp_path / "seven_runs.db")
+    _build_legacy_db_with_seven_finished_runs(path)
+    return path
+
+
+def test_backfill_produces_run_started_and_run_stopped_for_every_run(seven_run_db_path):
+    """Pins spec §15's exact numbers: 7 run_started + 7 run_stopped (every
+    run finished), nothing else — no gateway_moved/relocated/join/ack/nack —
+    and every row source='backfill'."""
+    db = Database(seven_run_db_path)
+    try:
+        db.init_schema()
+        events = db._conn.execute(
+            "SELECT type, source, payload FROM event ORDER BY id"
+        ).fetchall()
+        assert len(events) == 14
+        assert all(e["source"] == "backfill" for e in events)
+        started = [e for e in events if e["type"] == "run_started"]
+        stopped = [e for e in events if e["type"] == "run_stopped"]
+        assert len(started) == 7
+        assert len(stopped) == 7
+        other_types = {e["type"] for e in events} - {"run_started", "run_stopped"}
+        assert other_types == set()
+    finally:
+        db.close()
+
+
+def test_backfill_uses_the_stored_reason_or_unknown(seven_run_db_path):
+    """6 runs have reason='schedule-complete'; the one with a NULL reason
+    (run #7, matching the real snapshot) becomes 'unknown' — never NULL,
+    never fabricated as something more specific."""
+    db = Database(seven_run_db_path)
+    try:
+        db.init_schema()
+        stopped = db._conn.execute(
+            "SELECT run_id, payload FROM event WHERE type = 'run_stopped' ORDER BY run_id"
+        ).fetchall()
+        reasons = {row["run_id"]: json.loads(row["payload"])["reason"] for row in stopped}
+        assert reasons[7] == "unknown"
+        for run_id in (4, 5, 6, 8, 9, 10):
+            assert reasons[run_id] == "schedule-complete"
+    finally:
+        db.close()
+
+
+def test_backfill_event_ts_is_the_runs_own_timestamp_not_migration_time(seven_run_db_path):
+    """The backfilled ts must be the run's actual started_at/ended_at — the
+    historical moment — not "now" when the migration happens to run."""
+    db = Database(seven_run_db_path)
+    try:
+        db.init_schema()
+        started = db._conn.execute(
+            "SELECT ts FROM event WHERE type = 'run_started' AND run_id = 4"
+        ).fetchone()
+        stopped = db._conn.execute(
+            "SELECT ts FROM event WHERE type = 'run_stopped' AND run_id = 4"
+        ).fetchone()
+        assert started["ts"] == "2026-07-08T14:15:49+00:00"
+        assert stopped["ts"] == "2026-07-09T14:16:21+00:00"
+    finally:
+        db.close()
+
+
+def test_backfill_on_seven_run_db_is_idempotent(seven_run_db_path):
+    db = Database(seven_run_db_path)
+    try:
+        db.init_schema()
+        db.init_schema()
+        count = db._conn.execute("SELECT COUNT(*) AS c FROM event").fetchone()["c"]
+        assert count == 14
     finally:
         db.close()

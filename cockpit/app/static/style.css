@@ -1150,3 +1150,44 @@ details[open].coll > summary::before { transform: rotate(90deg); }
   box-shadow: 0 2px 6px rgba(0,0,0,.4);
 }
 .map-marker-sm.gateway { background: var(--accent2); }
+
+/* =================================================================
+   EVENT LOG (cockpit-redesign Stage 1, spec §4/§12/§14) — durable
+   milestone list. Reuses the existing token system throughout: the chip
+   is .map-unplaced-chip's exact recipe (pill, --bg-elev2/--line resting,
+   --accent-grad active) and the row is .rf-log-row's compact
+   time+fields layout — no new button/list system, same tokens as
+   everywhere else in this file.
+   ================================================================= */
+
+.evt-chip-row { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
+.evt-chip {
+  display: inline-flex; align-items: center;
+  background: var(--bg-elev2); border: 1px solid var(--line); color: var(--muted);
+  border-radius: 999px; padding: 5px 11px;
+  font-size: .72rem; font-weight: 700; cursor: pointer;
+  transition: background var(--t-fast), color var(--t-fast), border-color var(--t-fast);
+}
+.evt-chip:hover { border-color: var(--accent-light); color: var(--accent-light); }
+.evt-chip.active { background: var(--accent-grad); color: #0b1220; border-color: transparent; }
+
+.evt-row {
+  display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap;
+  padding: 8px 0; border-bottom: 1px solid var(--line);
+}
+.evt-row:last-child { border-bottom: none; }
+.evt-time { color: var(--muted); font-variant-numeric: tabular-nums; flex-shrink: 0; font-size: .74rem; }
+.evt-type { font-weight: 700; flex-shrink: 0; }
+.evt-device { color: var(--accent-light); flex-shrink: 0; }
+.evt-reason { color: var(--muted); font-size: .82rem; }
+
+/* Backfilled rows (source='backfill') must read as reconstructed, not as
+   measurement evidence (spec §12/§15) — same muted-pill language as
+   status pills elsewhere, deliberately NOT a colour alone. */
+.evt-badge-backfill {
+  font-size: .62rem; font-weight: 700; text-transform: uppercase; letter-spacing: .02em;
+  color: var(--muted); border: 1px solid var(--line); border-radius: 999px;
+  padding: 1px 7px; flex-shrink: 0;
+}
+
+#events-log-body { margin-top: 4px; }

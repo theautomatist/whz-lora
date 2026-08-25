@@ -18,6 +18,9 @@
     <button type="button" class="vsw-btn active" id="vsw-live" onclick="switchView('live')">Live</button>
     <button type="button" class="vsw-btn" id="vsw-history" onclick="switchView('history')">History</button>
     <button type="button" class="vsw-btn" id="vsw-map" onclick="switchView('map')">Map</button>
+    <!-- New markup (Stage 1, spec §6) — addEventListener only, no inline
+         onclick; wired in initEventsView() (app.js). -->
+    <button type="button" class="vsw-btn" id="vsw-events">Events</button>
   </div>
   <div id="status-pills">
     <span class="pill" id="pill-node">—</span>
@@ -482,6 +485,44 @@
     </div>
   </section>
 </div><!-- #map-view -->
+
+<!-- ===== EVENT LOG (cockpit-redesign Stage 1, spec §4/§14/§16) — durable
+     milestones only (join/run started/stopped/relocated/gateway moved/
+     downlink ack+nack/segment changed/first uplink); hidden unless the
+     header switch is on "Events". "Load more", no infinite scroll, no
+     virtualisation, no autoscroll pill, no time grouping (spec §12). Filter
+     chips are always visible, not tucked behind a toggle. Wired via
+     addEventListener only — no inline onclick in this new markup (spec §6).
+     See switchView()/loadEventsLog() in app.js. ===== -->
+<div id="events-view" style="display:none">
+  <section class="card full" id="card-events">
+    <div class="card-title">
+      <span class="ti">☰</span>
+      <span>Event Log</span>
+    </div>
+
+    <div class="evt-chip-row" id="evt-type-chips">
+      <button type="button" class="evt-chip active" data-evt-type="">All types</button>
+      <button type="button" class="evt-chip" data-evt-type="join">Join</button>
+      <button type="button" class="evt-chip" data-evt-type="run_started">Run started</button>
+      <button type="button" class="evt-chip" data-evt-type="run_stopped">Run stopped</button>
+      <button type="button" class="evt-chip" data-evt-type="relocated">Relocated</button>
+      <button type="button" class="evt-chip" data-evt-type="gateway_moved">Gateway moved</button>
+      <button type="button" class="evt-chip" data-evt-type="downlink_acked">Downlink ACK</button>
+      <button type="button" class="evt-chip" data-evt-type="downlink_nacked">Downlink NACK</button>
+      <button type="button" class="evt-chip" data-evt-type="segment_changed">Segment changed</button>
+      <button type="button" class="evt-chip" data-evt-type="first_uplink">First uplink</button>
+    </div>
+    <div class="evt-chip-row" id="evt-device-chips">
+      <button type="button" class="evt-chip active" data-evt-node-id="">All devices</button>
+    </div>
+
+    <div id="events-log-body"><p class="hint">Loading…</p></div>
+    <div class="brow" id="evt-load-more-row" style="display:none">
+      <button type="button" class="btn btn-o" id="evt-load-more">Load more</button>
+    </div>
+  </section>
+</div><!-- #events-view -->
 
 <!-- ===== PLACE / RELOCATE SHEET (device + gateway) ===== -->
 <div id="place-ov" class="sheet-ov" onclick="closeSheetBackdrop(event)">
