@@ -368,6 +368,110 @@ step_wireguard() {
 
 # =========================================================================
 
+
+# =========================================================================
+# 7. Kerlink USB link
+#    The gateway is NOT a serial device — it enumerates as a USB Ethernet
+#    gadget (0525:a4a2, driver cdc_eem), so the kernel gives it a network
+#    interface and there is nothing to pass through to a container. What it
+#    needs is an address on that interface, and a route.
+#
+#    The route is the part that is easy to miss: the gateway sends from a
+#    link-local source (169.254.x.x), not from 192.168.120.x, so without
+#    169.254.0.0/16 on usb0 the return path is dead while everything still
+#    looks connected.
+#
+#    never-default matters for the same reason AllowedIPs does in step 6:
+#    a point-to-point link that grabs the default route takes the host off
+#    the internet.
+# =========================================================================
+
+USB_CONN=kerlink-usb
+USB_IFACE=usb0
+USB_ADDR=192.168.120.31/24
+USB_ROUTE=169.254.0.0/16
+
+step_kerlink_usb() {
+    head_line "7. Kerlink USB link ($USB_IFACE)"
+
+    if ! command -v nmcli >/dev/null 2>&1; then
+        warn "NetworkManager not present — skipping"
+        return
+    fi
+
+    if ! nmcli -t -f NAME con show 2>/dev/null | grep -qx "$USB_CONN"; then
+        if apply; then
+            nmcli con add type ethernet con-name "$USB_CONN" ifname "$USB_IFACE"                 ipv4.method manual ipv4.addresses "$USB_ADDR"                 ipv4.routes "$USB_ROUTE" ipv4.never-default yes                 ipv6.method disabled connection.autoconnect yes >/dev/null 2>&1                 && changed "profile created: $USB_CONN ($USB_ADDR, route $USB_ROUTE)"                 || fail "could not create profile $USB_CONN"
+        else
+            missing "profile $USB_CONN does not exist — the gateway cannot be reached"
+        fi
+        return
+    fi
+
+    # Present, but a profile that exists with the wrong address or without
+    # the link-local route is worse than none: it looks configured.
+    local addr route nd auto bad=0
+    addr="$(nmcli -g ipv4.addresses con show "$USB_CONN" 2>/dev/null || echo '')"
+    route="$(nmcli -g ipv4.routes con show "$USB_CONN" 2>/dev/null || echo '')"
+    nd="$(nmcli -g ipv4.never-default con show "$USB_CONN" 2>/dev/null || echo '')"
+    auto="$(nmcli -g connection.autoconnect con show "$USB_CONN" 2>/dev/null || echo '')"
+
+    case "$addr"  in *"${USB_ADDR%%/*}"*) ;; *) bad=1 ;; esac
+    case "$route" in *"$USB_ROUTE"*)      ;; *) bad=1 ;; esac
+    [ "$nd" = "yes" ] || bad=1
+    [ "$auto" = "yes" ] || bad=1
+
+    if [ "$bad" -eq 0 ]; then
+        ok "profile $USB_CONN correct ($USB_ADDR, route $USB_ROUTE, autoconnect)"
+    elif apply; then
+        nmcli con modify "$USB_CONN" ipv4.method manual ipv4.addresses "$USB_ADDR"             ipv4.routes "$USB_ROUTE" ipv4.never-default yes             ipv6.method disabled connection.autoconnect yes >/dev/null 2>&1             && changed "profile $USB_CONN corrected"             || fail "could not correct profile $USB_CONN"
+    else
+        missing "profile $USB_CONN incomplete (address/route/never-default/autoconnect)"
+    fi
+}
+
+# =========================================================================
+# 8. Firmware settings for the gateway
+#    Read by the bootloader, long before Docker exists — this is the layer
+#    that cannot be containerised at all.
+#
+#    usb_max_current_enable=1 lifts the Pi 5's 600 mA total USB budget. The
+#    field host hit exactly this: the gateway browns out under load without
+#    it, and it needs a >=27 W supply to go with it.
+# =========================================================================
+
+BOOT_CFG=/boot/firmware/config.txt
+
+step_firmware() {
+    head_line "8. Firmware settings ($BOOT_CFG)"
+
+    if [ ! -f "$BOOT_CFG" ]; then
+        warn "$BOOT_CFG not found — not a Raspberry Pi OS image? skipping"
+        return
+    fi
+
+    # Each entry carries its own consequence: a shared message would name
+    # the wrong symptom for whichever line is actually missing, and send
+    # the next person looking in the wrong direction.
+    local entry line why
+    for entry in         "usb_max_current_enable=1|lifts the Pi 5's 600 mA USB budget; without it the gateway browns out under load"         "dtoverlay=dwc2,dr_mode=host|puts the USB controller in host mode; without it usb0 never appears"
+    do
+        line="${entry%%|*}"
+        why="${entry#*|}"
+        if grep -qxF "$line" "$BOOT_CFG"; then
+            ok "$line"
+        elif apply; then
+            cp -a "$BOOT_CFG" "$BOOT_CFG.whz-backup.$(date +%Y%m%d%H%M%S)" 2>/dev/null || true
+            printf '
+# whz-lora: Kerlink gateway over USB
+%s
+' "$line" >> "$BOOT_CFG"                 && { changed "$line added"; NEED_REBOOT=1; }                 || fail "could not write to $BOOT_CFG"
+        else
+            missing "$line absent — $why"
+        fi
+    done
+}
+
 main() {
     printf '%swhz-lora host setup%s — %s\n' "$C_HEAD" "$C_OFF" \
         "$([ "$CHECK_ONLY" -eq 1 ] && echo 'check only, nothing is changed' || echo 'applying configuration')"
@@ -378,6 +482,8 @@ main() {
     step_fake_hwclock
     step_wifi_powersave
     step_wireguard
+    step_kerlink_usb
+    step_firmware
 
     head_line "Summary"
     if [ "$CHECK_ONLY" -eq 1 ]; then
@@ -391,7 +497,7 @@ main() {
 
     printf '  %d change(s) applied, %d item(s) need attention\n' "$CHANGED" "$MISSING"
     if [ "$NEED_REBOOT" -eq 1 ]; then
-        printf '\n  %sA reboot is required for the memory cgroup to take effect.%s\n' "$C_WARN" "$C_OFF"
+        printf '\n  %sA reboot is required for the memory cgroup / firmware settings to take effect.%s\n' "$C_WARN" "$C_OFF"
         printf '  Afterwards verify with: %s --check\n' "$0"
     fi
     [ "$MISSING" -eq 0 ] || exit 1
