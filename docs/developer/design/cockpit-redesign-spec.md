@@ -433,13 +433,19 @@ evidence. Specifically **not** backfilled:
 **Permanently lost, to be stated plainly:** all join, ACK and NACK events
 before migration. They were never persisted.
 
-**The 12-photos-vs-6-rows question is settled.** `sqlite_sequence` shows
-`photo=7` while the lowest surviving id is 2, and the same early-row gap
-appears in `placement` (from 7), `run` (from 4) and `map_marker` (4 of 16).
-No code path deletes them — `DELETE FROM` appears once in `db.py`, for the
-`rf_frame` retention trim. The rows were removed outside the application;
-the files stayed. They are **orphaned files, not lost rows.** Reconcile by
-listing the directory against existing `placement.id`.
+**The photo question is settled — and the earlier count was wrong.** An
+earlier revision claimed "6 rows, 12 image files". That 12 came from
+counting directory entries alongside files. Reconciled properly against the
+restored data: **7 files, 6 rows, exactly one orphan**
+(`photos/3/1.png`, belonging to placement 3). Every one of the 6 rows has
+its file; nothing is missing in the other direction.
+
+The cause stands: `sqlite_sequence` shows `photo=7` while the lowest
+surviving id is 2, and the same early-row gap appears in `placement` (from
+7), `run` (from 4) and `map_marker` (4 of 16). No code path deletes them —
+`DELETE FROM` appears once in `db.py`, for the `rf_frame` retention trim.
+The rows were removed outside the application; the file stayed. Reconcile
+by listing the directory against existing `placement.id`.
 
 **Schema versioning.** There is none today (`PRAGMA user_version` = 0), only
 `CREATE TABLE IF NOT EXISTS` plus two column-guard migrations. Introduce
@@ -587,3 +593,43 @@ most need these controls (332 vendors, 53 foreign devices) have none.
   volume; deferring them was a mistake that followed from never having seen
   them. The horizontal overflow is a defect to fix immediately, independent
   of any redesign stage.
+
+### 19.3 Photos are served at full camera resolution
+
+Measured against the restored field data: `/api/photo/{id}` returns
+**2.1–4.0 MB per image**, straight from what the phone camera wrote. There
+is no thumbnail path and no downscaling anywhere —
+`POST /api/photo/{placement_id}` (`main.py:988-1005`) writes the uploaded
+bytes verbatim.
+
+A placement with the permitted maximum of three photos therefore transfers
+roughly **7 MB** to render one card, and the device card carries a photo
+strip that loads them. On a phone inside a building, on the same Wi-Fi the
+operator is walking in and out of, that is the difference between a card
+that appears and a card that hangs.
+
+Consequence for the plan: generate and serve a bounded thumbnail (the strip
+and any list only ever need a few hundred pixels), keep the original behind
+an explicit full-size request. This also removes one of the reasons §10
+cuts the photo strip from the device card — with thumbnails the strip could
+plausibly stay, which is a decision for the design variants rather than a
+foregone conclusion.
+
+### 19.4 A self-inflicted incident worth recording
+
+While preparing the local working copy, `rm -rf cockpit-data` failed with
+"Device or resource busy". It was **not** a no-op: it had already deleted
+the directory's contents and only failed on the directory itself. The
+follow-up step restored `cockpit.db` alone, so `photos/`, `floorplans/` and
+all run CSVs stayed deleted — noticed by the product owner, not by the
+tooling, when the interface showed no images.
+
+Everything was recoverable from the tarball. Two lessons, both cheap:
+
+- A failed destructive command is not necessarily a command that did
+  nothing. Verify the resulting state, do not infer it from the exit
+  message.
+- The working copy needs a fixture check. Any migration or restore step
+  should end by reconciling `photo` and `floorplan` rows against files on
+  disk — the same reconciliation §15 already requires for orphans, run as
+  an assertion rather than as a one-off investigation.
