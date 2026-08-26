@@ -32,9 +32,13 @@ export function photoThumbsHtml(photoIds) {
   if (!photoIds || !photoIds.length) return '';
   // role/tabindex: the thumbnail is a real control now (opens the full-size
   // view), so it has to be reachable and announced as one, not just clickable.
+  // The strip loads the small server-generated /thumb preview, not the
+  // 2-4 MB original — lightbox.js opens the original when tapped. The photo
+  // id travels as data-photo-id rather than being parsed back out of the
+  // thumb's src, so the two can point at different paths.
   return photoIds.map((id, i) => `<div class="pthumb view" role="button" tabindex="0"` +
     ` aria-label="Open photo ${i + 1} of ${photoIds.length} full size">` +
-    `<img src="/api/photo/${id}" alt="Placement photo ${i + 1}" loading="lazy"></div>`).join('');
+    `<img src="/api/photo/${id}/thumb" data-photo-id="${id}" alt="Placement photo ${i + 1}" loading="lazy"></div>`).join('');
 }
 
 /** F-0008 — small read-only floorplan thumbnail with one marker, showing

@@ -42,9 +42,9 @@ What it checks, against a running instance:
     the long-tail disclosure expands and its own search narrows it
   * the floor plan and at least one placement photo actually load
     (`naturalWidth > 0` — a broken `<img src>` still "renders", just blank)
-  * zero JavaScript errors and zero failed HTTP responses (>=400, except
-    favicon) over the whole run — this is the most important check, because
-    it is exactly how a stale global-function handler shows up
+  * zero JavaScript errors and zero failed HTTP responses (>=400) over the
+    whole run — this is the most important check, because it is exactly
+    how a stale global-function handler shows up
 
 Usage:
     python scripts/ui_smoke.py --url http://localhost:8000 \
@@ -546,7 +546,7 @@ def run(url: str, user: str, password: str, channel: str | None, viewport: tuple
             page.on(
                 "response",
                 lambda res: failed_responses.append(f"{res.status} {res.request.method} {res.url}")
-                if res.status >= 400 and "favicon" not in res.url
+                if res.status >= 400
                 else None,
             )
 

@@ -45,11 +45,14 @@ directly — same pattern test_workflow.py already established — and drives
 its `body_iterator` with a bounded timeout, which is fast and finite.
 """
 import asyncio
+import io
+import os
 from contextlib import asynccontextmanager
 
 import pytest
 from fastapi.security import HTTPBasicCredentials
 from fastapi.testclient import TestClient
+from PIL import Image
 
 from app import config, main
 from app.db import Database
@@ -64,6 +67,7 @@ WWW_AUTHENTICATE = 'Basic realm="Feldtest-Cockpit"'
 # further down; this list only proves the auth gate itself is uniform.
 _PROTECTED_GET_PATHS = [
     "/",
+    "/favicon.ico",
     "/static/app.js",
     "/static/style.css",
     "/api/state",
@@ -139,6 +143,34 @@ def _place_device(client, node_id: int, floor: str = "3", room: str = "301") -> 
     return r.json()["placement_id"]
 
 
+def _make_jpeg_bytes(size: tuple[int, int] = (800, 600), orientation: int | None = None) -> bytes:
+    """A real, decodable JPEG for thumbnail tests — the plain
+    `b"\\xff\\xd8\\xff"` fixture the upload tests above use is enough to
+    exercise store/serve-as-is, but PIL must actually be able to open it to
+    generate a preview. `orientation` sets the EXIF Orientation tag (6 is
+    the "rotated 90 CW, phone held sideways" case the real field photos
+    under cockpit-data/photos/ carry)."""
+    im = Image.new("RGB", size, color=(120, 40, 200))
+    buf = io.BytesIO()
+    if orientation is not None:
+        exif = im.getexif()
+        exif[0x0112] = orientation
+        im.save(buf, format="JPEG", exif=exif)
+    else:
+        im.save(buf, format="JPEG")
+    return buf.getvalue()
+
+
+def _upload_photo(client, placement_id: int, content: bytes, filename: str = "x.jpg") -> int:
+    r = client.post(
+        f"/api/photo/{placement_id}",
+        files={"file": (filename, content, "image/jpeg")},
+        auth=AUTH,
+    )
+    assert r.status_code == 200
+    return r.json()["photo_id"]
+
+
 def _start_run(client, node_id: int) -> dict:
     r = client.post("/api/run/start", json={"device_node_id": node_id}, auth=AUTH)
     assert r.status_code == 200
@@ -207,6 +239,15 @@ def test_static_app_js_is_reachable(client):
 def test_static_style_css_is_reachable(client):
     r = client.get("/static/style.css", auth=AUTH)
     assert r.status_code == 200
+
+
+def test_favicon_ico_is_reachable(client):
+    """The well-known path browsers request regardless of <link rel="icon">
+    markup — must not 404 (see scripts/ui_smoke.py, which used to carve
+    /favicon.ico out of its error count for exactly that reason)."""
+    r = client.get("/favicon.ico", auth=AUTH)
+    assert r.status_code == 200
+    assert r.headers["content-type"] == "image/x-icon"
 
 
 # ---------------------------------------------------------------------------
@@ -419,6 +460,108 @@ def test_upload_photo_then_get_photo_200(client):
 def test_get_photo_404_when_unknown(client):
     r = client.get("/api/photo/9999", auth=AUTH)
     assert r.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# GET /api/photo/{id}/thumb — server-side preview (generate once, cache,
+# never a 500 even for a broken/missing original). The full-size original
+# stays reachable, unchanged, at /api/photo/{id} above — that is what the
+# lightbox opens.
+# ---------------------------------------------------------------------------
+
+
+def test_get_photo_thumbnail_generates_and_shrinks(client):
+    node_id = _add_device_node()
+    placement_id = _place_device(client, node_id)
+    original = _make_jpeg_bytes((800, 600))
+    photo_id = _upload_photo(client, placement_id, original)
+
+    r = client.get(f"/api/photo/{photo_id}/thumb", auth=AUTH)
+    assert r.status_code == 200
+    assert r.headers["content-type"] == "image/jpeg"
+    assert len(r.content) < len(original)
+
+    with Image.open(io.BytesIO(r.content)) as thumb:
+        assert max(thumb.size) <= main.PHOTO_THUMBNAIL_MAX_EDGE
+
+
+def test_get_photo_thumbnail_sets_long_lived_cache_header(client):
+    node_id = _add_device_node()
+    placement_id = _place_device(client, node_id)
+    photo_id = _upload_photo(client, placement_id, _make_jpeg_bytes())
+
+    r = client.get(f"/api/photo/{photo_id}/thumb", auth=AUTH)
+    assert r.status_code == 200
+    assert "immutable" in r.headers["cache-control"]
+
+
+def test_get_photo_thumbnail_applies_exif_orientation(client):
+    """Orientation 6 means "rotate 90 deg CW to display upright" — the exact
+    tag the real field photos under cockpit-data/photos/ carry. An 800x600
+    (landscape) source with that tag must render upright, i.e. as a
+    600x800-shaped (portrait) preview, not a sideways 800x600 one."""
+    node_id = _add_device_node()
+    placement_id = _place_device(client, node_id)
+    photo_id = _upload_photo(client, placement_id, _make_jpeg_bytes((800, 600), orientation=6))
+
+    r = client.get(f"/api/photo/{photo_id}/thumb", auth=AUTH)
+    assert r.status_code == 200
+    with Image.open(io.BytesIO(r.content)) as thumb:
+        assert thumb.height > thumb.width  # portrait, not landscape
+        assert thumb.size == (225, 300)  # 800:600 == 4:3, bounded to a 300 px long edge
+
+
+def test_get_photo_thumbnail_reuses_cached_file_on_second_request(client, monkeypatch):
+    node_id = _add_device_node()
+    placement_id = _place_device(client, node_id)
+    photo_id = _upload_photo(client, placement_id, _make_jpeg_bytes())
+
+    calls = []
+    real_write = main._write_thumbnail
+
+    def _spy(original_path, thumb_path):
+        calls.append((original_path, thumb_path))
+        return real_write(original_path, thumb_path)
+
+    monkeypatch.setattr(main, "_write_thumbnail", _spy)
+
+    r1 = client.get(f"/api/photo/{photo_id}/thumb", auth=AUTH)
+    r2 = client.get(f"/api/photo/{photo_id}/thumb", auth=AUTH)
+    assert r1.status_code == 200
+    assert r2.status_code == 200
+    assert r1.content == r2.content
+    assert len(calls) == 1  # second request served the cached file, not regenerated
+
+
+def test_get_photo_thumbnail_404_when_photo_unknown(client):
+    r = client.get("/api/photo/9999/thumb", auth=AUTH)
+    assert r.status_code == 404
+
+
+def test_get_photo_thumbnail_404_when_original_file_missing(client):
+    node_id = _add_device_node()
+    placement_id = _place_device(client, node_id)
+    photo_id = _upload_photo(client, placement_id, _make_jpeg_bytes())
+    path = os.path.join(config.PHOTOS_DIR, str(placement_id), "1.jpg")
+    os.remove(path)
+
+    r = client.get(f"/api/photo/{photo_id}/thumb", auth=AUTH)
+    assert r.status_code == 404
+
+
+def test_get_photo_thumbnail_no_500_on_corrupt_original(client):
+    """Real case on record: an original that is not a decodable image at
+    all. The endpoint must degrade to a clean JSON error, not a 500/traceback
+    — the upload endpoint itself never validates image content, so a
+    corrupt file reaching disk is a real scenario, not a hypothetical."""
+    node_id = _add_device_node()
+    placement_id = _place_device(client, node_id)
+    photo_id = _upload_photo(client, placement_id, b"this is not a jpeg at all")
+
+    r = client.get(f"/api/photo/{photo_id}/thumb", auth=AUTH)
+    assert r.status_code == 404
+    assert r.headers["content-type"] == "application/json"
+    assert "detail" in r.json()
 
 
 # ---------------------------------------------------------------------------

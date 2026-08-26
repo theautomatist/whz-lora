@@ -9,10 +9,11 @@
 // on every refresh) keep working without re-binding — the same reason the
 // lists use delegation.
 //
-// Loading state matters here rather than being polish: the images come
-// straight from the phone camera at 2-4 MB each (spec §19.3, there is no
-// thumbnail endpoint yet), so on a building's Wi-Fi there is a real pause
-// between the tap and the picture.
+// Loading state matters here rather than being polish: this always opens
+// the ORIGINAL — straight from the phone camera at 2-4 MB each (spec
+// §19.3) — even though the strip itself now shows a small server-side
+// /thumb preview, so on a building's Wi-Fi there is still a real pause
+// between the tap and the full-size picture.
 import { esc } from './format.js';
 
 let _group = [];   // photo ids of the strip that was tapped
@@ -77,12 +78,14 @@ function isOpen() {
 }
 
 /** Photo ids of the strip a given thumbnail belongs to, so the stepper
- * walks that placement's photos and not every photo on the screen. */
+ * walks that placement's photos and not every photo on the screen. Reads
+ * the id off data-photo-id — the thumb's src points at the small preview,
+ * not at the photo id, so it can no longer be parsed back out of the path. */
 function _groupFor(thumb) {
   const strip = thumb.closest('[data-photo-strip]') || thumb.parentElement;
   if (!strip) return [];
   return [...strip.querySelectorAll('.pthumb.view img')]
-    .map(i => (i.getAttribute('src') || '').split('/').pop())
+    .map(i => i.dataset.photoId)
     .filter(Boolean);
 }
 
@@ -92,7 +95,7 @@ export function initLightbox() {
     if (thumb) {
       const img = thumb.querySelector('img');
       if (!img) return;
-      const id = (img.getAttribute('src') || '').split('/').pop();
+      const id = img.dataset.photoId;
       const group = _groupFor(thumb);
       open(group.length ? group : [id], id);
       return;
