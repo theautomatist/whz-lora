@@ -216,7 +216,7 @@
         <div class="place-empty">Loading…</div>
       </div>
 
-      <div class="photo-thumbs" id="sel-photos"></div>
+      <div class="photo-thumbs" data-photo-strip id="sel-photos"></div>
 
       <div class="msg" id="selected-msg"></div>
 
@@ -508,7 +508,7 @@
         <div class="hist-detail-col">
           <div class="hist-detail-subtitle">Device</div>
           <div class="place-info" id="hist-detail-device-place"><div class="place-empty">Loading…</div></div>
-          <div class="photo-thumbs" id="hist-detail-device-photos"></div>
+          <div class="photo-thumbs" data-photo-strip id="hist-detail-device-photos"></div>
           <div id="hist-detail-device-map"></div>
 
           <div class="pdr-sf-wrap" style="margin-top:14px">
@@ -533,7 +533,7 @@
         <div class="hist-detail-col">
           <div class="hist-detail-subtitle">Gateway position during this run</div>
           <div class="place-info" id="hist-detail-gateway-place"><div class="place-empty">Loading…</div></div>
-          <div class="photo-thumbs" id="hist-detail-gateway-photos"></div>
+          <div class="photo-thumbs" data-photo-strip id="hist-detail-gateway-photos"></div>
           <div id="hist-detail-gateway-map"></div>
         </div>
       </div>
@@ -663,6 +663,21 @@
 </div>
 
 <!-- ===== HELP OVERLAY ===== -->
+<!-- Photo lightbox — the 72 px strip cannot tell two similar rooms apart,
+     which is the whole point of a placement photo. Tap opens the original. -->
+<div id="photo-ov" class="sheet-ov photo-ov" aria-hidden="true" role="dialog" aria-modal="true" aria-label="Placement photo">
+  <div class="photo-ov-stage">
+    <div id="photo-ov-loading" class="photo-ov-loading"><span class="hint">Loading photo…</span></div>
+    <img id="photo-ov-img" alt="">
+  </div>
+  <div class="photo-ov-bar">
+    <button type="button" class="btn btn-o photo-ov-step" id="photo-ov-prev" aria-label="Previous photo">‹</button>
+    <span id="photo-ov-counter" class="photo-ov-counter"></span>
+    <button type="button" class="btn btn-o photo-ov-step" id="photo-ov-next" aria-label="Next photo">›</button>
+  </div>
+  <button type="button" class="btn btn-primary photo-ov-close" id="photo-ov-close">Close</button>
+</div>
+
 <div id="help-ov" class="sheet-ov">
   <div class="sheet-panel">
     <div class="h-handle"></div>

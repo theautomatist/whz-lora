@@ -30,7 +30,11 @@ export function placeInfoHtml(p, opts = {}) {
  * Stage 2b (spec §10 density cuts). */
 export function photoThumbsHtml(photoIds) {
   if (!photoIds || !photoIds.length) return '';
-  return photoIds.map(id => `<div class="pthumb view"><img src="/api/photo/${id}" alt="Photo" loading="lazy"></div>`).join('');
+  // role/tabindex: the thumbnail is a real control now (opens the full-size
+  // view), so it has to be reachable and announced as one, not just clickable.
+  return photoIds.map((id, i) => `<div class="pthumb view" role="button" tabindex="0"` +
+    ` aria-label="Open photo ${i + 1} of ${photoIds.length} full size">` +
+    `<img src="/api/photo/${id}" alt="Placement photo ${i + 1}" loading="lazy"></div>`).join('');
 }
 
 /** F-0008 — small read-only floorplan thumbnail with one marker, showing

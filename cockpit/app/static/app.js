@@ -28,6 +28,7 @@ import { loadRfEnvironment, initRfView } from './js/rf.js';
 import { loadDevices, initRegistration } from './js/registration.js';
 import { initViewSwitch } from './js/view-switch.js';
 import { initOverlays } from './js/overlays.js';
+import { initLightbox } from './js/lightbox.js';
 import { initSSE } from './js/sse.js';
 import { initTheme } from './js/theme.js';
 
@@ -84,6 +85,7 @@ async function init() {
   initTheme();
   initHeroRing();
   initOverlays();
+  initLightbox();
   initNodesView();
   initSelectedPanel();
   initDeviceStatus();

@@ -452,6 +452,81 @@ def _check_images_load(page, failures: list[str]) -> None:
         page.wait_for_timeout(300)
 
 
+def _check_lightbox(page, failures: list[str]) -> None:
+    """Tapping a placement photo must open it full size.
+
+    The 72 px strip cannot tell two similar rooms apart, which is the one
+    job a placement photo has. Worth a check of its own because the failure
+    is quiet: the thumbnail still renders, it just stops responding, and
+    nothing in the console says so.
+    """
+    page.click('.tab-btn[data-tab="devices"]')
+    page.wait_for_timeout(800)
+    btn = page.query_selector("#btn-open-history")
+    if not btn:
+        failures.append("no #btn-open-history to reach a run with photos")
+        return
+    btn.click()
+    page.wait_for_timeout(1500)
+
+    # Most placements carry no photo at all (3 of 11 in the real data), so
+    # walk the rows until one actually has a strip rather than assuming.
+    thumbs = []
+    for row in page.query_selector_all("#history-list-body > *"):
+        row.click()
+        page.wait_for_timeout(1200)
+        thumbs = page.query_selector_all("#hist-detail-device-photos .pthumb.view")
+        if thumbs:
+            break
+        back = page.query_selector("#hist-detail-back-btn")
+        if back:
+            back.click()
+            page.wait_for_timeout(600)
+    if not thumbs:
+        failures.append("no run in History exposed a placement photo to open")
+        return
+
+    thumbs[0].click()
+    page.wait_for_timeout(400)
+    if not page.evaluate("() => document.getElementById('photo-ov').classList.contains('open')"):
+        failures.append("tapping a placement photo did not open the lightbox")
+        return
+    if not page.evaluate("() => document.body.classList.contains('scroll-locked')"):
+        failures.append("lightbox is open but the page behind it still scrolls")
+
+    if not _wait_for_image_loaded(page, "#photo-ov-img"):
+        failures.append("#photo-ov-img never reached naturalWidth > 0")
+
+    # Chevrons sit on a dark backdrop in both themes; .btn-o would resolve
+    # them to near-black in the light theme and render them invisible.
+    ink = page.evaluate(r"""() => {
+      const e = document.getElementById('photo-ov-prev');
+      if (!e || e.classList.contains('is-hidden')) return null;
+      const c = (getComputedStyle(e).color.match(/\d+/g) || []).map(Number);
+      const f = (x) => { x /= 255; return x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4); };
+      const L = 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]);
+      const bg = 0.2126 * f(6) + 0.7152 * f(10) + 0.0722 * f(14);
+      return (Math.max(L, bg) + 0.05) / (Math.min(L, bg) + 0.05);
+    }""")
+    if ink is not None and ink < 4.5:
+        failures.append(f"lightbox stepper is {ink:.1f}:1 against the backdrop (needs 4.5:1)")
+
+    if len(thumbs) > 1:
+        before = page.evaluate("() => document.getElementById('photo-ov-img').getAttribute('src')")
+        page.click("#photo-ov-next")
+        page.wait_for_timeout(900)
+        after = page.evaluate("() => document.getElementById('photo-ov-img').getAttribute('src')")
+        if before == after:
+            failures.append("lightbox 'next' did not advance to another photo")
+
+    page.keyboard.press("Escape")
+    page.wait_for_timeout(500)
+    if page.evaluate("() => document.getElementById('photo-ov').classList.contains('open')"):
+        failures.append("Escape did not close the lightbox")
+    if page.evaluate("() => document.body.classList.contains('scroll-locked')"):
+        failures.append("lightbox closed but left the page scroll-locked")
+
+
 def run(url: str, user: str, password: str, channel: str | None, viewport: tuple[int, int]) -> list[str]:
     from playwright.sync_api import sync_playwright
 
@@ -486,6 +561,7 @@ def run(url: str, user: str, password: str, channel: str | None, viewport: tuple
             _check_radio_view(page, failures)
             _check_map_view(page, failures)
             _check_images_load(page, failures)
+            _check_lightbox(page, failures)
 
             ctx.close()
         finally:
