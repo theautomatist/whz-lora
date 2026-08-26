@@ -633,3 +633,74 @@ Everything was recoverable from the tarball. Two lessons, both cheap:
   should end by reconciling `photo` and `floorplan` rows against files on
   disk — the same reconciliation §15 already requires for orphans, run as
   an assertion rather than as a one-off investigation.
+
+---
+
+## 20. The visual decision — variant B, amended
+
+Three clickable variants were built against the real field data and reviewed
+at 390×844 by the product owner. All three passed the hard mobile criteria
+(zero horizontal overflow, no unbounded list, minimum 44 px targets, landing
+view on one screen). **Variant B — "calm cards" — is the chosen basis.**
+
+Why it won on substance, not taste:
+
+- **The reason is the dominant line, not the device name.** You read
+  "placed 33 d ago · never measured" in colour first and only then which
+  device it is. That inverts the current interface, where the name leads and
+  the state is a small badge.
+- **Card height 107 px**, down from ~200 px today, with all five nodes
+  visible at once and 130 px still free. The current card shows three of
+  five while asking "which device needs attention?".
+- **Row height is structurally guaranteed**, not incidental: a fixed grid
+  row plus `nowrap`/ellipsis, so a badge cannot make one row taller than the
+  next. Today's rows vary between 61 and 63 px for exactly that reason.
+
+### 20.1 Product owner decisions
+
+| Decision | Choice |
+|---|---|
+| Basis | Variant B |
+| Colour scheme | **Light by default, one-tap dark toggle in the header** |
+| Language | **English throughout** — as today, as the docs, no mixing |
+| Critical case | **Adopt variant C's treatment** |
+
+**Light with a toggle**, not light only: the round goes from a bright window
+frontage into a dark basement corridor, and a manual switch tracks that
+faster than any ambient heuristic. Both states must be correct, which is
+real work — the calm of the light scheme rests on white-on-light-grey
+surface separation that has no direct dark equivalent.
+
+**English throughout** settles the drift the variants exposed: two of them
+localised the chrome but left the data-derived reasons in English, producing
+exactly the mixed reading their own authors flagged. Staying English keeps
+interface, code, docs and data in one language and needs no backend
+localisation layer.
+
+**The critical case gets a different shape, not just a different colour.**
+Variant C's treatment is adopted: the "never measured" case gets a larger
+card, a filled background, an icon and an explicit instruction. The
+justification is in §3 — that case was invisible for 33 days precisely
+because it looked like "just finished".
+
+### 20.2 Defects in variant B to fix while building
+
+Found by operating it at 390 px, not by reading it:
+
+- **The event row squeezes four columns onto a phone.** Device names
+  truncate to `thermostat-ka…` and reasons to `Stopped · sche…`, which makes
+  identical-model devices indistinguishable. The `title` tooltip does not
+  fire on touch, so the information is unreachable. Rebuild as two lines
+  with a fixed height rather than four columns.
+- **"BACKFILL" repeats on all 14 rows.** When every entry is reconstructed,
+  one notice above the list is more honest than fourteen repetitions — the
+  same reasoning already applied to the 328-row vendor tail. Mark the
+  exception, not the rule.
+- **Ellipsis needs a touch affordance.** Any truncated value must be
+  reachable by tapping; a tooltip is a desktop-only answer on a
+  phone-first interface.
+
+Variant A's self-criticism is also worth carrying: sort, filter and search
+on a five-device list is more control surface than the content justifies.
+Build the list component once, but mount its controls only where volume
+warrants them — the event log, the vendor tail, the foreign devices.
