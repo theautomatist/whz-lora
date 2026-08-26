@@ -197,7 +197,7 @@ records what was removed and why. The entry format is defined in
 
 ### F-0006 — Feldmess-Workflow
 
-- Status: proposed
+- Status: active
 - Summary: Gerätezentrierter Feldmess-Workflow im Cockpit: Geräte und Gateway
   per Handy platzieren und umsetzen (Relocate), je Platzierung Fotos + Notizen,
   pro Gerät ein Messprotokoll (Run) mit Historie, ein Dashboard über
@@ -228,6 +228,69 @@ records what was removed and why. The entry format is defined in
   gateway/move`); SQLite `/data/cockpit.db`; Fotos `/data/photos`; CSV je Run;
   ChirpStack-gRPC + MQTT wie F-0005.
 - Realised by: n/a (Single-Repo)
-- Linked directives / ADRs: <Issue folgt>
+- Linked directives / ADRs: Issue #10, PR #11, PR #12
 - History: 2026-07-08 added (proposed) — Phase A (Backend/Datenmodell) im Bau;
-  Phase B (zeitgesteuerte Runs + Auto-SF-Sweep) geplant.
+  Phase B (zeitgesteuerte Runs + Auto-SF-Sweep) geplant. 2026-08-26 status →
+  active — beide Phasen sind seit PR #11/#12 ausgeliefert und seit Juli im
+  Feldeinsatz; der Eintrag stand nur nie nach.
+
+### F-0007 — Messlauf-Historie
+
+- Status: active
+- Summary: Durchblätterbare Historie aller Messläufe der Kampagne, getrennt
+  von der Live-Ansicht. Liste mit Filter nach Gerät und Sortierung nach
+  Start/Ende, Detailansicht je Lauf mit Gerät links und Gateway rechts,
+  CSV-Download.
+- Problem solved: Die Live-Ansicht zeigt nur den aktuellen Zustand. Für die
+  Auswertung braucht es Zugriff auf abgeschlossene Läufe samt dem Standort,
+  den Gerät und Gateway *während* dieses Laufs hatten — der Kontext ist im
+  Run eingefroren und geht sonst mit dem nächsten Umzug verloren.
+- User-facing behavior: Umschalter im Kopf wechselt von Live auf History.
+  Zeile antippen öffnet das Detail: Standort, Fotos, PDR je Spreizfaktor,
+  RSSI/SNR-Verlauf und CSV-Download des Geräts; daneben die
+  Gateway-Platzierung dieses Laufs.
+- Acceptance criteria:
+  - Liste aller Läufe, neueste zuerst, filterbar nach Gerät, sortierbar nach
+    Start/Ende; ein laufender Lauf zählt als „jetzt".
+  - Detail zeigt beide eingefrorenen Platzierungen (Gerät und Gateway).
+  - PDR je Spreizfaktor und Zeitreihe stammen aus der Run-CSV.
+  - Zeiten in lokaler Zeitzone.
+- Dependencies: F-0005, F-0006
+- Interfaces & data: `GET /api/runs`, `/api/run/{id}/detail|series|stats|csv`;
+  Run-CSV unter `/data`.
+- Realised by: n/a (Single-Repo)
+- Linked directives / ADRs: PR #11
+- History: 2026-08-26 nachgetragen — die Funktion ist seit PR #11 (2026-07-09)
+  ausgeliefert, war aber nie in der Registry erfasst. Nachgetragen im Zuge der
+  Bestandsaufnahme fürs Cockpit-Redesign.
+
+### F-0008 — Karten- und Platzierungs-Editor
+
+- Status: active (Proof of Concept)
+- Summary: Ein hochgeladener Gebäudeplan, auf dem Geräte und Gateway als
+  Marker liegen. Position wird als Bildanteil (0..1) gespeichert, nicht als
+  Realkoordinate, und mit der Platzierung eingefroren.
+- Problem solved: Etage und Raum als Freitext beschreiben einen Messpunkt nur
+  ungenau. Ein Marker auf dem Plan macht räumliche Zusammenhänge zwischen
+  Messpunkten sichtbar, ohne GPS (das im Gebäude ohnehin nicht trägt).
+- User-facing behavior: Bild hochladen, Marker ziehen, Marker entfernen; im
+  Platzierungs-Formular optional die Position antippen; im History-Detail
+  erscheint ein Thumbnail mit der Position dieses Laufs.
+- Acceptance criteria:
+  - Bild-Upload; das zuletzt hochgeladene gilt als aktuell.
+  - Marker-Position wird an der *aktiven* Platzierung gespeichert und beim
+    Umsetzen mit ihr eingefroren.
+  - Positionen sind Bildanteile 0..1, ausdrücklich keine Realkoordinaten.
+  - Übersteht einen Neustart.
+- Dependencies: F-0005, F-0006, F-0007
+- Interfaces & data: `POST/GET /api/floorplan`, `GET /api/floorplan/{id}/image`,
+  `PUT /api/marker`, `DELETE /api/marker/{node_id}`; Tabelle `floorplan`,
+  Spalten `placement.floorplan_id|map_x|map_y`; Bilder `/data/floorplans`.
+- Realised by: n/a (Single-Repo)
+- Linked directives / ADRs: PR #12
+- History: 2026-08-26 nachgetragen — ausgeliefert mit PR #12 (2026-08-01) als
+  Phase-2-PoC, aber nie in der Registry erfasst. Offene Punkte aus der
+  Bestandsaufnahme: aktuell trägt der Plan nur 2 von 5 Knoten und kein
+  Gateway, weil frühe Positionen in der ungenutzten Tabelle `map_marker`
+  liegen; es gibt genau einen Plan für ein mehrstöckiges Gebäude. Siehe
+  `docs/developer/design/cockpit-redesign-spec.md` §14.
