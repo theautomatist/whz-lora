@@ -1191,3 +1191,25 @@ details[open].coll > summary::before { transform: rotate(90deg); }
 }
 
 #events-log-body { margin-top: 4px; }
+
+/* =================================================================
+   UTILITIES (cockpit-redesign Stage 2a, spec §6/§16) — visibility state
+   moves here instead of living in `style.display`/`style="display:none"`
+   scattered across index.html and app.js (153 such spots before this
+   stage). This is the ONLY thing this class family carries: no pixel
+   values, no colours, nothing that could make it look like a component.
+   Inline styles that carry a real computed value (bar widths, marker
+   positions, chart geometry) are unaffected and stay inline. */
+
+/* !important is deliberate and load-bearing, not a shortcut: several
+   toggled elements (#main, #sel-metrics, …) carry their own ID-selector
+   `display` rule elsewhere in this file (e.g. `#main { display: grid; }`),
+   which otherwise outranks a plain class on specificity alone regardless
+   of source order — the exact bug this class exists to prevent. Same
+   precedent as the prefers-reduced-motion override above. */
+.is-hidden { display: none !important; }
+
+/* Body-level scroll lock while a sheet/modal is open — previously
+   `document.body.style.overflow = 'hidden' | ''`, same idea as
+   .is-hidden but scoped to <body> rather than the toggled element. */
+body.scroll-locked { overflow: hidden; }

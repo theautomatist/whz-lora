@@ -248,7 +248,38 @@ Pure-logic tests run without a broker or gRPC server:
 | `test_migration.py` | `init_schema()`'s additive column migrations against a synthetic legacy DB with the real data's id-gap pattern (`placement` from 7, `run` from 4, `photo` from 2, `sqlite_sequence` higher still) — idempotent, lossless, ids untouched |
 | `test_run_stats_golden.py` | Golden test pinning `_compute_run_stats`'s per-SF PDR/RSSI/SNR numbers against a fixed CSV fixture (`fixtures/golden_run_stats.csv`) — the proof a later aggregate-storage change computes identical numbers |
 
-Frontend (`app/static/{index.html,app.js,style.css}`) has no automated
-tests — verified manually against the endpoints above (mobile-first, dark
-theme, German UI; see `docs/developer/` for the manual verification note
-if one exists for this directive).
+### Frontend
+
+`app/static/` is `index.html` + `style.css` + ES modules (no framework, no
+bundler — `<script type="module" src="/static/app.js">`, served as-is by
+the `StaticFiles` mount). `app.js` is only the bootstrap; every feature
+lives in its own file under `app/static/js/` (state, API access, SSE,
+formatting helpers, the RF panel, the Live/History/Map/Events views, the
+place/relocate sheet, …) — see the module docstrings for what each one
+owns. `app/static/package.json` (`{"type": "module"}`) exists solely so
+`node --check` accepts the `import`/`export` syntax in CI and the local
+quickcheck hook, the same two-line trick as `chirpstack/package.json` for
+the ADR plugins — the browser is told the same thing per-file via
+`type="module"` and needs no such file itself.
+
+There was no frontend test at all until `scripts/ui_smoke.py`
+(cockpit-redesign Stage 2a): a Playwright script that drives the real UI in
+a browser (mirrors `scripts/ui_audit.py`'s layout-auditing approach, same
+`--channel msedge`) and clicks through the main paths — every view switch,
+selecting a device, the event log's filters and "Load more", the RF panel,
+loading the floor plan and a placement photo — while treating any
+JavaScript error or failed HTTP response (>=400, excluding favicon) as a
+hard failure. That last part is the main point: a stale handler after a
+refactor like Stage 2a's (inline `onclick` -> ES modules) fails silently at
+the DOM layer (a button that does nothing) and loudly in the console (a
+`ReferenceError`) — this is the net that catches it.
+
+```bash
+python scripts/ui_smoke.py --url http://localhost:8000 --user admin --password <pw>
+```
+
+Exit code 0 on success, 1 with a list of failures otherwise. Requires
+`playwright` (in `requirements-dev.txt`) and a browser; run it against a
+live stack (`docker compose up -d --wait`) after any frontend change, and
+`scripts/ui_audit.py` alongside it to confirm layout metrics (page height,
+horizontal overflow, list containment) haven't regressed.

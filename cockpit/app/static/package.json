@@ -1,0 +1,5 @@
+{
+  "type": "module",
+  "private": true,
+  "description": "Marks app.js and js/*.js as ES modules so `node --check` accepts top-level `import`/`export` (cockpit-redesign Stage 2a, spec §6). The browser is told the same thing per-file via <script type=\"module\">; this file only governs the local `node --check` quickcheck hook and CI, mirroring the precedent at chirpstack/package.json. No bundler, no npm install, no node_modules — FastAPI's StaticFiles mount serves these files exactly as written."
+}

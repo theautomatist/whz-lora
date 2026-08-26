@@ -13,21 +13,19 @@
   <span id="app-title">WHZ LoRa Field Test</span>
   <!-- Top-level view switch — swaps #main (Live, unchanged) for #history-view
        (F-0007, browse past measurements) or #map-view (F-0008, drag markers
-       onto an uploaded map). See switchView() in app.js. -->
+       onto an uploaded map). See switchView() in js/view-switch.js. -->
   <div id="view-switch">
-    <button type="button" class="vsw-btn active" id="vsw-live" onclick="switchView('live')">Live</button>
-    <button type="button" class="vsw-btn" id="vsw-history" onclick="switchView('history')">History</button>
-    <button type="button" class="vsw-btn" id="vsw-map" onclick="switchView('map')">Map</button>
-    <!-- New markup (Stage 1, spec §6) — addEventListener only, no inline
-         onclick; wired in initEventsView() (app.js). -->
+    <button type="button" class="vsw-btn active" id="vsw-live">Live</button>
+    <button type="button" class="vsw-btn" id="vsw-history">History</button>
+    <button type="button" class="vsw-btn" id="vsw-map">Map</button>
     <button type="button" class="vsw-btn" id="vsw-events">Events</button>
   </div>
   <div id="status-pills">
     <span class="pill" id="pill-node">—</span>
-    <span class="pill" id="pill-run" style="display:none">No run</span>
+    <span class="pill is-hidden" id="pill-run">No run</span>
     <span id="dot-sse" title="SSE connection"></span>
   </div>
-  <button id="btn-help" onclick="openHelp()" aria-label="Help">?</button>
+  <button id="btn-help" aria-label="Help">?</button>
 </header>
 
 <!-- ===== MAIN GRID (Live) ===== -->
@@ -56,7 +54,7 @@
         <div class="hero-sub" id="hero-sub">Loading…</div>
       </div>
     </div>
-    <!-- Per-device progress breakdown — see renderHeroDeviceList() in app.js -->
+    <!-- Per-device progress breakdown — see renderHeroDeviceList() in js/hero.js -->
     <div class="hero-devices" id="hero-devices"></div>
   </section>
 
@@ -65,7 +63,7 @@
     <div class="card-title">
       <span class="ti">▦</span>
       <span>Overview</span>
-      <span class="pill" id="overview-summary" style="margin-left:auto;display:none"></span>
+      <span class="pill is-hidden" id="overview-summary" style="margin-left:auto"></span>
     </div>
     <div id="node-grid">
       <div class="hint" style="padding:20px 0;text-align:center">Loading…</div>
@@ -77,7 +75,7 @@
     <div class="card-title">
       <span class="ti">◈</span>
       <span>Selected device / gateway</span>
-      <select class="node-select" id="node-select" onchange="onNodeSelect()">
+      <select class="node-select" id="node-select">
         <option value="">— loading —</option>
       </select>
     </div>
@@ -87,13 +85,13 @@
         <div class="sel-name" id="sel-name">—</div>
         <div class="sel-eui mono" id="sel-eui"></div>
       </div>
-      <span class="pill" id="sel-run-pill" style="display:none">No run</span>
+      <span class="pill is-hidden" id="sel-run-pill">No run</span>
     </div>
 
     <!-- Reciprocity: proves itself with live signal before you do anything.
          Big RSSI + quality live ONLY here — "Last packet"/"Send interval"
          live ONLY in Device status below (F-0006 dedup pass). -->
-    <div class="signal-hero" id="signal-hero" style="display:none">
+    <div class="signal-hero is-hidden" id="signal-hero">
       <div class="signal-hero-top">
         <div class="signal-hero-value">
           <span class="signal-hero-num" id="signal-hero-rssi">—</span>
@@ -108,13 +106,13 @@
     <!-- Compact secondary line — SNR/SF only, RSSI stays hero-only; PDR now
          lives in the "PDR per SF" headline block below (per-SF, not a
          single always-empty legacy figure). -->
-    <div class="nc-metrics" id="sel-metrics" style="display:none"></div>
+    <div class="nc-metrics is-hidden" id="sel-metrics"></div>
 
     <!-- HEADLINE: delivery reliability per SF (coverage that actually
          matters — RSSI barely changes with SF, PDR does). Uplink PDR from
          the run's CSV vs. its commanded interval; Downlink PDR from
          confirmed-downlink ACKs (see GET /api/run/{id}/stats). -->
-    <div id="pdr-sf-block" style="display:none">
+    <div id="pdr-sf-block" class="is-hidden">
       <div class="pdr-sf-wrap">
         <div class="pdr-sf-hdr">
           <span class="pdr-sf-title">PDR per SF</span>
@@ -129,14 +127,14 @@
          inline SVG, live via SSE 'up' events for the selected device. The
          SAME run's chart is excluded from History below while it's active
          (renderHistory only lists past/completed runs). -->
-    <div id="sel-chart-wrap" style="display:none">
+    <div id="sel-chart-wrap" class="is-hidden">
       <div class="hist-chart" id="sel-chart"><p class="hint">Loading…</p></div>
     </div>
 
-    <div id="sel-progress" style="display:none"></div>
+    <div id="sel-progress" class="is-hidden"></div>
 
     <!-- Device status — "is the configuration working?" (Trust & visibility) -->
-    <div id="dev-status-block" style="display:none">
+    <div id="dev-status-block" class="is-hidden">
       <div class="dstatus">
         <div class="dstatus-row">
           <span class="dstatus-label">Last packet</span>
@@ -151,8 +149,8 @@
           <span class="dstatus-value" id="ds-config-dl">—</span>
         </div>
         <div class="brow" style="margin-top:10px">
-          <button class="btn btn-o" onclick="setDeviceInterval5()">Set interval to 5 min</button>
-          <button class="btn btn-o" onclick="wakeDeviceTest()">Ping device (test)</button>
+          <button class="btn btn-o" id="btn-set-interval-5">Set interval to 5 min</button>
+          <button class="btn btn-o" id="btn-wake-device">Ping device (test)</button>
         </div>
         <div class="dstatus-hint">Config only reaches the device on its next uplink (Class A) — wake a silent device briefly at the TRV.</div>
       </div>
@@ -167,14 +165,14 @@
 
     <!-- Actions -->
     <div class="brow">
-      <button class="btn btn-p" id="btn-place" onclick="onPlaceOrRelocateClick()" style="display:none">Place / Relocate</button>
-      <button class="btn btn-d" id="btn-run-stop" onclick="stopSelectedRun()" style="display:none">Stop run</button>
-      <button class="btn btn-p" id="btn-gw-move" onclick="onMoveGatewayClick()" style="display:none">Move gateway</button>
+      <button class="btn btn-p is-hidden" id="btn-place">Place / Relocate</button>
+      <button class="btn btn-d is-hidden" id="btn-run-stop">Stop run</button>
+      <button class="btn btn-p is-hidden" id="btn-gw-move">Move gateway</button>
     </div>
 
-    <div id="run-start-block" style="display:none">
+    <div id="run-start-block" class="is-hidden">
       <div class="brow" style="margin-top:4px">
-        <button class="btn btn-s" id="btn-run-start" onclick="startSweepDefault()" style="width:100%">Start run — 24 h · SF7→SF9→SF12 · 5-min interval</button>
+        <button class="btn btn-s" id="btn-run-start" style="width:100%">Start run — 24 h · SF7→SF9→SF12 · 5-min interval</button>
       </div>
       <label class="run-dltest-toggle">
         <input type="checkbox" id="run-downlink-test" checked>
@@ -203,7 +201,7 @@
             </select>
           </div>
           <div class="brow">
-            <button class="btn btn-p" onclick="startSweepCustom()">Start run (customized)</button>
+            <button class="btn btn-p" id="btn-run-start-custom">Start run (customized)</button>
           </div>
         </div>
       </details>
@@ -211,7 +209,7 @@
 
     <div class="msg" id="selected-msg"></div>
 
-    <details class="coll" id="history-details" ontoggle="onHistoryToggle(this)" style="display:none">
+    <details class="coll is-hidden" id="history-details">
       <summary>History</summary>
       <div class="db" id="history-body"><p class="hint">Loading on open.</p></div>
     </details>
@@ -326,7 +324,7 @@
         <input id="dev-joineui" type="text" placeholder="0000000000000000" maxlength="16" autocorrect="off" autocapitalize="none">
       </div>
       <div class="brow">
-        <button class="btn btn-p" onclick="registerDevice()">Register</button>
+        <button class="btn btn-p" id="btn-register-device">Register</button>
       </div>
       <div class="msg" id="dev-msg"></div>
       <p class="hint" style="margin-top:10px">Newly registered devices appear in the overview only after the cockpit is restarted (node sync runs at startup).</p>
@@ -334,7 +332,7 @@
       <hr class="sep">
       <div class="between" style="margin-bottom:8px">
         <span class="hint">Registered devices (ChirpStack)</span>
-        <button class="btn btn-g" onclick="loadDevices()">⟳ Load</button>
+        <button class="btn btn-g" id="btn-load-devices">⟳ Load</button>
       </div>
       <div style="overflow-x:auto">
         <table class="dtbl">
@@ -351,8 +349,8 @@
         <div class="db">
           <p class="hint">Load the device list above first. Sent to all registered devices.</p>
           <div class="brow">
-            <button class="btn btn-o" onclick="sendVickiKeepalive()">Set interval to 5 min</button>
-            <button class="btn btn-o" onclick="sendVickiLoopback()">Read HW/SW version</button>
+            <button class="btn btn-o" id="btn-vicki-keepalive">Set interval to 5 min</button>
+            <button class="btn btn-o" id="btn-vicki-loopback">Read HW/SW version</button>
           </div>
           <div class="msg" id="vicki-msg"></div>
         </div>
@@ -365,9 +363,9 @@
 <!-- ===== HISTORY / ANALYSIS VIEW (F-0007, Phase 1) — browse past
      measurements; hidden unless the header switch is on "History". Two
      sub-views inside: the filterable list, and the left/right run detail
-     (tap a row). See switchView()/loadHistoryList()/openHistoryDetail() in
-     app.js. ===== -->
-<div id="history-view" style="display:none">
+     (tap a row). See switchView() in js/view-switch.js and
+     loadHistoryList()/openHistoryDetail() in js/history.js. ===== -->
+<div id="history-view" class="is-hidden">
 
   <div id="history-list-view">
     <section class="card full" id="card-history-list">
@@ -377,11 +375,11 @@
       </div>
       <div class="hist-filter-row">
         <label for="hist-device-filter" class="hint">Device</label>
-        <select id="hist-device-filter" onchange="renderHistoryList()">
+        <select id="hist-device-filter">
           <option value="">All devices</option>
         </select>
         <label for="hist-sort" class="hint">Sort</label>
-        <select id="hist-sort" onchange="renderHistoryList()">
+        <select id="hist-sort">
           <option value="start_desc">Start ↓ (newest)</option>
           <option value="start_asc">Start ↑ (oldest)</option>
           <option value="end_desc">End ↓ (newest)</option>
@@ -392,10 +390,10 @@
     </section>
   </div>
 
-  <div id="history-detail-view" style="display:none">
+  <div id="history-detail-view" class="is-hidden">
     <section class="card full" id="card-history-detail">
       <div class="card-title">
-        <button type="button" class="btn btn-g" onclick="closeHistoryDetail()">← Back</button>
+        <button type="button" class="btn btn-g" id="hist-detail-back-btn">← Back</button>
         <span id="hist-detail-title">Run detail</span>
       </div>
 
@@ -442,9 +440,9 @@
      uploaded map image; hidden unless the header switch is on "Map". A
      placeholder: the first map is an isometric building view whose
      perspective distorts real coordinates — x/y are image-relative
-     fractions, not real-world positions. See switchView()/loadMapView() in
-     app.js. ===== -->
-<div id="map-view" style="display:none">
+     fractions, not real-world positions. See switchView() in
+     js/view-switch.js and loadMapView() in js/map.js. ===== -->
+<div id="map-view" class="is-hidden">
   <section class="card full" id="card-map">
     <div class="card-title">
       <span class="ti">⌖</span>
@@ -455,14 +453,14 @@
     <div id="map-empty">
       <p class="hint">No map uploaded yet. Any image works — the isometric building view for now, a real floor plan later.</p>
       <div class="brow">
-        <input type="file" id="map-upload-input" accept="image/*" style="display:none" onchange="onMapImageSelected(event)">
-        <button type="button" class="btn btn-p" onclick="document.getElementById('map-upload-input').click()">Upload map image</button>
+        <input type="file" id="map-upload-input" class="is-hidden" accept="image/*">
+        <button type="button" class="btn btn-p" id="btn-map-upload">Upload map image</button>
       </div>
       <div class="msg" id="map-upload-msg"></div>
     </div>
 
     <!-- A map is current -->
-    <div id="map-with-image" style="display:none">
+    <div id="map-with-image" class="is-hidden">
       <p class="hint">Placeholder map — marker positions are relative to the image, not real-world coordinates.</p>
 
       <div id="map-stage">
@@ -473,8 +471,8 @@
       <div class="between" style="margin-top:10px">
         <span class="hint" id="map-name"></span>
         <div class="brow" style="margin:0">
-          <input type="file" id="map-replace-input" accept="image/*" style="display:none" onchange="onMapImageSelected(event)">
-          <button type="button" class="btn btn-g" onclick="document.getElementById('map-replace-input').click()">Replace map</button>
+          <input type="file" id="map-replace-input" class="is-hidden" accept="image/*">
+          <button type="button" class="btn btn-g" id="btn-map-replace">Replace map</button>
         </div>
       </div>
 
@@ -493,8 +491,9 @@
      virtualisation, no autoscroll pill, no time grouping (spec §12). Filter
      chips are always visible, not tucked behind a toggle. Wired via
      addEventListener only — no inline onclick in this new markup (spec §6).
-     See switchView()/loadEventsLog() in app.js. ===== -->
-<div id="events-view" style="display:none">
+     See switchView() in js/view-switch.js and loadEventsLog() in
+     js/events.js. ===== -->
+<div id="events-view" class="is-hidden">
   <section class="card full" id="card-events">
     <div class="card-title">
       <span class="ti">☰</span>
@@ -518,19 +517,19 @@
     </div>
 
     <div id="events-log-body"><p class="hint">Loading…</p></div>
-    <div class="brow" id="evt-load-more-row" style="display:none">
+    <div class="brow is-hidden" id="evt-load-more-row">
       <button type="button" class="btn btn-o" id="evt-load-more">Load more</button>
     </div>
   </section>
 </div><!-- #events-view -->
 
 <!-- ===== PLACE / RELOCATE SHEET (device + gateway) ===== -->
-<div id="place-ov" class="sheet-ov" onclick="closeSheetBackdrop(event)">
+<div id="place-ov" class="sheet-ov">
   <div class="sheet-panel">
     <div class="h-handle"></div>
     <div class="h-hdr">
       <h2 id="sheet-title">Place</h2>
-      <button class="sheet-x" onclick="closeSheet()">✕</button>
+      <button class="sheet-x" id="sheet-close-btn">✕</button>
     </div>
     <div class="h-body">
 
@@ -557,11 +556,11 @@
         <div class="f" id="sheet-antenna-field">
           <label>Antenna</label>
           <div class="ant-grid">
-            <button type="button" class="abtn" id="sheet-ant-3dbi" onclick="selectSheetAntenna('3dbi')">
+            <button type="button" class="abtn" id="sheet-ant-3dbi">
               <span class="av">3 dBi</span>
               <span class="as">Short antenna</span>
             </button>
-            <button type="button" class="abtn" id="sheet-ant-12dbi" onclick="selectSheetAntenna('12dbi')">
+            <button type="button" class="abtn" id="sheet-ant-12dbi">
               <span class="av">12 dBi</span>
               <span class="as">Long antenna</span>
             </button>
@@ -571,42 +570,42 @@
         <div class="f" id="sheet-photo-field">
           <label>Photos (max. 3)</label>
           <div id="sheet-photo-thumbs" class="photo-thumbs"></div>
-          <input type="file" id="sheet-photo-upload-input" accept="image/*" multiple style="display:none" onchange="onSheetPhotoSelected(event)">
-          <input type="file" id="sheet-photo-camera-input" accept="image/*" capture="environment" style="display:none" onchange="onSheetPhotoSelected(event)">
+          <input type="file" id="sheet-photo-upload-input" class="is-hidden" accept="image/*" multiple>
+          <input type="file" id="sheet-photo-camera-input" class="is-hidden" accept="image/*" capture="environment">
           <div class="brow" id="sheet-photo-btn-row">
-            <button type="button" class="btn btn-o" id="sheet-photo-upload-btn" onclick="document.getElementById('sheet-photo-upload-input').click()">Upload photo</button>
-            <button type="button" class="btn btn-o" id="sheet-photo-camera-btn" onclick="document.getElementById('sheet-photo-camera-input').click()">Take Picture</button>
+            <button type="button" class="btn btn-o" id="sheet-photo-upload-btn">Upload photo</button>
+            <button type="button" class="btn btn-o" id="sheet-photo-camera-btn">Take Picture</button>
           </div>
-          <p class="hint" id="sheet-photo-cap-hint" style="display:none">3/3 photos</p>
+          <p class="hint is-hidden" id="sheet-photo-cap-hint">3/3 photos</p>
         </div>
 
         <!-- F-0008 — optional map position, alongside photos; hidden when
              no floorplan has been uploaded yet (Map view). See
-             loadSheetMapPosition()/onSheetMapTap() in app.js. -->
-        <div class="f" id="sheet-map-field" style="display:none">
+             loadSheetMapPosition()/onSheetMapTap() in js/sheet.js. -->
+        <div class="f is-hidden" id="sheet-map-field">
           <label>Position on floor plan <span class="hint">(optional)</span></label>
-          <div id="sheet-map-stage" onclick="onSheetMapTap(event)">
+          <div id="sheet-map-stage">
             <img id="sheet-map-image" src="" alt="Floor plan">
-            <div id="sheet-map-marker" style="display:none"></div>
+            <div id="sheet-map-marker" class="is-hidden"></div>
           </div>
           <div class="between" style="margin-top:6px">
             <span class="hint">Tap the plan to place or move the marker.</span>
-            <button type="button" class="btn btn-g" onclick="clearSheetMapPosition()">Clear</button>
+            <button type="button" class="btn btn-g" id="sheet-map-clear-btn">Clear</button>
           </div>
         </div>
 
         <div class="brow">
-          <button type="button" class="btn btn-p" id="sheet-submit-btn" onclick="submitSheet()">Save</button>
+          <button type="button" class="btn btn-p" id="sheet-submit-btn">Save</button>
         </div>
         <div class="msg" id="sheet-msg"></div>
       </div>
 
-      <div id="sheet-conflict" style="display:none">
+      <div id="sheet-conflict" class="is-hidden">
         <div class="loss-title"><span>⚠️</span><span id="sheet-conflict-title">Running measurements will be lost</span></div>
         <div id="sheet-conflict-list"></div>
         <div class="brow">
-          <button type="button" class="btn btn-o" onclick="closeSheet()">Cancel</button>
-          <button type="button" class="btn btn-d" onclick="forceGatewayMove()">Move anyway — end measurements</button>
+          <button type="button" class="btn btn-o" id="sheet-conflict-cancel-btn">Cancel</button>
+          <button type="button" class="btn btn-d" id="sheet-conflict-force-btn">Move anyway — end measurements</button>
         </div>
       </div>
 
@@ -615,7 +614,7 @@
 </div>
 
 <!-- ===== CONFIRM MODAL (generic — loss-aversion prompts) ===== -->
-<div id="confirm-ov" class="sheet-ov" onclick="closeConfirmBackdrop(event)">
+<div id="confirm-ov" class="sheet-ov">
   <div class="sheet-panel confirm-panel">
     <div class="h-handle"></div>
     <div class="confirm-body">
@@ -624,20 +623,20 @@
       <div id="confirm-message"></div>
       <div id="confirm-list"></div>
       <div class="brow confirm-actions">
-        <button class="btn btn-o" id="confirm-cancel-btn" onclick="_resolveConfirm(false)">Cancel</button>
-        <button class="btn btn-d" id="confirm-ok-btn" onclick="_resolveConfirm(true)">Confirm</button>
+        <button class="btn btn-o" id="confirm-cancel-btn">Cancel</button>
+        <button class="btn btn-d" id="confirm-ok-btn">Confirm</button>
       </div>
     </div>
   </div>
 </div>
 
 <!-- ===== HELP OVERLAY ===== -->
-<div id="help-ov" class="sheet-ov" onclick="closeHelpBdrop(event)">
+<div id="help-ov" class="sheet-ov">
   <div class="sheet-panel">
     <div class="h-handle"></div>
     <div class="h-hdr">
       <h2>Guide &amp; field-measurement workflow</h2>
-      <button class="sheet-x" onclick="closeHelp()">✕</button>
+      <button class="sheet-x" id="help-close-btn">✕</button>
     </div>
     <div class="h-body">
 
@@ -723,6 +722,6 @@
 </div><!-- #help-ov -->
 
 <div id="toast"></div>
-<script src="/static/app.js"></script>
+<script type="module" src="/static/app.js"></script>
 </body>
 </html>
