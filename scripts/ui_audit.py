@@ -9,6 +9,13 @@ plainly visible after one look and invisible in the source.
 
 So looking is now a repeatable step, not a one-off.
 
+Stage 2b (spec §7–§13/§20) replaced the header Live/History/Map/Events
+switch with a bottom tab bar (Devices/Events/Radio/Map) plus two level-2
+screens (device detail, history) reached one tap deeper. This script's view
+list and list-container inventory were updated to match — including the
+split vendor KPI/long-tail (spec §19.1/§20.2) and the new Devices landing
+list.
+
 What it measures, per view:
   * horizontal overflow (fatal on a phone) and which elements cause it
   * page height in screenfuls
@@ -33,18 +40,18 @@ import sys
 # Containers worth measuring. A list is "interesting" when its length is
 # driven by data rather than by layout.
 LIST_CONTAINERS = [
-    "rf-vendors", "rf-devices", "rf-networks", "rf-frame-log",
+    "rf-devices", "vendor-tail-list", "rf-networks", "rf-frame-log",
     "rf-sf-dist", "rf-rssi-dist", "rf-mtype-breakdown", "rf-timeline",
     "dev-list-body", "history-list-body", "events-log-body",
-    "card-dashboard", "map-unplaced-list",
+    "device-list", "map-unplaced-list",
 ]
 
-# The view switch buttons, in the order a person meets them.
+# The bottom tab bar buttons, in the order a person meets them.
 VIEWS = [
-    ("live", "#vsw-live"),
-    ("history", "#vsw-history"),
-    ("map", "#vsw-map"),
-    ("events", "#vsw-events"),
+    ("devices", '.tab-btn[data-tab="devices"]'),
+    ("events",  '.tab-btn[data-tab="events"]'),
+    ("radio",   '.tab-btn[data-tab="radio"]'),
+    ("map",     '.tab-btn[data-tab="map"]'),
 ]
 
 VIEWPORTS = {"phone": (390, 844), "desktop": (1440, 900)}
@@ -83,7 +90,14 @@ _JS_LISTS = """(ids) => ids.map(id => {
   const bounded = cs.maxHeight !== 'none' ||
                   (cs.overflowY === 'auto' || cs.overflowY === 'scroll');
   return {
-    id, present: true, visible: el.offsetParent !== null || cs.position === 'fixed',
+    // getClientRects() is empty whenever the element or any ancestor is
+    // display:none, for both HTML and SVG elements alike — unlike
+    // offsetParent, which is undefined (not null) on an SVGElement in
+    // Chromium, so `!== null` alone used to read an SVG (e.g.
+    // #rf-timeline) as "visible" even while its whole view sat behind
+    // .is-hidden on a different tab.
+    id, present: true,
+    visible: el.getClientRects().length > 0,
     items: el.children.length,
     clientH: el.clientHeight, scrollH: el.scrollHeight,
     overflowY: cs.overflowY, maxHeight: cs.maxHeight,
@@ -104,6 +118,30 @@ _JS_CONTROLS = """() => {
     chips: q('[class*=chip]'),
   };
 }"""
+
+
+def _measure(page, out_dir: str, vp_name: str, view_name: str) -> dict:
+    # Expand every <details> so collapsed content is measured too; a
+    # defect hidden behind a disclosure triangle is still a defect.
+    page.evaluate("() => document.querySelectorAll('details').forEach(d => d.open = true)")
+    # Expand the RF vendor long-tail too, same reasoning (spec §19/§20.2) —
+    # it is not a <details>, it is toggled via .is-hidden.
+    page.evaluate("""() => {
+      const t = document.getElementById('vendor-tail-toggle');
+      const w = document.getElementById('vendor-tail');
+      if (t && w && w.classList.contains('is-hidden')) t.click();
+    }""")
+    page.wait_for_timeout(1200)
+
+    overflow = page.evaluate(_JS_OVERFLOW)
+    lists = [l for l in page.evaluate(_JS_LISTS, LIST_CONTAINERS)
+             if l.get("present") and l.get("visible")]
+    controls = page.evaluate(_JS_CONTROLS)
+
+    shot = os.path.join(out_dir, f"{vp_name}-{view_name}.png")
+    page.screenshot(path=shot, full_page=True)
+
+    return {"overflow": overflow, "lists": lists, "controls": controls, "screenshot": shot}
 
 
 def audit(url: str, user: str, password: str, out_dir: str, channel: str) -> dict:
@@ -130,23 +168,31 @@ def audit(url: str, user: str, password: str, out_dir: str, channel: str) -> dic
                     if btn:
                         btn.click()
                         page.wait_for_timeout(2500)
-                    # Expand every <details> so collapsed content is measured too;
-                    # a defect hidden behind a disclosure triangle is still a defect.
-                    page.evaluate("() => document.querySelectorAll('details').forEach(d => d.open = true)")
+                    vp_report["views"][view_name] = _measure(page, out_dir, vp_name, view_name)
+
+                # Level-2 screens — reached one tap deeper from Devices, not
+                # their own tab (spec §11/§20).
+                devices_btn = page.query_selector('.tab-btn[data-tab="devices"]')
+                if devices_btn:
+                    devices_btn.click()
+                    page.wait_for_timeout(1000)
+
+                detail_card = page.query_selector("#device-list .dcard")
+                if detail_card:
+                    detail_card.click()
                     page.wait_for_timeout(1200)
+                    vp_report["views"]["detail"] = _measure(page, out_dir, vp_name, "detail")
+                    back = page.query_selector("#detail-back-btn")
+                    if back:
+                        back.click()
+                        page.wait_for_timeout(600)
 
-                    overflow = page.evaluate(_JS_OVERFLOW)
-                    lists = [l for l in page.evaluate(_JS_LISTS, LIST_CONTAINERS)
-                             if l.get("present") and l.get("visible")]
-                    controls = page.evaluate(_JS_CONTROLS)
+                history_link = page.query_selector("#btn-open-history")
+                if history_link:
+                    history_link.click()
+                    page.wait_for_timeout(1200)
+                    vp_report["views"]["history"] = _measure(page, out_dir, vp_name, "history")
 
-                    shot = os.path.join(out_dir, f"{vp_name}-{view_name}.png")
-                    page.screenshot(path=shot, full_page=True)
-
-                    vp_report["views"][view_name] = {
-                        "overflow": overflow, "lists": lists,
-                        "controls": controls, "screenshot": shot,
-                    }
                 report["viewports"][vp_name] = vp_report
                 ctx.close()
         finally:

@@ -72,6 +72,22 @@ export function fmtAgo(ms) {
   return `${h} h ago`;
 }
 
+/** Whole-days-capable age, no trailing "ago" — for the device-severity
+ * reason line (cockpit-redesign Stage 2b, spec §7/§9), which needs "33 d"
+ * for a placement/run that is genuinely weeks old, not "792 h ago" like
+ * fmtAgo/fmtDuration would produce past the 60 min mark. */
+export function fmtAgeShort(ms) {
+  if (ms == null) return '—';
+  const s = Math.max(0, Math.floor(ms / 1000));
+  if (s < 60) return 'just now';
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m} min`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h} h`;
+  const d = Math.floor(h / 24);
+  return `${d} d`;
+}
+
 /** ≥60 -> "~N min" (rounded), else "~N s"; null -> "—". Shows the actual
  * measured cadence so the operator can confirm a Vicki interval change
  * (e.g. the 5-min downlink) has really taken effect. */

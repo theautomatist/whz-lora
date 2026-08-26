@@ -1,40 +1,61 @@
-// view-switch.js — the top-level Live | History | Map | Events tab switch
-// (header). Unchanged behaviour from the old app.js — switchView() only
-// toggles `display` (via .is-hidden now, not inline style); no
-// pushState/hash/sessionStorage, same as before this stage (that is
-// cockpit-redesign Stage 4, spec §11, out of scope here). Inline onclick
-// replaced with addEventListener (Stage 2a, spec §6).
+// view-switch.js — cockpit-redesign Stage 2b (spec §11/§20): the bottom
+// tab bar (Devices · Events · Radio · Map) plus the two level-2 screens
+// reached one tap deeper (device detail, from a Devices card; measurement
+// history, from the "All measurement history" link) — replaces the old
+// header Live | History | Map | Events switch. Still only toggles
+// `.is-hidden` (via classList, not inline style), same idiom as before
+// this stage.
+//
+// Adds `history.pushState`/`popstate` (spec §11: "the Android back button
+// and iOS edge-swipe leave the app" otherwise) — a small, deliberately
+// shallow addition: it remembers which screen was open, not scroll
+// position or any open sheet's field values (spec §11 sizes that whole
+// feature at "~20 lines"; this is that feature, not more).
 import { state } from './state.js';
 import { closeHistoryDetail, loadHistoryList } from './history.js';
 import { loadMapView } from './map.js';
 import { loadEventsLog } from './events.js';
+import { loadRfEnvironment } from './rf.js';
 
-function switchView(view) {
-  if (view === state.currentView) return;
+const TOP_TABS = ['devices', 'events', 'radio', 'map'];
+const VIEW_IDS = {
+  devices: 'view-devices',
+  events:  'view-events',
+  radio:   'view-radio',
+  map:     'view-map',
+  detail:  'view-detail',
+  history: 'view-history',
+};
+
+function showView(view, opts = {}) {
+  if (!VIEW_IDS[view]) view = 'devices';
   state.currentView = view;
-  const liveBtn = document.getElementById('vsw-live');
-  const histBtn = document.getElementById('vsw-history');
-  const mapBtn = document.getElementById('vsw-map');
-  const eventsBtn = document.getElementById('vsw-events');
-  if (liveBtn) liveBtn.classList.toggle('active', view === 'live');
-  if (histBtn) histBtn.classList.toggle('active', view === 'history');
-  if (mapBtn) mapBtn.classList.toggle('active', view === 'map');
-  if (eventsBtn) eventsBtn.classList.toggle('active', view === 'events');
-  const mainEl = document.getElementById('main');
-  const histEl = document.getElementById('history-view');
-  const mapEl = document.getElementById('map-view');
-  const eventsEl = document.getElementById('events-view');
-  if (mainEl) mainEl.classList.toggle('is-hidden', view !== 'live');
-  if (histEl) histEl.classList.toggle('is-hidden', view !== 'history');
-  if (mapEl) mapEl.classList.toggle('is-hidden', view !== 'map');
-  if (eventsEl) eventsEl.classList.toggle('is-hidden', view !== 'events');
-  if (view === 'history') {
-    closeHistoryDetail(); // always land on the list, never a stale detail
-    loadHistoryList();
+
+  for (const [key, id] of Object.entries(VIEW_IDS)) {
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle('is-hidden', key !== view);
+  }
+
+  const activeTab = TOP_TABS.includes(view) ? view : 'devices';
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === activeTab));
+
+  if (!opts.fromPopState) {
+    try { history.pushState({ view }, '', location.pathname + location.search); } catch (_) { /* non-browser test harness */ }
+  }
+
+  onViewShown(view);
+}
+
+function onViewShown(view) {
+  if (view === 'events') {
+    loadEventsLog(true);
+  } else if (view === 'radio') {
+    loadRfEnvironment();
   } else if (view === 'map') {
     loadMapView();
-  } else if (view === 'events') {
-    loadEventsLog(true);
+  } else if (view === 'history') {
+    closeHistoryDetail(); // always land on the list, never a stale detail
+    loadHistoryList();
   }
 }
 
@@ -43,8 +64,28 @@ function switchView(view) {
 // ---------------------------------------------------------------------------
 
 export function initViewSwitch() {
-  document.getElementById('vsw-live').addEventListener('click', () => switchView('live'));
-  document.getElementById('vsw-history').addEventListener('click', () => switchView('history'));
-  document.getElementById('vsw-map').addEventListener('click', () => switchView('map'));
-  document.getElementById('vsw-events').addEventListener('click', () => switchView('events'));
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => showView(btn.dataset.tab));
+  });
+
+  const openHistoryBtn = document.getElementById('btn-open-history');
+  if (openHistoryBtn) openHistoryBtn.addEventListener('click', () => showView('history'));
+
+  const detailBackBtn = document.getElementById('detail-back-btn');
+  if (detailBackBtn) detailBackBtn.addEventListener('click', () => showView('devices'));
+
+  const historyBackBtn = document.getElementById('history-back-btn');
+  if (historyBackBtn) historyBackBtn.addEventListener('click', () => showView('devices'));
+
+  // Dispatched by nodes.js when a Devices card is tapped — decouples the
+  // navigation module from the device-list module (no import cycle).
+  document.addEventListener('cockpit:open-detail', () => showView('detail'));
+
+  window.addEventListener('popstate', (e) => {
+    const view = (e.state && e.state.view) || 'devices';
+    showView(view, { fromPopState: true });
+  });
+
+  try { history.replaceState({ view: 'devices' }, '', location.pathname + location.search); } catch (_) { /* non-browser test harness */ }
+  showView('devices', { fromPopState: true });
 }

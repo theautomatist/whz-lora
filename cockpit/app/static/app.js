@@ -24,11 +24,12 @@ import { initSheet } from './js/sheet.js';
 import { initHistoryView } from './js/history.js';
 import { initMapView } from './js/map.js';
 import { initEventsView } from './js/events.js';
-import { loadRfEnvironment } from './js/rf.js';
+import { loadRfEnvironment, initRfView } from './js/rf.js';
 import { loadDevices, initRegistration } from './js/registration.js';
 import { initViewSwitch } from './js/view-switch.js';
 import { initOverlays } from './js/overlays.js';
 import { initSSE } from './js/sse.js';
+import { initTheme } from './js/theme.js';
 
 // ---------------------------------------------------------------------------
 // Run-progress ticker — recomputes the progress bars/labels from
@@ -80,9 +81,9 @@ function applyInitialState(s) {
 }
 
 async function init() {
+  initTheme();
   initHeroRing();
   initOverlays();
-  initViewSwitch();
   initNodesView();
   initSelectedPanel();
   initDeviceStatus();
@@ -91,7 +92,9 @@ async function init() {
   initHistoryView();
   initMapView();
   initEventsView();
+  initRfView();
   initRegistration();
+  initViewSwitch(); // last — its initial showView() reads elements every init* above wired up
 
   try {
     const s = await apiJSON('/api/state');

@@ -2,7 +2,7 @@
 """Click through the cockpit's main paths in a real browser and fail loudly.
 
 Why this exists (cockpit-redesign Stage 2a, spec §6/§16): the frontend had
-zero automated tests before this script. Stage 2a rewrites app.js from one
+zero automated tests before this script. Stage 2a rewrote app.js from one
 file full of inline `onclick`/`onchange` handlers into ES modules — a change
 that is supposed to be invisible. The specific way that kind of refactor
 breaks is silent: once module scope replaces the global `window` functions
@@ -10,6 +10,14 @@ an inline handler called, the handler doesn't error at page load — it just
 throws a ReferenceError the moment someone taps the button, and the button
 quietly does nothing. A human clicking around would eventually notice; a
 `pytest` suite that never opens a browser never will.
+
+Stage 2b (spec §7–§13/§20) rebuilt the navigation itself — a bottom tab bar
+(Devices/Events/Radio/Map) plus two level-2 screens (device detail, opened
+from a Devices card; measurement history, opened from a link on the
+Devices tab) replacing the old header Live/History/Map/Events switch. This
+script's checks were rewritten to match: they exercise the new tab bar, the
+light/dark toggle, the RF vendor long-tail disclosure, and the event-log
+search box, alongside everything the previous stage already covered.
 
 This script is the net that catches that class of defect, and everything
 else that only shows up once the interface actually renders and runs (see
@@ -19,11 +27,19 @@ response as a hard failure, not just missing content — that is the whole
 point: a page can look fine and still be silently broken underneath.
 
 What it checks, against a running instance:
-  * every view is reachable via the tab switch and shows its lead content
-  * selecting a device fills the detail panel
-  * the event log loads; the type filter chips narrow it; "Load more" is
-    exercised when the current data actually offers a next page
-  * the RF panel renders its sections
+  * every tab (Devices/Events/Radio/Map) is reachable and shows its lead
+    content; each view carries zero horizontal overflow (spec Acceptance #3)
+  * tapping a Devices card opens the device detail screen and fills it;
+    the back button returns to Devices
+  * the "All measurement history" link opens History; its back button
+    returns to Devices
+  * the light/dark toggle flips `<html data-theme>` and persists across a
+    reload
+  * the event log loads; the search box and the type filter chips narrow
+    it; "Load more" is exercised when the current data actually offers a
+    next page
+  * the RF panel renders its sections, including the vendor KPI highlights;
+    the long-tail disclosure expands and its own search narrows it
   * the floor plan and at least one placement photo actually load
     (`naturalWidth > 0` — a broken `<img src>` still "renders", just blank)
   * zero JavaScript errors and zero failed HTTP responses (>=400, except
@@ -48,6 +64,16 @@ DEFAULT_VIEWPORT = (390, 844)  # phone — the primary field-use device (spec §
 IMAGE_LOAD_TIMEOUT_MS = 15000  # placements photos are full camera resolution
                                 # (2-4 MB, spec §19.3) — local network, but not instant
 
+TABS = ("devices", "events", "radio", "map")
+VIEW_IDS = {
+    "devices": "view-devices",
+    "events":  "view-events",
+    "radio":   "view-radio",
+    "map":     "view-map",
+    "detail":  "view-detail",
+    "history": "view-history",
+}
+
 
 def _wait_for_image_loaded(page, selector: str, timeout_ms: int = IMAGE_LOAD_TIMEOUT_MS) -> bool:
     """True once the first element matching *selector* has finished loading
@@ -68,110 +94,161 @@ def _wait_for_image_loaded(page, selector: str, timeout_ms: int = IMAGE_LOAD_TIM
         return False
 
 
-def _switch_view(page, button_id: str, view_id: str, failures: list[str],
-                  hidden_ids: tuple[str, ...] = ()) -> None:
-    """Click a tab and confirm both halves of the switch: the target view
-    appears AND every other top-level view actually disappears. The second
-    half matters on its own — a CSS specificity fight (an ID-selector
-    `display` rule outranking a plain visibility class, for instance) can
-    leave a hidden-looking element rendering underneath just fine, with no
-    JavaScript error at all. `ui_audit.py`'s page-height/overflow numbers
-    catch that after the fact; this catches it inline, in the same run
-    that also checks for JS errors."""
-    btn = page.query_selector(f"#{button_id}")
+def _check_overflow(page, view: str, failures: list[str]) -> None:
+    """scrollWidth must equal clientWidth on every view (Acceptance #3) —
+    the 34 px overflow the pre-redesign header caused on every screen."""
+    o = page.evaluate("() => ({sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth})")
+    if o["sw"] > o["cw"]:
+        failures.append(f"{view}: horizontal overflow of {o['sw'] - o['cw']}px (scrollWidth {o['sw']} > clientWidth {o['cw']})")
+
+
+def _switch_tab(page, tab: str, failures: list[str]) -> None:
+    """Click a bottom-tab-bar button and confirm both halves of the switch:
+    the target view appears AND every sibling view actually disappears —
+    a CSS specificity fight can leave a hidden-looking element rendering
+    underneath just fine, with no JavaScript error at all."""
+    btn = page.query_selector(f'.tab-btn[data-tab="{tab}"]')
     if not btn:
-        failures.append(f"view switch button #{button_id} not found")
+        failures.append(f"tab button [data-tab={tab}] not found")
         return
     btn.click()
     page.wait_for_timeout(1200)
+    view_id = VIEW_IDS[tab]
     view = page.query_selector(f"#{view_id}")
     if not view:
-        failures.append(f"view container #{view_id} not found after clicking #{button_id}")
+        failures.append(f"view container #{view_id} not found after clicking the {tab} tab")
         return
     if not view.is_visible():
-        failures.append(f"#{view_id} did not become visible after clicking #{button_id}")
-    for other_id in hidden_ids:
+        failures.append(f"#{view_id} did not become visible after clicking the {tab} tab")
+    for other_tab, other_id in VIEW_IDS.items():
+        if other_tab == tab:
+            continue
         other = page.query_selector(f"#{other_id}")
         if other and other.is_visible():
-            failures.append(f"#{other_id} is still visible after switching to #{view_id}")
+            failures.append(f"#{other_id} is still visible after switching to {tab}")
+    _check_overflow(page, tab, failures)
 
 
-def _check_live_view(page, failures: list[str]) -> None:
-    """Live is the default view — the Overview grid must already carry at
-    least one device/gateway card without any interaction."""
-    main = page.query_selector("#main")
-    if not main or not main.is_visible():
-        failures.append("Live view (#main) is not visible on initial load")
+def _check_devices_view(page, failures: list[str]) -> None:
+    """Devices is the default/landing tab — it must already carry at least
+    one device/gateway card without any interaction, sorted by
+    need-for-action (spec §7), and none of the five field nodes may be cut
+    off (Acceptance #4)."""
+    view = page.query_selector("#view-devices")
+    if not view or not view.is_visible():
+        failures.append("Devices view (#view-devices) is not visible on initial load")
         return
-    cards = page.query_selector_all("#node-grid .node-card")
+    cards = page.query_selector_all("#device-list .dcard")
     if not cards:
-        failures.append("Overview (#node-grid) shows no device/gateway cards")
-
-    # RF Environment panel — always expanded, no start/stop; every section
-    # must at least exist (spec §19: this panel is a repeat offender for
-    # "assembled from unrelated parts").
-    for rf_id in (
-        "rf-heatmap", "rf-timeline", "rf-sf-dist", "rf-rssi-dist",
-        "rf-mtype-breakdown", "rf-networks", "rf-devices", "rf-vendors",
-        "rf-frame-log", "rf-sparkline",
-    ):
-        if page.query_selector(f"#{rf_id}") is None:
-            failures.append(f"RF Environment section #{rf_id} is missing")
+        failures.append("Devices list (#device-list) shows no device/gateway cards")
+    _check_overflow(page, "devices", failures)
 
 
-def _check_device_selection(page, failures: list[str]) -> None:
-    """Tapping an Overview card must fill the 'Selected device / gateway'
-    detail panel — the core of the whole field workflow (spec §7)."""
-    card = page.query_selector("#node-grid .node-card")
+def _check_device_detail(page, failures: list[str]) -> None:
+    """Tapping a Devices card must open the device-detail screen and fill
+    it — the core of the whole field workflow (spec §7)."""
+    card = page.query_selector("#device-list .dcard")
     if not card:
-        failures.append("no Overview card to select (skipped device-selection check)")
+        failures.append("no Devices card to open (skipped device-detail check)")
         return
-    name_before = (page.query_selector("#sel-name").text_content() or "").strip()
-    card_name_el = card.query_selector(".nc-name")
+    card_name_el = card.query_selector(".dcard-name")
     card_name = (card_name_el.text_content() or "").strip() if card_name_el else ""
     card.click()
     page.wait_for_timeout(800)
+
+    detail = page.query_selector("#view-detail")
+    if not detail or not detail.is_visible():
+        failures.append("tapping a Devices card did not open #view-detail")
+        return
+    _check_overflow(page, "detail", failures)
+
     name_after = (page.query_selector("#sel-name").text_content() or "").strip()
     if not name_after or name_after == "—":
-        failures.append("selecting a device left #sel-name empty/placeholder")
+        failures.append("opening a device left #sel-name empty/placeholder")
     if card_name and name_after != card_name:
         failures.append(
-            f"selecting the '{card_name}' card did not select it "
-            f"(#sel-name reads '{name_after}', was '{name_before}')"
+            f"opening the '{card_name}' card did not select it "
+            f"(#sel-name reads '{name_after}')"
         )
     place_info = page.query_selector("#sel-place-info")
     if place_info is None or not (place_info.text_content() or "").strip():
-        failures.append("#sel-place-info is empty after selecting a device")
+        failures.append("#sel-place-info is empty after opening a device")
+
+    back = page.query_selector("#detail-back-btn")
+    if not back:
+        failures.append("#detail-back-btn not found")
+        return
+    back.click()
+    page.wait_for_timeout(600)
+    devices_view = page.query_selector("#view-devices")
+    if not devices_view or not devices_view.is_visible():
+        failures.append("the detail back button did not return to #view-devices")
+
+
+def _check_theme_toggle(page, failures: list[str]) -> None:
+    """The light/dark toggle (spec §9/§20) must flip the <html data-theme>
+    attribute and remember the choice across a reload."""
+    btn = page.query_selector("#btn-theme-toggle")
+    if not btn:
+        failures.append("#btn-theme-toggle not found")
+        return
+    before = page.evaluate("document.documentElement.getAttribute('data-theme')")
+    btn.click()
+    page.wait_for_timeout(400)
+    after = page.evaluate("document.documentElement.getAttribute('data-theme')")
+    if after == before:
+        failures.append(f"clicking the theme toggle did not change data-theme (stayed '{before}')")
+        return
+    page.reload(wait_until="networkidle")
+    page.wait_for_timeout(1500)
+    after_reload = page.evaluate("document.documentElement.getAttribute('data-theme')")
+    if after_reload != after:
+        failures.append(f"theme did not persist across reload (was '{after}', now '{after_reload}')")
+    # Leave it back on light (the product-owner-decided default) for the
+    # rest of the run, so later screenshots/checks see the default state.
+    btn2 = page.query_selector("#btn-theme-toggle")
+    if btn2 and page.evaluate("document.documentElement.getAttribute('data-theme')") != "light":
+        btn2.click()
+        page.wait_for_timeout(400)
 
 
 def _check_history_view(page, failures: list[str]) -> None:
-    _switch_view(page, "vsw-history", "history-view", failures,
-                 hidden_ids=("main", "map-view", "events-view"))
+    """"All measurement history" (a link on the Devices tab, not a tab of
+    its own — spec §11/§20) must open History and its back button must
+    return to Devices."""
+    _switch_tab(page, "devices", failures)
+    link = page.query_selector("#btn-open-history")
+    if not link:
+        failures.append("#btn-open-history not found")
+        return
+    link.click()
+    page.wait_for_timeout(1200)
+    view = page.query_selector("#view-history")
+    if not view or not view.is_visible():
+        failures.append("#btn-open-history did not open #view-history")
+        return
+    _check_overflow(page, "history", failures)
     list_view = page.query_selector("#history-list-view")
     if list_view is None or not list_view.is_visible():
         failures.append("History did not land on its list view")
-        return
     body = page.query_selector("#history-list-body")
     text = (body.text_content() or "").strip() if body else ""
     if not text:
         failures.append("#history-list-body is empty (expected rows or an empty-state hint)")
 
-
-def _check_map_view(page, failures: list[str]) -> None:
-    _switch_view(page, "vsw-map", "map-view", failures,
-                 hidden_ids=("main", "history-view", "events-view"))
-    with_image = page.query_selector("#map-with-image")
-    empty = page.query_selector("#map-empty")
-    if with_image and with_image.is_visible():
-        if not _wait_for_image_loaded(page, "#map-image"):
-            failures.append("#map-image (floor plan) never reached naturalWidth > 0")
-    elif not (empty and empty.is_visible()):
-        failures.append("Map view shows neither #map-with-image nor #map-empty")
+    back = page.query_selector("#history-back-btn")
+    if not back:
+        failures.append("#history-back-btn not found")
+        return
+    back.click()
+    page.wait_for_timeout(600)
+    devices_view = page.query_selector("#view-devices")
+    if not devices_view or not devices_view.is_visible():
+        failures.append("the history back button did not return to #view-devices")
 
 
 def _check_events_view(page, failures: list[str]) -> None:
-    _switch_view(page, "vsw-events", "events-view", failures,
-                 hidden_ids=("main", "history-view", "map-view"))
+    _switch_tab(page, "events", failures)
     body = page.query_selector("#events-log-body")
     if body is None:
         failures.append("#events-log-body not found")
@@ -180,11 +257,29 @@ def _check_events_view(page, failures: list[str]) -> None:
     if not text:
         failures.append("#events-log-body is empty (expected rows or an empty-state hint)")
 
+    # The search box (spec §12/§20.2 — "search exists nowhere" before this
+    # stage) must actually narrow the list.
+    search = page.query_selector("#evt-search")
+    if search:
+        rows_before = len(page.query_selector_all("#events-log-body .evt-row"))
+        search.fill("zzz-no-such-event-zzz")
+        page.wait_for_timeout(400)
+        rows_after_noise = len(page.query_selector_all("#events-log-body .evt-row"))
+        if rows_before and rows_after_noise != 0:
+            failures.append("searching for a nonsense string did not empty the event list")
+        search.fill("")
+        page.wait_for_timeout(400)
+        rows_after_clear = len(page.query_selector_all("#events-log-body .evt-row"))
+        if rows_after_clear != rows_before:
+            failures.append("clearing the event search did not restore the original rows")
+    else:
+        failures.append("#evt-search not found")
+
     # Filter chips must actually filter — pick a concrete type chip (not
     # "All types") if one is offered, and confirm the list re-renders. A
     # chip that silently does nothing is exactly the failure mode this
     # script exists to catch.
-    type_chips = page.query_selector_all("#evt-type-chips .evt-chip[data-evt-type]:not([data-evt-type=''])")
+    type_chips = page.query_selector_all("#evt-type-chips .chip[data-evt-type]:not([data-evt-type=''])")
     if type_chips:
         rows_before = len(page.query_selector_all("#events-log-body .evt-row"))
         type_chips[0].click()
@@ -196,8 +291,7 @@ def _check_events_view(page, failures: list[str]) -> None:
         if rows_after == rows_before and not body_text_after:
             failures.append("event-type filter produced neither rows nor an empty-state message")
 
-        # Reset via "All types".
-        all_chip = page.query_selector("#evt-type-chips .evt-chip[data-evt-type='']")
+        all_chip = page.query_selector("#evt-type-chips .chip[data-evt-type='']")
         if all_chip:
             all_chip.click()
             page.wait_for_timeout(800)
@@ -219,19 +313,143 @@ def _check_events_view(page, failures: list[str]) -> None:
         if rows_after <= rows_before:
             failures.append("'Load more' did not add any event rows")
 
+    # A truncated row must be reachable by tap (spec §20.2 — a tooltip
+    # alone is a desktop-only answer on a phone-first interface).
+    first_row = page.query_selector("#events-log-body .evt-row")
+    if first_row:
+        first_row.click()
+        page.wait_for_timeout(200)
+        if not first_row.evaluate("el => el.classList.contains('evt-row-expanded')"):
+            failures.append("tapping an event row did not expand it")
+
+
+def _check_radio_view(page, failures: list[str]) -> None:
+    _switch_tab(page, "radio", failures)
+
+    for rf_id in (
+        "rf-heatmap", "rf-timeline", "rf-sf-dist", "rf-rssi-dist",
+        "rf-mtype-breakdown", "rf-networks", "rf-devices", "vendor-highlights",
+        "rf-frame-log", "rf-sparkline",
+    ):
+        if page.query_selector(f"#{rf_id}") is None:
+            failures.append(f"Radio section #{rf_id} is missing")
+
+    # Vertical column charts (SF/RSSI distributions, product-owner addendum
+    # 2026-08-26): every non-zero bucket must actually render a bar with a
+    # real pixel height — the exact defect class flagged from the design
+    # variants, where a `<span style="width:…%">` silently stayed 0 px wide
+    # because inline elements ignore width/height. A genuine zero (SF11)
+    # must render NO bar, not a sub-pixel one.
+    # Measured in ONE page.evaluate rather than through element handles.
+    # The RF panel replaces its innerHTML on every refresh (the 30 s ticker
+    # and each SSE coex burst), so a handle taken a moment earlier can point
+    # at a detached node by the time it is measured — which reported a real
+    # 6 px bar as 0 px, and made `handle.bounding_box()` return None between
+    # a truthiness check and its subscript. A snapshot taken inside the page
+    # is atomic with respect to that re-render.
+    for chart_id in ("rf-sf-dist", "rf-rssi-dist"):
+        cols = page.evaluate(
+            """(id) => {
+              const root = document.getElementById(id);
+              if (!root) return null;
+              return [...root.querySelectorAll('.col-item')].map(col => {
+                const fill = col.querySelector('.col-bar-fill');
+                const label = col.querySelector('.col-label');
+                const value = col.querySelector('.col-value');
+                return {
+                  isZero: col.classList.contains('col-zero'),
+                  hasFill: !!fill,
+                  height: fill ? fill.getBoundingClientRect().height : 0,
+                  label: (label && label.textContent || '?').trim(),
+                  hasValue: !!(value && value.textContent && value.textContent.trim()),
+                };
+              });
+            }""",
+            chart_id,
+        )
+        if not cols:
+            failures.append(f"#{chart_id} rendered no .col-item columns")
+            continue
+        for col in cols:
+            label = col["label"]
+            if col["isZero"]:
+                if col["hasFill"]:
+                    failures.append(f"{chart_id}: zero column '{label}' still rendered a .col-bar-fill")
+            elif not col["hasFill"]:
+                failures.append(f"{chart_id}: non-zero column '{label}' rendered no .col-bar-fill")
+            elif col["height"] < 3:
+                failures.append(
+                    f"{chart_id}: column '{label}' bar height is "
+                    f"{col['height']:.1f}px (expected >= 3px floor)"
+                )
+            if not col["hasValue"]:
+                failures.append(f"{chart_id}: column '{label}' has no visible value label above the bar")
+
+    # The vendor long-tail disclosure (spec §19/§20.2) must expand and
+    # mount its own searchable list.
+    toggle = page.query_selector("#vendor-tail-toggle")
+    if toggle and toggle.is_visible():
+        toggle.click()
+        page.wait_for_timeout(600)
+        tail = page.query_selector("#vendor-tail")
+        if not tail or not tail.is_visible():
+            failures.append("the vendor 'Show more' disclosure did not reveal #vendor-tail")
+        else:
+            cells_before = len(page.query_selector_all("#lb-vendor-tail .vtail-cell"))
+            search = page.query_selector("#lb-vendor-tail input[type=search]")
+            if search:
+                search.fill("zzz-no-such-oui")
+                page.wait_for_timeout(400)
+                cells_after = len(page.query_selector_all("#lb-vendor-tail .vtail-cell"))
+                if cells_before and cells_after != 0:
+                    failures.append("searching the vendor tail for a nonsense OUI did not empty it")
+                search.fill("")
+                page.wait_for_timeout(400)
+            else:
+                failures.append("no search input found inside the vendor tail")
+    _check_overflow(page, "radio (vendor tail open)", failures)
+
+
+def _check_map_view(page, failures: list[str]) -> None:
+    _switch_tab(page, "map", failures)
+    with_image = page.query_selector("#map-with-image")
+    empty = page.query_selector("#map-empty")
+    if with_image and with_image.is_visible():
+        if not _wait_for_image_loaded(page, "#map-image"):
+            failures.append("#map-image (floor plan) never reached naturalWidth > 0")
+    elif not (empty and empty.is_visible()):
+        failures.append("Map view shows neither #map-with-image nor #map-empty")
+
 
 def _check_images_load(page, failures: list[str]) -> None:
-    """At least one real placement photo must actually load — back on Live,
-    the Overview photo strip is the cheapest place to find one without
-    depending on which device happens to be selected."""
-    _switch_view(page, "vsw-live", "main", failures,
-                 hidden_ids=("history-view", "map-view", "events-view"))
-    photo = page.query_selector("#node-grid .photo-strip img")
+    """At least one real placement photo must actually load — the device
+    detail's photo strip (spec §10 removed the small Overview-card photo
+    strip; the full-size collection now lives only in the detail screen)."""
+    _switch_tab(page, "devices", failures)
+    cards = page.query_selector_all("#device-list .dcard")
+    photo = None
+    for card in cards:
+        node_id = card.get_attribute("data-node-id")
+        if not node_id:
+            continue
+        card.click()
+        page.wait_for_timeout(600)
+        photo = page.query_selector("#sel-photos img")
+        if photo:
+            break
+        back = page.query_selector("#detail-back-btn")
+        if back:
+            back.click()
+            page.wait_for_timeout(300)
     if photo is None:
-        failures.append("no placement photo found on the Overview cards to verify loading")
+        failures.append("no placement photo found on any device's detail screen to verify loading")
         return
-    if not _wait_for_image_loaded(page, "#node-grid .photo-strip img"):
-        failures.append("Overview placement photo never reached naturalWidth > 0")
+    if not _wait_for_image_loaded(page, "#sel-photos img"):
+        failures.append("device-detail placement photo never reached naturalWidth > 0")
+    back = page.query_selector("#detail-back-btn")
+    if back:
+        back.click()
+        page.wait_for_timeout(300)
 
 
 def run(url: str, user: str, password: str, channel: str | None, viewport: tuple[int, int]) -> list[str]:
@@ -260,11 +478,13 @@ def run(url: str, user: str, password: str, channel: str | None, viewport: tuple
             page.goto(url, wait_until="networkidle")
             page.wait_for_timeout(3000)  # SSE connect + first /api/nodes render
 
-            _check_live_view(page, failures)
-            _check_device_selection(page, failures)
+            _check_devices_view(page, failures)
+            _check_device_detail(page, failures)
+            _check_theme_toggle(page, failures)
             _check_history_view(page, failures)
-            _check_map_view(page, failures)
             _check_events_view(page, failures)
+            _check_radio_view(page, failures)
+            _check_map_view(page, failures)
             _check_images_load(page, failures)
 
             ctx.close()

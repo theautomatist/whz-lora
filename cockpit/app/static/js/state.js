@@ -16,5 +16,5 @@ export const state = {
   nodesById: {},   // node.id -> node
   selectedNodeId: null,
   devMetrics: {},  // dev_eui -> { rssi, snr, sf, f_cnt, pdr, acked, downlinks_sent, dl_pdr, lastUplinkAt, intervalSeconds }
-  currentView: 'live', // 'live' | 'history' | 'map' | 'events' — see view-switch.js
+  currentView: 'devices', // 'devices' | 'events' | 'radio' | 'map' | 'detail' | 'history' — see view-switch.js
 };

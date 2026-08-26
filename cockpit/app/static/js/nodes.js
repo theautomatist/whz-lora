@@ -1,23 +1,36 @@
-// nodes.js — the Overview (device/gateway cards) and node selection:
-// GET /api/nodes, the node picker in the "Selected device / gateway" card
-// title, and the dashboard cards themselves. Unchanged behaviour from the
-// old app.js; the cards' onclick="selectNode(...)" is now event delegation
-// on the stable #node-grid container (cockpit-redesign Stage 2a, spec §6).
+// nodes.js — GET /api/nodes, the node picker inside the device-detail
+// topbar, and — cockpit-redesign Stage 2b (spec §7/§20) — the Devices
+// landing list: one card per device/gateway, sorted by computed
+// need-for-action rather than alphabetically or by raw run state. The
+// cards' click is event delegation on the stable #device-list container
+// (cockpit-redesign Stage 2a, spec §6).
 import { state } from './state.js';
 import { apiJSON } from './api.js';
-import { esc, toast, metaLineText, fmtNum, rssiClass, snrClass } from './format.js';
-import { runProgressHtml, checkCelebration } from './run.js';
+import { esc, toast } from './format.js';
+import { checkCelebration } from './run.js';
+import { computeSeverity, sortByNeed } from './severity.js';
 import { renderHero } from './hero.js';
 import { renderSelectedNode } from './selected-panel.js';
 import { refreshDeviceStatus } from './device-status.js';
 import { populateEventDeviceChips } from './events.js';
 
+let _runsByEui = {}; // eui -> runs (newest first), from GET /api/runs — see severity.js
+
 export async function loadNodes() {
   try {
-    const data = await apiJSON('/api/nodes');
-    state.nodes = data.nodes || [];
+    const [nodesData, runsData] = await Promise.all([
+      apiJSON('/api/nodes'),
+      apiJSON('/api/runs').catch(() => ({ runs: [] })), // best-effort — a stale severity read beats a broken Devices tab
+    ]);
+    state.nodes = nodesData.nodes || [];
     state.nodesById = {};
     for (const n of state.nodes) state.nodesById[n.id] = n;
+
+    _runsByEui = {};
+    for (const r of runsData.runs || []) {
+      if (!r.device || !r.device.eui) continue;
+      (_runsByEui[r.device.eui] = _runsByEui[r.device.eui] || []).push(r);
+    }
 
     if (state.selectedNodeId == null || !state.nodesById[state.selectedNodeId]) {
       const firstDevice = state.nodes.find(n => n.kind === 'device');
@@ -38,6 +51,7 @@ export async function loadNodes() {
 
 function renderNodeSelect() {
   const sel = document.getElementById('node-select');
+  if (!sel) return;
   if (!state.nodes.length) {
     sel.innerHTML = '<option value="">— no devices —</option>';
     return;
@@ -54,115 +68,94 @@ function onNodeSelect() {
   if (!isNaN(id)) selectNode(id);
 }
 
-/** Select a node. When *scroll* is true (card tap in the Overview), the
- * "Selected device / gateway" detail panel is scrolled into view. */
-export function selectNode(id, scroll = false) {
+/** Select a node and show its detail screen (cockpit-redesign Stage 2b —
+ * the device detail is now a level-2 screen, opened from a Devices card or
+ * the in-detail picker; see nav.js's openDeviceDetail()). */
+export function selectNode(id) {
   state.selectedNodeId = id;
   const sel = document.getElementById('node-select');
   if (sel) sel.value = String(id);
   renderSelectedNode();
-  renderNodeDashboard();
   refreshDeviceStatus(); // fire-and-forget — Device status (Trust & visibility)
-  if (scroll) {
-    const panel = document.getElementById('card-selected');
-    if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }
 }
 
 // ---------------------------------------------------------------------------
-// Overview — Node dashboard (device cards)
+// Devices landing list — cockpit-redesign Stage 2b (spec §7/§9/§20)
 // ---------------------------------------------------------------------------
 
 export function renderNodeDashboard() {
-  const grid = document.getElementById('node-grid');
+  const list = document.getElementById('device-list');
+  if (!list) return;
   if (!state.nodes.length) {
-    grid.innerHTML = '<div class="hint" style="padding:20px 0;text-align:center">No devices found.</div>';
+    list.innerHTML = '<div class="hint" style="padding:20px 0;text-align:center">No devices found.</div>';
     return;
   }
-  const gateways = state.nodes.filter(n => n.kind === 'gateway');
-  const devices  = state.nodes.filter(n => n.kind === 'device');
-  grid.innerHTML = gateways.map(gatewayCardHtml).join('') + devices.map(deviceCardHtml).join('');
 
-  for (const n of devices) checkCelebration(n);
+  const entries = state.nodes.map(n => Object.assign({ node: n }, computeSeverity(n, _runsByEui)));
+  const sorted = sortByNeed(entries);
 
-  const doneCount = devices.filter(n => n.last_run && n.last_run.status === 'done').length;
-  const summaryEl = document.getElementById('overview-summary');
-  if (summaryEl) {
-    summaryEl.classList.toggle('is-hidden', doneCount === 0);
-    summaryEl.textContent = doneCount > 0 ? `${doneCount} done` : '';
+  list.innerHTML = sorted.map(dcardHtml).join('');
+
+  for (const n of state.nodes) checkCelebration(n);
+
+  const badge = document.getElementById('tab-devices-badge');
+  if (badge) {
+    const attn = entries.filter(e => e.severity === 'red' || e.severity === 'amber').length;
+    badge.classList.toggle('is-hidden', attn === 0);
+    badge.textContent = attn > 0 ? String(attn) : '';
   }
 }
 
-function gatewayCardHtml(n) {
-  const loc = n.placement
-    ? `${esc(n.placement.floor || '—')} · ${esc(n.placement.room || '—')}`
-    : 'not placed';
+function criticalFlagText(node, reason) {
+  if (reason.includes('never measured')) return 'Never measured — go here first';
+  if (reason.includes('0 packets')) return 'Zero packets — check the device now';
+  return 'Needs attention now';
+}
+
+function dcardHtml(entry) {
+  const { node: n, severity, reason, meta } = entry;
+  const kindLabel = n.kind === 'gateway' ? 'Gateway' : 'Device';
+
+  if (severity === 'red') {
+    return `
+      <button class="dcard dcard-critical" id="nc-${n.id}" data-node-id="${n.id}">
+        <div class="dcard-crit-row1">
+          <span class="dcard-crit-icon" aria-hidden="true">!</span>
+          <span class="dcard-name">${esc(n.name)}</span>
+          <span class="dcard-chevron" aria-hidden="true">&rsaquo;</span>
+        </div>
+        <p class="dcard-crit-reason">${esc(reason)}</p>
+        ${meta ? `<div class="dcard-meta">${esc(meta)}</div>` : ''}
+        <span class="dcard-crit-flag">${esc(criticalFlagText(n, reason))}</span>
+      </button>`;
+  }
+
   return `
-    <div class="node-card gw-card ${n.id === state.selectedNodeId ? 'selected' : ''}" id="nc-${n.id}" data-node-id="${n.id}">
-      <div class="nc-top">
-        <span class="nc-name">${esc(n.name)}</span>
-        <span class="nc-tag">Gateway</span>
+    <button class="dcard sev-${severity}" id="nc-${n.id}" data-node-id="${n.id}">
+      <div class="dcard-head">
+        <span class="dcard-name">${esc(n.name)}</span>
+        <span class="dcard-kind">${kindLabel}</span>
       </div>
-      <div class="nc-loc">${loc}</div>
-      ${photoStripHtml(n.placement)}
-    </div>`;
+      <p class="dcard-statement">${esc(reason)}</p>
+      <div class="dcard-meta">${esc(meta)}</div>
+      <span class="dcard-chevron" aria-hidden="true">&rsaquo;</span>
+    </button>`;
 }
 
-function deviceCardHtml(n) {
-  const running = !!(n.active_run && n.active_run.status === 'running');
-  const justDone = !running && n.last_run && n.last_run.status === 'done';
-  const loc = n.placement
-    ? `${esc(n.placement.floor || '—')} · ${esc(n.placement.room || '—')}`
-    : 'not placed';
-  const m = state.devMetrics[n.eui] || {};
-  const progressRun = n.active_run || n.last_run;
-
-  const statusHtml = justDone
-    ? `<span class="nc-done">done ✓</span>`
-    : `<span class="nc-run ${running ? 'on' : ''}">${running ? '● Running' : 'no run'}</span>`;
-
-  return `
-    <div class="node-card ${running ? 'running' : ''} ${n.id === state.selectedNodeId ? 'selected' : ''}" id="nc-${n.id}" data-node-id="${n.id}">
-      <div class="nc-top">
-        <span class="nc-name">${esc(n.name)}</span>
-        ${statusHtml}
-      </div>
-      <div class="nc-loc">${loc}</div>
-      ${running ? `<div class="nc-packets">${n.active_run.packets} packets</div>` : ''}
-      <div class="nc-metrics">${nodeCardMetricsHtml(m)}</div>
-      <div class="nc-meta" id="nc-meta-${n.id}">${esc(metaLineText(m))}</div>
-      ${progressRun ? runProgressHtml(progressRun, { compact: true }) : ''}
-      ${photoStripHtml(n.placement)}
-    </div>`;
-}
-
-/** Endowment/IKEA: your own captured photos shown as a growing collection,
- * right on the overview card. */
-function photoStripHtml(placement) {
-  if (!placement || !placement.photo_ids || !placement.photo_ids.length) return '';
-  return `<div class="photo-strip">${placement.photo_ids.slice(0, 3).map(id =>
-    `<img src="/api/photo/${id}" alt="Photo" loading="lazy">`
-  ).join('')}</div>`;
-}
-
-/** RSSI / SNR / SF only, per the Overview card spec (PDR stays in the
- * "Selected device" detail panel via selMetricsHtml). */
-function nodeCardMetricsHtml(m) {
-  return `
-    <span class="${rssiClass(m.rssi)}">${fmtNum(m.rssi)}&nbsp;dBm</span>
-    <span class="${snrClass(m.snr)}">${fmtNum(m.snr)}&nbsp;dB</span>
-    <span>${m.sf != null ? 'SF' + m.sf : '—'}</span>
-  `;
-}
-
+// updateNodeCardMetrics() was Stage-2a's live RSSI/SNR/SF refresh on the
+// Overview card — cockpit-redesign Stage 2b (spec §10) removes that triple
+// from the device card (PDR-per-SF in the detail screen is the metric that
+// actually matters). sse.js's 'uplink' handler still calls this on every
+// packet; kept as a harmless no-op (no '.nc-metrics' element exists on the
+// new cards) rather than touching sse.js for a call site that already
+// degrades safely.
 export function updateNodeCardMetrics(eui) {
   const node = state.nodes.find(n => n.eui === eui);
   if (!node) return;
   const card = document.getElementById(`nc-${node.id}`);
   if (!card) return;
-  const m = state.devMetrics[eui] || {};
   const metricsEl = card.querySelector('.nc-metrics');
-  if (metricsEl) metricsEl.innerHTML = nodeCardMetricsHtml(m);
+  if (!metricsEl) return;
   card.classList.remove('flash');
   void card.offsetWidth; // reflow
   card.classList.add('flash');
@@ -173,14 +166,18 @@ export function updateNodeCardMetrics(eui) {
 // ---------------------------------------------------------------------------
 
 export function initNodesView() {
-  document.getElementById('node-select').addEventListener('change', onNodeSelect);
+  const sel = document.getElementById('node-select');
+  if (sel) sel.addEventListener('change', onNodeSelect);
 
   // Event delegation on the stable container — cards are replaced wholesale
   // on every renderNodeDashboard() call (cockpit-redesign Stage 2a, spec §6).
-  document.getElementById('node-grid').addEventListener('click', (e) => {
-    const card = e.target.closest('.node-card');
+  document.getElementById('device-list').addEventListener('click', (e) => {
+    const card = e.target.closest('.dcard');
     if (!card) return;
     const id = parseInt(card.dataset.nodeId, 10);
-    if (!isNaN(id)) selectNode(id, true);
+    if (!isNaN(id)) {
+      selectNode(id);
+      document.dispatchEvent(new CustomEvent('cockpit:open-detail', { detail: { nodeId: id } }));
+    }
   });
 }

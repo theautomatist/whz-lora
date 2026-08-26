@@ -3,10 +3,21 @@
 // gateway hears every frame in range regardless of any toggle. Fetches
 // GET /api/rf-environment (own/foreign totals, a channel×SF heatmap,
 // networks, foreign devices, vendors from joins, band busyness), throttled
-// re-fetch on SSE 'coex' events (sse.js). Unchanged behaviour from the old
-// app.js — this panel has no inline handlers to remove, only rendering.
+// re-fetch on SSE 'coex' events (sse.js).
+//
+// cockpit-redesign Stage 2b (spec §19/§20.2): the vendor list was the
+// worst offender found by actually operating the UI — 332 rows, 8885 px,
+// no cap, no search. It now splits into a handful of meaningful KPI cards
+// (joins > 1) and a collapsed long tail of single-join OUIs, reduced to
+// just the OUI (the resolved "name" column for that tail is only ever
+// "OUI <the same oui>" — showing it twice added nothing), mounted through
+// the one shared list component (list.js) with its own search + sort and
+// a capped, scrolling height. Foreign devices (53 rows) gets the same
+// component for the same reason (spec §19.1 — it is exactly the list that
+// "most needs these controls and has none").
 import { apiJSON } from './api.js';
 import { esc, fmtNum, fmtTime, ageFromUplinkAt, rssiClass } from './format.js';
+import { mountList } from './list.js';
 
 const RF_HEATMAP_CHANNELS = [0, 1, 2, 3, 4, 5, 6, 7]; // the 8 EU868 LoRa channels
 const RF_HEATMAP_SFS = [7, 8, 9, 10, 11, 12];
@@ -161,48 +172,163 @@ function renderRfNetworks(networks) {
     </div>`).join('');
 }
 
-function renderRfDevices(devices) {
-  const el = document.getElementById('rf-devices');
-  const countEl = document.getElementById('rf-device-count');
-  if (!el) return;
-  const entries = Object.entries(devices);
-  if (countEl) countEl.textContent = entries.length ? `(${entries.length})` : '';
-  if (!entries.length) { el.innerHTML = '<p class="hint">No foreign devices observed yet.</p>'; return; }
-  entries.sort((a, b) => new Date(b[1].last_seen || 0) - new Date(a[1].last_seen || 0));
-  el.innerHTML = entries.map(([devAddr, d]) => `
+function foreignRowHtml([devAddr, d]) {
+  return `
     <div class="rf-dev-row">
       <span class="mono">${esc(devAddr)}</span>
       <span class="rf-dev-net">${esc(d.network || 'other')}</span>
       <span>${d.last_sf != null ? 'SF' + d.last_sf : '—'}</span>
       <span class="${rssiClass(d.last_rssi)}">${fmtNum(d.last_rssi)}&nbsp;dBm</span>
       <span class="hint">${ageFromUplinkAt(d.last_seen)}</span>
-    </div>`).join('');
+    </div>`;
 }
 
+const FOREIGN_FILTERS = [
+  { key: 'all', test: () => true },
+  { key: 'ttn', test: ([, d]) => d.network === 'The Things Network' },
+  { key: 'private', test: ([, d]) => d.network === 'private/experimental' },
+  { key: 'other', test: ([, d]) => !d.network || (d.network !== 'The Things Network' && d.network !== 'private/experimental') },
+];
+const FOREIGN_SORTS = [
+  { label: 'Most recent', cmp: (a, b) => new Date(b[1].last_seen || 0) - new Date(a[1].last_seen || 0) },
+  { label: 'Most frames', cmp: (a, b) => (b[1].frames || 0) - (a[1].frames || 0) },
+  { label: 'Strongest signal', cmp: (a, b) => (b[1].last_rssi || -999) - (a[1].last_rssi || -999) },
+];
+
+let _foreignList = null; // mountList() handle — created once, fed via setItems() so a live
+                          // refresh never wipes out the operator's in-progress search/sort.
+
+function renderRfDevices(devices) {
+  const countEl = document.getElementById('rf-device-count');
+  const entries = Object.entries(devices);
+  if (countEl) countEl.textContent = entries.length ? `(${entries.length})` : '';
+
+  if (!_foreignList) {
+    const root = document.getElementById('lb-foreign');
+    if (!root) return;
+    _foreignList = mountList({
+      root,
+      items: entries,
+      renderRow: foreignRowHtml,
+      searchFields: ([addr, d]) => `${addr} ${d.network || ''}`,
+      filters: FOREIGN_FILTERS,
+      sorts: FOREIGN_SORTS,
+      emptyText: 'No foreign devices observed yet.',
+    });
+  } else {
+    _foreignList.setItems(entries);
+  }
+}
+
+let _vendorTailList = null; // mountList() handle — created once on first data, then fed via setItems()
+
+const VENDOR_TAIL_SORTS = [
+  { label: 'OUI A→Z', cmp: (a, b) => a.oui.localeCompare(b.oui) },
+  { label: 'OUI Z→A', cmp: (a, b) => b.oui.localeCompare(a.oui) },
+];
+
+function vendorHighlightHtml([, v]) {
+  return `
+    <div class="vcard">
+      <div class="stat-num">${v.joins.toLocaleString('en-US')}</div>
+      <div class="stat-label">joins</div>
+      <div class="vcard-name" title="${esc(v.name)}">${esc(v.name)}</div>
+    </div>`;
+}
+
+function vendorTailRowHtml(v) {
+  return `<div class="vtail-cell mono">${esc(v.oui)}</div>`;
+}
+
+/** Splits joins-from-vendors into a handful of meaningful KPI cards
+ * (> 1 join) and a collapsed, searchable/sortable long tail (exactly 1
+ * join each, reduced to just the OUI — spec §19.1/§20.2). */
 function renderRfVendors(vendors) {
-  const el = document.getElementById('rf-vendors');
-  if (!el) return;
+  const countEl = document.getElementById('vendor-count');
   const entries = Object.entries(vendors);
-  if (!entries.length) { el.innerHTML = '<p class="hint">No joins observed yet.</p>'; return; }
-  entries.sort((a, b) => b[1].joins - a[1].joins);
-  el.innerHTML = entries.map(([oui, v]) => `
-    <div class="rf-vendor-row">
-      <span>${esc(v.name)}</span>
-      <span class="hint mono">${esc(oui)}</span>
-      <span>${v.joins} join${v.joins === 1 ? '' : 's'}</span>
-    </div>`).join('');
+  if (countEl) countEl.textContent = entries.length ? `(${entries.length})` : '';
+
+  const highlights = entries.filter(([, v]) => v.joins > 1).sort((a, b) => b[1].joins - a[1].joins);
+  const tail = entries.filter(([, v]) => v.joins === 1).map(([oui]) => ({ oui }));
+
+  const highlightsEl = document.getElementById('vendor-highlights');
+  if (highlightsEl) {
+    highlightsEl.innerHTML = highlights.length
+      ? highlights.map(vendorHighlightHtml).join('')
+      : '<p class="hint">No joins observed yet.</p>';
+  }
+
+  const toggle = document.getElementById('vendor-tail-toggle');
+  const tailWrap = document.getElementById('vendor-tail');
+  const hint = document.getElementById('vendor-tail-hint');
+  if (toggle) toggle.classList.toggle('is-hidden', !tail.length);
+  if (!tail.length) { if (tailWrap) tailWrap.classList.add('is-hidden'); return; }
+
+  if (toggle && !toggle.dataset.labelled) {
+    toggle.textContent = `Show ${tail.length} more · 1 join each`;
+    toggle.dataset.labelled = '1';
+  }
+  if (hint) hint.textContent = `${tail.length} unresolved · 1 join each`;
+
+  if (!_vendorTailList) {
+    const root = document.getElementById('lb-vendor-tail');
+    if (root) {
+      _vendorTailList = mountList({
+        root,
+        items: tail,
+        renderRow: vendorTailRowHtml,
+        searchFields: (v) => v.oui,
+        sorts: VENDOR_TAIL_SORTS,
+        emptyText: 'No matching OUIs.',
+      });
+    }
+  } else {
+    _vendorTailList.setItems(tail);
+  }
 }
 
-/** Small horizontal bar row shared by the SF and RSSI distributions —
- * label · thin bar (width relative to the loudest bucket) · count. */
-function _rfDistRowsHtml(entries) {
+/** Vertical column chart shared by the SF and RSSI distributions —
+ * cockpit-redesign Stage 2b addendum (product-owner note, 2026-08-26):
+ * both are ORDERED categories, so a column shape reads as a distribution
+ * at a glance instead of a stack of rows.
+ *
+ * The real data has a brutal range (RSSI: 48,617 vs. 2 — a 24,000:1
+ * ratio). On a linear scale (kept deliberately linear — a log scale would
+ * need axis labels there is no room for on a phone) the smallest non-zero
+ * bucket would round to a sub-pixel height and read as "nothing", exactly
+ * like the genuine zero (SF11 = 0) next to it. So:
+ *   - every value > 0 gets a floor of COL_MIN_PX so "very little" stays
+ *     visually distinct from "none" (never just a CSS min-height on a 0%
+ *     bar — computed in JS against the same px scale as every other bar,
+ *     so a 3 px floor is still 3 px next to a 96 px column, not stretched)
+ *   - a genuine zero renders NO bar at all, only a baseline tick + the
+ *     label "0" — it must not look like "almost zero"
+ *   - the exact number sits above every column as text, not only in a
+ *     title tooltip (spec §20.2 — a tooltip is not a touch answer, and
+ *     the RSSI bucket of 2 is otherwise unreadable at this scale)
+ * Uses <div>, not <span>, for the bar itself, with the height computed in
+ * JS as an absolute px value (not a %) — the exact bug class the product
+ * owner flagged from the design-variant prototypes: an inline element's
+ * width/height is ignored by the box model regardless of a correct
+ * `style="width:…"`, unless it is block-level. */
+const COL_CHART_PLOT_PX = 84;
+const COL_CHART_MIN_PX = 3;
+
+function columnChartHtml(entries) {
   const max = Math.max(1, ...entries.map(([, c]) => c));
-  return entries.map(([label, c]) => `
-    <div class="rf-dist-row">
-      <span class="rf-dist-label">${esc(label)}</span>
-      <div class="rf-dist-bar-track"><div class="rf-dist-bar-fill" style="width:${c ? Math.max(4, (c / max) * 100).toFixed(0) : 0}%"></div></div>
-      <span class="rf-dist-count">${c}</span>
-    </div>`).join('');
+  return `<div class="col-chart">` + entries.map(([label, c]) => {
+    const isZero = !c;
+    const heightPx = isZero ? 0 : Math.max(COL_CHART_MIN_PX, Math.round((c / max) * COL_CHART_PLOT_PX));
+    const bar = isZero
+      ? ''
+      : `<div class="col-bar-fill" style="height:${heightPx}px"></div>`;
+    return `
+      <div class="col-item${isZero ? ' col-zero' : ''}">
+        <span class="col-value">${c.toLocaleString('en-US')}</span>
+        <div class="col-bar-track">${bar}</div>
+        <span class="col-label">${esc(label)}</span>
+      </div>`;
+  }).join('') + `</div>`;
 }
 
 function renderRfSfDistribution(sfDist) {
@@ -211,7 +337,16 @@ function renderRfSfDistribution(sfDist) {
   const entries = Object.entries(sfDist).map(([sf, c]) => [`SF${sf}`, c]);
   const total = entries.reduce((a, [, c]) => a + c, 0);
   if (!total) { el.innerHTML = '<p class="hint">No data yet.</p>'; return; }
-  el.innerHTML = _rfDistRowsHtml(entries);
+  el.innerHTML = columnChartHtml(entries);
+}
+
+/** Backend labels carry their own " dBm" suffix ("≥ -80 dBm", spec
+ * db.py:1430-1433) — dropped here since the column is too narrow for it
+ * and the section title already states the unit; shortened, not
+ * shortened-and-vaguer (spec addendum point 5: "kürze die Beschriftung,
+ * nicht die Lesbarkeit"). */
+function shortRssiLabel(label) {
+  return label.replace(/\s*dBm$/, '');
 }
 
 function renderRfRssiDistribution(buckets) {
@@ -219,7 +354,7 @@ function renderRfRssiDistribution(buckets) {
   if (!el) return;
   const total = buckets.reduce((a, b) => a + b.count, 0);
   if (!total) { el.innerHTML = '<p class="hint">No data yet.</p>'; return; }
-  el.innerHTML = _rfDistRowsHtml(buckets.map(b => [b.label, b.count]));
+  el.innerHTML = columnChartHtml(buckets.map(b => [shortRssiLabel(b.label), b.count]));
 }
 
 /** "HH:MM:SS" from a stored ts, using the same raw-substring approach as
@@ -245,4 +380,20 @@ function renderRfFrameLog(frames) {
       <span class="rf-log-sf">${f.sf != null ? 'SF' + f.sf : '—'}</span>
       <span class="rf-log-rssi ${rssiClass(f.rssi)}">${fmtNum(f.rssi)}&nbsp;dBm</span>
     </div>`).join('');
+}
+
+// ---------------------------------------------------------------------------
+// Wiring (called once from app.js) — the vendor long-tail disclosure
+// (cockpit-redesign Stage 2b, spec §19/§20.2).
+// ---------------------------------------------------------------------------
+
+export function initRfView() {
+  const toggle = document.getElementById('vendor-tail-toggle');
+  const tailWrap = document.getElementById('vendor-tail');
+  if (!toggle || !tailWrap) return;
+  toggle.addEventListener('click', () => {
+    const willShow = tailWrap.classList.contains('is-hidden');
+    tailWrap.classList.toggle('is-hidden');
+    toggle.setAttribute('aria-expanded', String(willShow));
+  });
 }

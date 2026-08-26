@@ -24,8 +24,10 @@ export function placeInfoHtml(p, opts = {}) {
     ${antennaLine}`;
 }
 
-/** Larger photo thumbnails (not the small Overview-card photoStripHtml in
- * nodes.js) — "your collection" (endowment). */
+/** Full-size photo thumbnails for the device-detail screen and History —
+ * "your collection" (endowment). The small Overview-card photo strip this
+ * comment used to distinguish itself from was removed in cockpit-redesign
+ * Stage 2b (spec §10 density cuts). */
 export function photoThumbsHtml(photoIds) {
   if (!photoIds || !photoIds.length) return '';
   return photoIds.map(id => `<div class="pthumb view"><img src="/api/photo/${id}" alt="Photo" loading="lazy"></div>`).join('');

@@ -1,76 +1,154 @@
-/* Feldtest-Cockpit — modern dark UI, mobile-first, device-centric (F-0006).
-   Self-contained: no external fonts/CDN/libs — everything inline. */
+/* Field-Test Cockpit — cockpit-redesign Stage 2b (spec §7–§13/§20).
+   Basis: design variant B ("calm cards"), the critical-card treatment from
+   variant C, light-by-default with a one-tap dark toggle. Self-contained:
+   no external fonts/CDN/libs — everything inline.
+
+   ONE system per concept, replacing the pre-Stage-2b sprawl (spec §20):
+     - buttons   — .btn (+ variants) and .chip (filter/toggle pills)
+     - cards     — .card (generic panel) and .dcard (device-list row)
+     - lists     — .list-toolbar/.list-body/.row (search+filter+sort, once)
+     - markers   — one .map-marker recipe, one touch-safe delete control
+     - spacing   — a small --space-* scale, used throughout every rule
+       authored for this stage (ported pre-existing sections keep their
+       original literal values — already a consistent 2px-multiple scale,
+       not worth the churn of a blind find-replace, see the PR notes)
+     - breakpoints — --bp-tablet (640px) / --bp-desktop (1024px), replacing
+       the previous four (480/520/720/860) with no shared logic
+   The former backward-compat alias layer (--surface/--surface-2/--surface-3/
+   --border/--danger/--success — all dead, zero references) is gone; the
+   handful of aliases that WERE referenced (--m-good/--m-warn/--m-bad) now
+   just use their canonical --good/--warn/--bad names directly.
+*/
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  /* --- core palette (tuned from the suggested tokens) --- */
-  --bg:        #0a0e14;
-  --bg-elev:   #141b26;
-  --bg-elev2:  #1b2430;
-  --bg-elev3:  #212b38;
-  --line:      #26303d;
-  --text:      #e8eef6;
-  --muted:     #8593a6;
-  --accent1:   #22d3ee;   /* cyan   */
-  --accent2:   #6366f1;   /* indigo */
-  --good:      #34d399;
-  --warn:      #fbbf24;
-  --bad:       #f87171;
-  --accent-grad: linear-gradient(135deg, var(--accent1), var(--accent2));
+  /* ---- spacing scale ---- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
 
-  /* --- backward-compat aliases (existing rules + inline styles use these) --- */
-  --surface:      var(--bg-elev);
-  --surface-2:    var(--bg-elev2);
-  --surface-3:    var(--bg-elev3);
-  --border:       var(--line);
-  --accent:       var(--accent1);
+  /* ---- breakpoint scale (documented — @media still needs literal px) ---- */
+  --bp-tablet: 640px;
+  --bp-desktop: 1024px;
+
+  /* ---- radii ---- */
+  --radius:    14px;
+  --radius-sm: 10px;
+  --radius-pill: 999px;
+
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --t-fast: .16s;
+  --t-med:  .3s;
+
+  /* ---- LIGHT palette (default) — computed contrast, spec §9/§20:
+     text/surface 17.0:1, text-muted/surface 6.7:1, text-faint/surface
+     5.1:1, red/surface 6.5:1, amber/surface 7.5:1, green/surface 6.5:1,
+     grey/surface 6.3:1, accent/surface 6.6:1 — all pass WCAG AA (4.5:1). ---- */
+  --bg:        #eef0f3;
+  --surface:   #ffffff;
+  --surface-2: #f4f5f7;
+  --surface-3: #e9ebee;
+  --line:      #e2e4e8;
+  --text:       #1c1c1e;
+  --text-muted: #5b5b62;
+  --text-faint: #6e6e75;
+  --accent:       #2454c7;
+  --accent-light: #2454c7;
+  --accent-dim:   rgba(36,84,199,.10);
+  --red:   #b3261e;
+  --amber: #7a4a00;
+  --green: #146c38;
+  --grey:  #5f5f66;
+  --info:  var(--accent);
+  --good: var(--green);
+  --warn: var(--amber);
+  --bad:  var(--red);
+  --m-ok: #1d4ed8;
+  /* RGB triplets for translucent tints (rgba(var(--x-rgb), alpha)) — used
+     instead of color-mix() so a tint never silently disappears on an
+     older mobile browser (spec §6 "offline-capable" — this stage does not
+     add a new baseline requirement). */
+  --red-rgb:   179,38,30;
+  --amber-rgb: 122,74,0;
+  --green-rgb: 20,108,56;
+  --accent-rgb: 36,84,199;
+  --m-ok-rgb:  29,78,216;
+
+  --sf7-color:  #0e7490;
+  --sf7-dim:    rgba(14,116,144,.12);
+  --sf9-color:  #b45309;
+  --sf9-dim:    rgba(180,83,9,.12);
+  --sf12-color: #4338ca;
+  --sf12-dim:   rgba(67,56,202,.12);
+  --adr-color:  var(--text-muted);
+  --adr-dim:    rgba(91,91,98,.10);
+
+  --shadow: 0 1px 2px rgba(20,23,26,.06), 0 1px 1px rgba(20,23,26,.04);
+  --glow:   0 0 0 2px var(--accent-dim), 0 0 0 1px var(--accent);
+  color-scheme: light;
+}
+
+/* ---- DARK palette — computed contrast: text/surface 14.8:1, text-muted
+   6.8:1, text-faint 5.0:1, red 6.3:1, amber 10.4:1, green 9.0:1, grey
+   5.9:1, accent/surface 9.6:1 — all pass WCAG AA. ---- */
+:root[data-theme="dark"] {
+  --bg:        #0a0e14;
+  --surface:   #141b26;
+  --surface-2: #1b2430;
+  --surface-3: #212b38;
+  --line:      #26303d;
+  --text:       #e8eef6;
+  --text-muted: #98a4b3;
+  --text-faint: #7d8ba0;
+  --accent:       #22d3ee;
   --accent-light: #67e8f9;
   --accent-dim:   rgba(34,211,238,.14);
-  --danger:       var(--bad);
-  --success:      var(--good);
-  --m-good: var(--good);
-  --m-ok:   #60a5fa;
-  --m-warn: var(--warn);
-  --m-bad:  var(--bad);
+  --red:   #f87171;
+  --amber: #fbbf24;
+  --green: #34d399;
+  --grey:  #8b98a8;
+  --info:  var(--accent);
+  --good: var(--green);
+  --warn: var(--amber);
+  --bad:  var(--red);
+  --m-ok: #60a5fa;
+  --red-rgb:   248,113,113;
+  --amber-rgb: 251,191,36;
+  --green-rgb: 52,211,153;
+  --accent-rgb: 34,211,238;
+  --m-ok-rgb:  96,165,250;
 
-  /* SF-sweep segment colours — cyan (SF7) -> amber (SF9) -> indigo (SF12),
-     also reused by the fixed-SF Phase panel for the same SF values. */
-  --sf7-color:  var(--accent1);
+  --sf7-color:  var(--accent);
   --sf7-dim:    rgba(34,211,238,.15);
   --sf9-color:  #fb923c;
   --sf9-dim:    rgba(251,146,60,.15);
-  --sf12-color: var(--accent2);
-  --sf12-dim:   rgba(99,102,241,.18);
-  --adr-color:  var(--muted);
-  --adr-dim:    rgba(133,147,166,.12);
+  --sf12-color: #818cf8;
+  --sf12-dim:   rgba(129,140,248,.18);
+  --adr-color:  var(--text-muted);
+  --adr-dim:    rgba(152,164,179,.12);
 
-  --radius:    16px;
-  --radius-sm: 10px;
-  --shadow:    0 8px 24px rgba(0,0,0,.35), 0 1px 2px rgba(0,0,0,.5);
-  --glow:      0 0 0 1px rgba(34,211,238,.35), 0 0 18px rgba(34,211,238,.22);
-  --font:      -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-
-  --t-fast: .18s;
-  --t-med:  .35s;
+  --shadow: 0 8px 24px rgba(0,0,0,.35), 0 1px 2px rgba(0,0,0,.5);
+  --glow:   0 0 0 1px var(--accent-dim), 0 0 18px var(--accent-dim);
+  color-scheme: dark;
 }
 
-html { scroll-behavior: smooth; }
+html { scroll-behavior: smooth; height: 100%; }
 
 body {
   font-family: var(--font);
   font-size: 15px;
   color: var(--text);
-  background:
-    radial-gradient(1200px 600px at 20% -10%, rgba(99,102,241,.10), transparent 60%),
-    radial-gradient(900px 500px at 100% 0%, rgba(34,211,238,.08), transparent 55%),
-    var(--bg);
-  min-height: 100vh;
+  background: var(--bg);
+  min-height: 100%;
   overflow-x: hidden;
+  transition: background var(--t-med), color var(--t-med);
 }
 
-/* Respect prefers-reduced-motion: collapse every animation/transition to
-   effectively-instant, and disable smooth scrolling. Placed early so later
-   more specific rules cannot accidentally re-enable motion. */
+button, input, select { font-family: inherit; }
+button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   *, *::before, *::after {
@@ -81,834 +159,629 @@ body {
 }
 
 /* =================================================================
-   HEADER
+   HEADER — slim, no per-selection state (spec §9/§20: that lives in the
+   device-detail topbar). Fixed set of controls that can never overflow a
+   390 px viewport regardless of content (Acceptance #3).
    ================================================================= */
 
 #app-header {
-  position: sticky;
-  top: 0;
-  z-index: 200;
-  background: rgba(20,27,38,.85);
-  -webkit-backdrop-filter: blur(10px);
-  backdrop-filter: blur(10px);
+  position: sticky; top: 0; z-index: 200;
+  background: var(--surface);
   border-bottom: 1px solid var(--line);
-  box-shadow: 0 2px 20px rgba(0,0,0,.5);
-  padding: 0 12px;
-  height: 54px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
+  padding: 0 var(--space-3);
+  height: 52px;
+  display: flex; align-items: center; gap: var(--space-2);
 }
-
 #app-title {
-  font-size: 0.85rem;
-  font-weight: 800;
-  letter-spacing: .01em;
-  background: var(--accent-grad);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  white-space: nowrap;
-  flex-shrink: 0;
+  font-size: .95rem; font-weight: 800; letter-spacing: -.01em;
+  color: var(--text); white-space: nowrap;
 }
-
-#status-pills {
-  display: flex;
-  gap: 5px;
-  align-items: center;
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-}
-
-.pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 0.70rem;
-  font-weight: 700;
-  border-radius: 999px;
-  padding: 3px 9px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 40vw;
-  border: 1px solid var(--line);
-  background: var(--bg-elev2);
-  color: var(--muted);
-  transition: color var(--t-fast), border-color var(--t-fast), background var(--t-fast), box-shadow var(--t-fast);
-}
-
-/* run pill (header + selected panel) */
-.pill.on { color: var(--bad); border-color: var(--bad); background: rgba(248,113,113,.12); }
-
-/* SSE indicator */
 #dot-sse {
-  width: 8px; height: 8px; border-radius: 50%;
+  width: 8px; height: 8px; border-radius: 50%; margin-left: var(--space-1);
   background: var(--bad); flex-shrink: 0;
   transition: background var(--t-med), box-shadow var(--t-med);
 }
-#dot-sse.ok { background: var(--good); box-shadow: 0 0 8px rgba(52,211,153,.7); }
+#dot-sse.ok { background: var(--good); box-shadow: 0 0 6px var(--accent-dim); }
 
-/* F-0007 top-level view switch (Live | History) */
-#view-switch {
-  display: flex; gap: 2px; flex-shrink: 0;
-  background: var(--bg-elev2); border: 1px solid var(--line);
-  border-radius: 999px; padding: 2px;
-}
-.vsw-btn {
-  border: none; background: transparent; color: var(--muted); cursor: pointer;
-  font-size: .68rem; font-weight: 700; padding: 5px 10px; border-radius: 999px;
-  transition: background var(--t-fast), color var(--t-fast);
-}
-.vsw-btn.active { background: var(--accent-grad); color: #0b1220; }
-
-/* help button */
-#btn-help {
+/* One icon-button recipe for every round, single-glyph control: help,
+   theme toggle, back buttons — 44 px minimum touch target (spec §10). */
+.icon-btn {
   margin-left: auto; flex-shrink: 0;
-  width: 32px; height: 32px; border-radius: 50%;
-  border: 1px solid var(--line);
-  background: var(--bg-elev2); color: var(--muted);
-  font-size: 0.95rem; font-weight: 800; cursor: pointer;
+  width: 44px; height: 44px;
+  border-radius: 50%; border: 1px solid var(--line);
+  background: var(--surface-2); color: var(--text-muted);
+  font-size: 1rem; font-weight: 700;
   display: flex; align-items: center; justify-content: center;
   transition: border-color var(--t-fast), color var(--t-fast), transform var(--t-fast);
 }
-#btn-help:hover { border-color: var(--accent1); color: var(--accent-light); }
-#btn-help:active { transform: scale(.92); }
+.icon-btn + .icon-btn { margin-left: 0; }
+.icon-btn:hover { border-color: var(--accent); color: var(--accent); }
+.icon-btn:active { transform: scale(.92); }
+.icon-btn.back-btn { margin-left: 0; margin-right: var(--space-1); border: none; background: none; font-size: 1.4rem; }
 
 /* =================================================================
-   MAIN GRID
+   SCREENS — top-level tabs (Devices/Events/Radio/Map) and the two
+   level-2 screens (Detail, History) all share this shape: a scrollable
+   body plus an optional sticky topbar/footer. Exactly one is visible at
+   a time (view-switch.js toggles .is-hidden).
    ================================================================= */
 
-#main {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 12px;
-  padding: 12px 12px 40px;
-  max-width: 980px;
-  margin: 0 auto;
+.screen {
+  display: flex; flex-direction: column;
+  min-height: calc(100vh - 52px);
+  min-height: calc(100dvh - 52px);
 }
-@media (min-width: 720px) {
-  #main { grid-template-columns: repeat(2, 1fr); }
+.screen-scroll {
+  flex: 1; min-height: 0;
+  padding: var(--space-3) var(--space-3) calc(var(--space-5) + 56px + env(safe-area-inset-bottom));
+  max-width: 720px; width: 100%; margin: 0 auto;
 }
-.full { grid-column: 1 / -1; }
+/* Device detail has its OWN fixed action bar sitting directly above the
+   tab bar (.detail-actions below) — the scroll area needs enough bottom
+   clearance for the taller of its two states (the "Start run" block, with
+   the downlink-test toggle and the "Customize" disclosure, is the tallest)
+   plus the tab bar itself, so scrolled content never hides behind either
+   fixed layer. */
+#view-detail .screen-scroll { padding-bottom: calc(320px + env(safe-area-inset-bottom)); }
+
+.topbar {
+  flex: 0 0 auto; position: sticky; top: 52px; z-index: 150;
+  display: flex; align-items: center; gap: var(--space-2);
+  min-height: 52px; padding: 0 var(--space-3);
+  background: var(--surface); border-bottom: 1px solid var(--line);
+}
+.topbar-title { font-size: .95rem; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.topbar .pill { max-width: 40vw; }
+
+/* "Switch device" quick-jump inside the detail card — an alternative to
+   going back and tapping a different Devices card. */
+.node-select {
+  margin: var(--space-2) 0 0; width: 100%; min-height: 44px;
+  background: var(--surface-2); border: 1px solid var(--line);
+  border-radius: var(--radius-sm); color: var(--text);
+  font-size: .84rem; font-weight: 600; padding: 8px 12px;
+  outline: none; transition: border-color var(--t-fast);
+}
+.node-select:focus { border-color: var(--accent); }
 
 /* =================================================================
-   CARDS
+   TAB BAR (thumb zone) — cockpit-redesign Stage 2b (spec §11/§20).
+   Replaces the header Live | History | Map | Events switch. Honours
+   env(safe-area-inset-bottom) so it never sits under a phone's
+   home-indicator gesture strip (spec §10 "Safe area").
+   ================================================================= */
+
+.tabbar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 300;
+  display: flex;
+  background: var(--surface); border-top: 1px solid var(--line);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.tab-btn {
+  flex: 1; min-height: 56px; position: relative;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  background: none; border: none; color: var(--text-faint);
+  font-size: .70rem; font-weight: 700;
+  transition: color var(--t-fast);
+}
+.tab-btn.active { color: var(--accent); }
+.tab-badge {
+  position: absolute; top: 2px; right: calc(50% - 28px);
+  min-width: 16px; height: 16px; border-radius: var(--radius-pill);
+  background: var(--red); color: #fff; font-size: .62rem; font-weight: 800;
+  display: flex; align-items: center; justify-content: center; padding: 0 4px;
+}
+
+/* =================================================================
+   CARDS — the one generic panel: a section of content on a screen.
    ================================================================= */
 
 .card {
-  background: linear-gradient(180deg, var(--bg-elev), var(--bg-elev) 60%, var(--bg-elev2));
-  border: 1px solid var(--line);
+  background: var(--surface);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
-  padding: 18px;
+  padding: var(--space-4);
+  margin-bottom: var(--space-3);
 }
+.card.full { margin-bottom: 0; }
 .card-title {
-  font-size: 0.67rem;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: .10em;
-  color: var(--muted);
-  margin-bottom: 14px;
-  padding-bottom: 12px;
+  font-size: .68rem; font-weight: 800; text-transform: uppercase; letter-spacing: .08em;
+  color: var(--text-faint);
+  margin-bottom: var(--space-3); padding-bottom: var(--space-3);
   border-bottom: 1px solid var(--line);
-  display: flex; align-items: center; gap: 7px;
-  flex-wrap: wrap;
+  display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap;
 }
-.card-title .ti { color: var(--accent-light); font-size: 1rem; }
-
-/* =================================================================
-   HERO — "Deine Messkampagne" (goal-gradient anchor, never zero)
-   ================================================================= */
-
-.hero {
-  background:
-    linear-gradient(135deg, rgba(34,211,238,.10), rgba(99,102,241,.10)),
-    linear-gradient(180deg, var(--bg-elev), var(--bg-elev2));
-  border: 1px solid rgba(34,211,238,.25);
-  box-shadow: var(--shadow), 0 0 32px rgba(99,102,241,.10);
-  padding: 18px 20px;
+.card-title .ti { color: var(--accent); font-size: 1rem; }
+/* A page-level heading sitting directly on the screen background (Events/
+   Radio/Map), not inside a bordered card — no eyebrow treatment. */
+.card-title.solo {
+  border-bottom: none; margin-bottom: var(--space-3); padding-bottom: 0;
+  text-transform: none; letter-spacing: normal; font-size: 1.05rem; font-weight: 800; color: var(--text);
 }
-.hero-inner { display: flex; align-items: center; gap: 18px; }
-
-.hero-ring-wrap { position: relative; width: 104px; height: 104px; flex-shrink: 0; }
-.hero-ring { width: 100%; height: 100%; transform: rotate(-90deg); overflow: visible; }
-.ring-track { fill: none; stroke: var(--bg-elev3); stroke-width: 10; }
-.ring-fill {
-  fill: none; stroke: url(#heroGrad); stroke-width: 10; stroke-linecap: round;
-  stroke-dasharray: 326.7; stroke-dashoffset: 326.7;
-  transition: stroke-dashoffset 1s cubic-bezier(.4,0,.2,1);
-}
-.hero-ring-label {
-  position: absolute; inset: 0;
-  display: flex; align-items: center; justify-content: center;
-  flex-direction: column;
-}
-.hero-pct {
-  font-size: 1.55rem; font-weight: 800; line-height: 1;
-  background: var(--accent-grad);
-  -webkit-background-clip: text; background-clip: text; color: transparent;
-  font-variant-numeric: tabular-nums;
-}
-
-.hero-text { min-width: 0; }
-.hero-title { font-size: 1.02rem; font-weight: 800; margin-bottom: 5px; }
-.hero-sub { font-size: .80rem; color: var(--muted); line-height: 1.5; }
-
-/* Per-device progress breakdown — compact, one thin row per device (see
-   renderHeroDeviceList in app.js). */
-.hero-devices {
-  margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line);
-  display: flex; flex-direction: column; gap: 7px;
-}
-.hdev-hdr { display: flex; justify-content: space-between; gap: 8px; font-size: .74rem; margin-bottom: 3px; }
-.hdev-name { font-weight: 700; color: var(--text); }
-.hdev-label { color: var(--muted); font-variant-numeric: tabular-nums; flex-shrink: 0; }
-.hdev-bar-track { height: 5px; border-radius: 3px; background: var(--bg-elev3); overflow: hidden; }
-.hdev-bar-fill { height: 100%; border-radius: 3px; background: var(--accent1); transition: width .6s ease; }
-.hdev-done .hdev-bar-fill { background: var(--m-good); }
-.hdev-not-placed .hdev-name, .hdev-not-placed .hdev-label { color: var(--muted); }
-
-/* =================================================================
-   COLLAPSIBLE CARD (secondary panel: Device registration)
-   <details class="card coll-card"><summary class="card-title">…</summary>
-   <div class="card-body">…</div></details>  — collapsed by default.
-   ================================================================= */
 
 .coll-card { padding: 0; }
-.coll-card > summary {
-  cursor: pointer;
-  list-style: none;
-  user-select: none;
-  padding: 16px 18px 10px;
-  margin-bottom: 0;
-}
+.coll-card > summary { cursor: pointer; list-style: none; user-select: none; padding: var(--space-4) var(--space-4) var(--space-3); margin-bottom: 0; }
 .coll-card > summary::-webkit-details-marker { display: none; }
 .coll-card > summary::before {
-  content: '▶';
-  font-size: .60rem;
-  color: var(--muted);
-  transition: transform var(--t-fast);
-  flex-shrink: 0;
-  display: inline-block;
+  content: '▶'; font-size: .58rem; color: var(--text-faint);
+  transition: transform var(--t-fast); flex-shrink: 0; display: inline-block;
 }
 .coll-card[open] > summary::before { transform: rotate(90deg); }
-.coll-card .card-body { padding: 0 18px 18px; }
+.coll-card .card-body { padding: 0 var(--space-4) var(--space-4); }
+.hero-pct-inline { margin-left: auto; font-weight: 800; color: var(--accent); text-transform: none; letter-spacing: normal; }
 
-/* =================================================================
-   NODE SELECT — compact, folded into the "Selected …" card title
-   ================================================================= */
-
-.node-select {
-  margin-left: auto;
-  background: var(--bg-elev2);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  color: var(--text);
-  font-size: .72rem;
-  font-weight: 700;
-  text-transform: none;
-  letter-spacing: normal;
-  padding: 6px 26px 6px 10px;
-  min-height: 32px;
-  max-width: 60%;
-  outline: none;
-  appearance: none;
-  -webkit-appearance: none;
-  background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2322d3ee' stroke-width='3'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 6px center;
-  background-size: 14px;
-  transition: border-color var(--t-fast);
-}
-.node-select:focus { border-color: var(--accent1); }
-
-/* =================================================================
-   SELECTED NODE PANEL
-   ================================================================= */
-
-.sel-name { font-size: 1.18rem; font-weight: 800; color: var(--text); }
-.sel-eui  { font-size: .75rem; color: var(--accent-light); margin-top: 2px; }
-
-/* --- Reciprocity: live signal shown immediately on selection --- */
-.signal-hero {
-  margin: 14px 0;
-  padding: 12px 14px;
-  background: var(--bg-elev2);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-}
-.signal-hero-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.signal-hero-value { display: flex; align-items: baseline; gap: 4px; }
-.signal-hero-num {
-  font-size: 2.05rem; font-weight: 800; line-height: 1;
-  font-variant-numeric: tabular-nums;
-  display: inline-block;
-}
-.signal-hero-unit { font-size: .78rem; color: var(--muted); font-weight: 600; }
-.signal-hero-meta { text-align: right; }
-.signal-hero-quality {
-  display: inline-block; font-size: .70rem; font-weight: 800;
-  padding: 3px 9px; border-radius: 999px;
-  text-transform: uppercase; letter-spacing: .04em;
-}
-.signal-hero-quality.m-good { background: rgba(52,211,153,.15); color: var(--good); }
-.signal-hero-quality.m-ok   { background: rgba(96,165,250,.15); color: var(--m-ok); }
-.signal-hero-quality.m-warn { background: rgba(251,191,36,.15); color: var(--warn); }
-.signal-hero-quality.m-bad  { background: rgba(248,113,113,.15); color: var(--bad); }
-
-@keyframes numRoll {
-  0%   { transform: scale(1.22); opacity: .55; }
-  100% { transform: scale(1); opacity: 1; }
-}
-.signal-hero-num.roll { animation: numRoll .45s cubic-bezier(.34,1.56,.64,1); }
-
-.place-info { margin: 12px 0; }
-.place-loc  { font-size: .95rem; font-weight: 700; color: var(--text); }
-.place-desc { font-size: .82rem; color: var(--muted); margin-top: 2px; }
-.place-note { font-size: .78rem; color: var(--muted); margin-top: 2px; font-style: italic; }
-.place-empty{ font-size: .84rem; color: var(--muted); }
-
-.photo-thumbs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
-.pthumb {
-  position: relative; width: 76px; height: 76px;
-  border-radius: var(--radius-sm); overflow: hidden;
-  border: 1px solid var(--line); background: var(--bg-elev2);
-  flex-shrink: 0;
-}
-.pthumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.pthumb-x {
-  position: absolute; top: 2px; right: 2px;
-  width: 20px; height: 20px; border-radius: 50%;
-  background: rgba(0,0,0,.65); color: #fff; border: none;
-  font-size: .85rem; line-height: 1; cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-}
-
-/* Mini photo strip on Overview cards (endowment/IKEA — "your collection") */
-.photo-strip { display: flex; gap: 4px; margin-top: 6px; }
-.photo-strip img {
-  width: 26px; height: 26px; border-radius: 6px; object-fit: cover;
-  border: 1px solid var(--line);
-}
-
-/* =================================================================
-   COLLAPSIBLE (details/summary) — nested (e.g. Vicki, History, Customize)
-   ================================================================= */
-
-.coll { border-top: 1px solid var(--line); margin-top: 12px; }
+.coll { border-top: 1px solid var(--line); margin-top: var(--space-3); }
 .coll > summary {
-  font-size: 0.78rem; font-weight: 600; color: var(--muted);
-  cursor: pointer; list-style: none;
-  display: flex; align-items: center; gap: 6px;
-  padding: 10px 0 0; user-select: none;
+  font-size: .78rem; font-weight: 600; color: var(--text-muted); cursor: pointer; list-style: none;
+  display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) 0 0; user-select: none;
+  min-height: 44px;
 }
 .coll > summary::before { content: '▶'; font-size: .58rem; transition: transform var(--t-fast); }
 details[open].coll > summary::before { transform: rotate(90deg); }
-.coll .db { padding-top: 10px; }
+.coll .db { padding-top: var(--space-2); }
+
+/* =================================================================
+   HERO — campaign progress ring (kept, collapsed by default — spec §10
+   density cuts; Tabu: nothing may disappear).
+   ================================================================= */
+
+.hero-inner { display: flex; align-items: center; gap: var(--space-4); }
+.hero-ring-wrap { position: relative; width: 88px; height: 88px; flex-shrink: 0; }
+.hero-ring { width: 100%; height: 100%; transform: rotate(-90deg); overflow: visible; }
+.ring-track { fill: none; stroke: var(--surface-3); stroke-width: 10; }
+.ring-fill {
+  fill: none; stroke: var(--accent); stroke-width: 10; stroke-linecap: round;
+  stroke-dasharray: 326.7; stroke-dashoffset: 326.7;
+  transition: stroke-dashoffset 1s cubic-bezier(.4,0,.2,1);
+}
+.hero-text { min-width: 0; }
+.hero-title { font-size: .92rem; font-weight: 800; margin-bottom: var(--space-1); }
+.hero-sub { font-size: .78rem; color: var(--text-muted); line-height: 1.5; }
+
+.hero-devices { margin-top: var(--space-3); padding-top: var(--space-3); border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: var(--space-2); }
+.hdev-hdr { display: flex; justify-content: space-between; gap: var(--space-2); font-size: .74rem; margin-bottom: 3px; }
+.hdev-name { font-weight: 700; color: var(--text); }
+.hdev-label { color: var(--text-muted); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.hdev-bar-track { height: 5px; border-radius: 3px; background: var(--surface-3); overflow: hidden; }
+.hdev-bar-fill { height: 100%; border-radius: 3px; background: var(--accent); transition: width .6s ease; }
+.hdev-done .hdev-bar-fill { background: var(--good); }
+.hdev-not-placed .hdev-name, .hdev-not-placed .hdev-label { color: var(--text-faint); }
+
+/* =================================================================
+   DEVICES LANDING LIST — cockpit-redesign Stage 2b (spec §7/§9/§10/§20).
+   The reason is the dominant line, not the device name (variant B).
+   ~107 px per card so all five field nodes fit one 390×844 screen with
+   the tab bar (Acceptance #4).
+   ================================================================= */
+
+.devices-list-hdr { margin-bottom: var(--space-2); }
+.card-list { display: flex; flex-direction: column; gap: var(--space-3); margin-bottom: var(--space-3); }
+
+.dcard {
+  position: relative; display: block; width: 100%; text-align: left;
+  background: var(--surface); border: 0; border-radius: var(--radius);
+  padding: var(--space-4) 34px var(--space-4) var(--space-4);
+  font: inherit; color: inherit; min-height: 44px;
+  box-shadow: var(--shadow);
+  transition: transform var(--t-fast);
+}
+.dcard:active { transform: scale(.99); }
+.dcard::before {
+  content: ""; position: absolute; left: 6px; top: 12px; bottom: 12px; width: 3px;
+  border-radius: 2px; background: var(--grey);
+}
+.dcard.sev-amber::before { background: var(--amber); }
+.dcard.sev-green::before { background: var(--good); }
+.dcard.sev-grey::before  { background: var(--grey); }
+.dcard.sev-info::before  { background: var(--info); }
+
+.dcard-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); padding-left: var(--space-2); }
+.dcard-name { font-size: .84rem; font-weight: 700; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.dcard-kind { flex: 0 0 auto; font-size: .60rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--text-faint); }
+.dcard-statement { margin: 6px 0 8px; padding-left: var(--space-2); font-size: 1.02rem; font-weight: 700; line-height: 1.3; }
+.sev-amber .dcard-statement { color: var(--amber); }
+.sev-green .dcard-statement { color: var(--good); }
+.sev-grey  .dcard-statement { color: var(--grey); }
+.sev-info  .dcard-statement { color: var(--info); }
+.dcard-meta { padding-left: var(--space-2); font-size: .74rem; color: var(--text-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dcard-chevron { position: absolute; right: var(--space-3); top: 50%; transform: translateY(-50%); color: var(--text-faint); font-size: 1.1rem; }
+
+/* The critical card (red — "never measured"/"zero packets"): a different
+   shape, not just a different border colour (variant C, adopted per
+   product-owner decision, spec §20/§20.1). It was invisible for 33 days
+   precisely because it looked like "just finished". */
+.dcard-critical {
+  padding: var(--space-4);
+  background: rgba(var(--red-rgb), .08);
+  border-left: 5px solid var(--red);
+  min-height: 44px;
+}
+.dcard-crit-row1 { display: flex; align-items: center; gap: var(--space-2); }
+.dcard-crit-icon {
+  width: 30px; height: 30px; min-width: 30px; border-radius: 50%;
+  background: var(--red); color: #fff; font-weight: 800; font-size: 1rem;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.dcard-critical .dcard-name { font-size: .95rem; }
+.dcard-critical .dcard-chevron { position: static; transform: none; margin-left: auto; }
+.dcard-crit-reason { margin: var(--space-2) 0 4px; font-size: 1rem; font-weight: 800; color: var(--red); line-height: 1.3; }
+.dcard-crit-flag {
+  display: inline-block; margin-top: var(--space-2);
+  background: var(--red); color: #fff; font-size: .70rem; font-weight: 700;
+  padding: 4px 10px; border-radius: var(--radius-pill); letter-spacing: .01em;
+}
 
 /* =================================================================
    FORMS
    ================================================================= */
 
-.f {
-  display: flex; flex-direction: column;
-  gap: 4px; margin-bottom: 10px;
-}
-.f label {
-  font-size: 0.69rem; font-weight: 700;
-  color: var(--muted); text-transform: uppercase; letter-spacing: .07em;
-}
+.f { display: flex; flex-direction: column; gap: var(--space-1); margin-bottom: var(--space-2); }
+.f label { font-size: .69rem; font-weight: 700; color: var(--text-faint); text-transform: uppercase; letter-spacing: .07em; }
 .f input, .f select {
-  background: var(--bg-elev2); border: 1px solid var(--line);
+  background: var(--surface-2); border: 1px solid var(--line);
   border-radius: var(--radius-sm); color: var(--text);
-  font-size: 0.90rem; padding: 9px 10px; width: 100%;
+  font-size: .90rem; padding: 9px 10px; width: 100%;
   outline: none; min-height: 44px; transition: border-color var(--t-fast), box-shadow var(--t-fast);
 }
-.f input:focus, .f select:focus { border-color: var(--accent1); box-shadow: 0 0 0 3px rgba(34,211,238,.15); }
-.f2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.f input:focus, .f select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
+.f2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); }
+
+/* Generic text search — ONE recipe, used by the event log and every RF
+   list (spec §12/§19/§20.2: "search exists nowhere" before this stage). */
+.search-input {
+  width: 100%; min-height: 44px; border-radius: var(--radius-sm);
+  border: 1px solid var(--line); background: var(--surface);
+  padding: 0 var(--space-3); font-size: .90rem; color: var(--text);
+  margin-bottom: var(--space-2); -webkit-appearance: none; appearance: none;
+}
+.search-input::placeholder { color: var(--text-faint); }
+.search-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
+/* Remove the native WebKit "clear" affordance's odd default sizing so the
+   built-in x still lands inside the same 44 px control. */
+.search-input::-webkit-search-cancel-button { margin-right: 2px; }
 
 /* =================================================================
-   BUTTONS
+   BUTTONS — one system: .btn (+ colour variant) and .chip (filter/toggle
+   pill). 44 px minimum, .btn-primary 56 px (spec §10 touch targets).
    ================================================================= */
 
 .btn {
-  display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--space-1);
   padding: 11px 16px; border-radius: var(--radius-sm);
   border: 1px solid transparent; cursor: pointer;
-  font-size: 0.86rem; font-weight: 700; min-height: 46px;
+  font-size: .86rem; font-weight: 700; min-height: 44px;
   transition: opacity var(--t-fast), background var(--t-fast), border-color var(--t-fast), color var(--t-fast), transform var(--t-fast), box-shadow var(--t-fast);
   white-space: nowrap; text-decoration: none;
 }
-.btn:disabled { opacity: .36; cursor: not-allowed; }
+.btn:disabled { opacity: .4; cursor: not-allowed; }
 .btn:active:not(:disabled) { transform: scale(.97); }
 
-.btn-p { background: var(--accent-grad); color: #06131a; }
-.btn-p:hover:not(:disabled) { box-shadow: 0 4px 18px rgba(34,211,238,.35); }
-
-.btn-d { background: var(--bad); color: #fff; }
-.btn-d:hover:not(:disabled) { background: #ef4444; }
-
-.btn-s { background: linear-gradient(135deg, #10b981, #34d399); color: #052e1f; }
-.btn-s:hover:not(:disabled) { box-shadow: 0 4px 18px rgba(52,211,153,.35); }
-
+.btn-p { background: var(--accent); color: #fff; }
+.btn-p:hover:not(:disabled) { box-shadow: 0 4px 14px var(--accent-dim); }
+.btn-d { background: var(--red); color: #fff; }
+.btn-d:hover:not(:disabled) { opacity: .92; }
+.btn-s { background: var(--green); color: #fff; }
+.btn-s:hover:not(:disabled) { opacity: .92; }
 .btn-o { background: transparent; border-color: var(--line); color: var(--text); }
-.btn-o:hover:not(:disabled) { border-color: var(--accent-light); color: var(--accent-light); }
-
-.btn-g { background: transparent; border: none; color: var(--muted); font-size: .80rem; padding: 4px 8px; min-height: 0; font-weight: 600; }
+.btn-o:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.btn-g { background: transparent; border: none; color: var(--text-muted); font-size: .80rem; padding: 4px 8px; min-height: 32px; font-weight: 600; }
 .btn-g:hover { color: var(--text); }
 
-.brow { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+/* Primary call-to-action — full width, 56 px (spec §10: "56 px for
+   primary actions"). */
+.btn-primary {
+  width: 100%; min-height: 56px; font-size: 1rem; border-radius: var(--radius);
+  white-space: normal; line-height: 1.3; text-align: center; padding: 10px 16px;
+}
+
+.btn-row { display: flex; gap: var(--space-2); }
+.btn-row .btn { flex: 1; }
+.brow { display: flex; gap: var(--space-2); flex-wrap: wrap; margin-top: var(--space-2); }
+
+/* Filter/toggle pill — event-type/device chips, RF network chips. Same
+   44 px minimum as every other control. */
+.chip-row { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: 0 0 var(--space-2); }
+.chip, .map-unplaced-chip {
+  display: inline-flex; align-items: center; gap: var(--space-1);
+  min-height: 44px; padding: 0 var(--space-3);
+  border: 1px solid var(--line); border-radius: var(--radius-pill);
+  background: var(--surface); color: var(--text-muted);
+  font-size: .74rem; font-weight: 700; cursor: pointer;
+  transition: background var(--t-fast), color var(--t-fast), border-color var(--t-fast);
+}
+.chip:hover, .map-unplaced-chip:hover { border-color: var(--accent); color: var(--accent); }
+.chip.active { background: var(--accent); color: #fff; border-color: transparent; }
+.map-unplaced-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+.map-unplaced-dot.gw { background: var(--sf12-color); }
 
 /* =================================================================
    ANTENNA TOGGLE (reused in the placement sheet)
    ================================================================= */
 
-.ant-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 6px; }
+.ant-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); margin-bottom: var(--space-1); }
 .abtn {
-  display: flex; flex-direction: column; align-items: center;
-  justify-content: center; gap: 3px; padding: 16px 8px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  padding: var(--space-4) var(--space-2);
   border: 2px solid var(--line); border-radius: var(--radius-sm);
-  background: var(--bg-elev2); cursor: pointer; min-height: 74px;
+  background: var(--surface-2); cursor: pointer; min-height: 74px;
   transition: border-color var(--t-fast), background var(--t-fast), transform var(--t-fast);
 }
-.abtn .av { font-size: 1.25rem; font-weight: 800; color: var(--text); transition: color var(--t-fast); }
-.abtn .as { font-size: 0.70rem; color: var(--muted); }
-.abtn.active { border-color: var(--accent1); background: var(--accent-dim); }
-.abtn.active .av { color: var(--accent-light); }
+.abtn .av { font-size: 1.2rem; font-weight: 800; color: var(--text); transition: color var(--t-fast); }
+.abtn .as { font-size: .70rem; color: var(--text-muted); }
+.abtn.active { border-color: var(--accent); background: var(--accent-dim); }
+.abtn.active .av { color: var(--accent); }
 .abtn:active { transform: scale(.97); }
 
 /* =================================================================
-   DASHBOARD — NODE CARDS (Overview)
+   SIGNAL HERO / PLACEMENT / PHOTOS — device-detail screen
    ================================================================= */
 
-#node-grid {
-  display: grid; grid-template-columns: 1fr; gap: 10px;
-}
-@media (min-width: 520px) { #node-grid { grid-template-columns: repeat(2, 1fr); } }
-@media (min-width: 860px) { #node-grid { grid-template-columns: repeat(3, 1fr); } }
+.sel-name { font-size: 1.1rem; font-weight: 800; color: var(--text); }
+.sel-eui  { font-size: .74rem; color: var(--accent-light); margin-top: 2px; }
 
-.node-card {
-  position: relative;
-  background: var(--bg-elev2); border: 1px solid var(--line);
-  border-radius: var(--radius-sm); padding: 13px;
-  cursor: pointer;
-  transition: border-color var(--t-med), box-shadow var(--t-med), transform var(--t-fast);
-}
-.node-card:active { transform: scale(.98); }
-.node-card.selected { border-color: var(--accent-light); box-shadow: var(--glow); }
-.node-card.running   { border-color: var(--bad); }
-.node-card.flash { animation: card-flash .7s ease-out forwards, card-pulse .4s ease-out; }
-@keyframes card-flash {
-  0%   { border-color: var(--accent-light); box-shadow: var(--glow); }
-  100% { border-color: var(--line); box-shadow: none; }
-}
-@keyframes card-pulse {
-  0%  { transform: scale(1); }
-  35% { transform: scale(1.018); }
-  100%{ transform: scale(1); }
-}
+.signal-hero { margin: var(--space-4) 0; padding: var(--space-3) var(--space-4); background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius-sm); }
+.signal-hero-top { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
+.signal-hero-value { display: flex; align-items: baseline; gap: 4px; }
+.signal-hero-num { font-size: 2rem; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; display: inline-block; }
+.signal-hero-unit { font-size: .78rem; color: var(--text-muted); font-weight: 600; }
+.signal-hero-meta { text-align: right; }
+.signal-hero-quality { display: inline-block; font-size: .68rem; font-weight: 800; padding: 3px 9px; border-radius: var(--radius-pill); text-transform: uppercase; letter-spacing: .04em; }
+.signal-hero-quality.m-good { background: rgba(var(--green-rgb), .16); color: var(--good); }
+.signal-hero-quality.m-ok   { background: rgba(var(--m-ok-rgb), .16); color: var(--m-ok); }
+.signal-hero-quality.m-warn { background: rgba(var(--amber-rgb), .16); color: var(--warn); }
+.signal-hero-quality.m-bad  { background: rgba(var(--red-rgb), .16); color: var(--bad); }
 
-/* One-shot "fertig ✓" celebration */
-@keyframes celebrate-pop {
-  0%   { transform: scale(1); }
-  45%  { transform: scale(1.14); }
-  70%  { transform: scale(.96); }
-  100% { transform: scale(1); }
-}
-.celebrate { animation: celebrate-pop .6s cubic-bezier(.34,1.56,.64,1); }
-@keyframes celebrate-glow-pulse {
-  0%   { box-shadow: 0 0 0 0 rgba(52,211,153,.55); }
-  70%  { box-shadow: 0 0 0 20px rgba(52,211,153,0); }
-  100% { box-shadow: 0 0 0 0 rgba(52,211,153,0); }
-}
-.celebrate-glow { animation: celebrate-glow-pulse 1.1s ease-out; }
+@keyframes numRoll { 0% { transform: scale(1.2); opacity: .55; } 100% { transform: scale(1); opacity: 1; } }
+.signal-hero-num.roll { animation: numRoll .45s cubic-bezier(.34,1.56,.64,1); }
 
-.nc-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 6px; margin-bottom: 6px; }
-.nc-name { font-size: .92rem; font-weight: 700; color: var(--text); }
-.nc-run  { font-size: .66rem; font-weight: 700; color: var(--muted); white-space: nowrap; }
-.nc-run.on { color: var(--bad); }
-.nc-done {
-  font-size: .64rem; font-weight: 800; color: var(--good); white-space: nowrap;
-  background: rgba(52,211,153,.14); border-radius: 999px; padding: 2px 8px;
-  display: inline-block;
-}
-.nc-loc { font-size: .78rem; color: var(--muted); margin-bottom: 4px; }
-.nc-packets { font-size: .72rem; color: var(--accent-light); margin-bottom: 8px; font-variant-numeric: tabular-nums; }
-.nc-metrics { display: flex; gap: 10px; flex-wrap: wrap; font-size: .74rem; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--muted); }
+.place-info { margin: var(--space-3) 0; }
+.place-loc  { font-size: .92rem; font-weight: 700; color: var(--text); }
+.place-desc { font-size: .82rem; color: var(--text-muted); margin-top: 2px; }
+.place-note { font-size: .78rem; color: var(--text-muted); margin-top: 2px; font-style: italic; }
+.place-empty{ font-size: .84rem; color: var(--text-faint); }
 
-/* Letztes Paket / Sendeintervall — small muted metadata line on each card */
-.nc-meta {
-  font-size: .66rem; color: var(--muted); margin-top: 5px;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-
-/* Gateway card — same base as .node-card, distinct accent + a small tag */
-.node-card.gw-card { border-color: rgba(34,211,238,.4); background: linear-gradient(135deg, rgba(34,211,238,.08), rgba(99,102,241,.08)); }
-.nc-tag {
-  font-size: .60rem; font-weight: 800; letter-spacing: .06em;
-  color: var(--accent-light); background: var(--bg-elev);
-  border: 1px solid var(--accent1); border-radius: 4px; padding: 2px 6px;
-  white-space: nowrap; flex-shrink: 0;
+.photo-thumbs { display: flex; gap: var(--space-2); flex-wrap: wrap; margin-bottom: var(--space-2); }
+.pthumb { position: relative; width: 72px; height: 72px; border-radius: var(--radius-sm); overflow: hidden; border: 1px solid var(--line); background: var(--surface-2); flex-shrink: 0; }
+.pthumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pthumb-x {
+  position: absolute; top: -6px; right: -6px;
+  width: 26px; height: 26px; border-radius: 50%;
+  background: var(--red); color: #fff; border: 2px solid var(--surface); padding: 0;
+  font-size: .85rem; line-height: 1; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
 }
 
 /* =================================================================
-   SF-SWEEP TIMELINE — glowing segmented bar (wow factor + anchoring)
+   COMPACT METRICS / PDR-per-SF / DEVICE STATUS
    ================================================================= */
 
-.sweep-timeline { display: flex; gap: 4px; margin-top: 10px; }
-.sweep-seg { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
-.sweep-seg-track {
-  height: 6px; border-radius: 3px; background: var(--bg-elev3);
-  overflow: hidden; position: relative;
-}
-.sweep-seg-fill {
-  height: 100%; width: 0%; border-radius: 3px;
-  background: var(--muted);
-  transition: width .8s cubic-bezier(.4,0,.2,1);
-}
-.sweep-seg.done .sweep-seg-fill    { background: var(--good); }
-.sweep-seg.current .sweep-seg-fill { background: var(--accent-grad); }
-/* current segment stays clearly marked by its accent fill — no pulsing glow */
-.sweep-seg-label {
-  font-size: .62rem; font-weight: 700; color: var(--muted);
-  text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.sweep-seg.done .sweep-seg-label    { color: var(--good); }
-.sweep-seg.current .sweep-seg-label { color: var(--text); }
-
-.sweep-timeline.compact { gap: 3px; margin-top: 8px; }
-.sweep-timeline.compact .sweep-seg-track { height: 4px; }
-.sweep-timeline.compact .sweep-seg-label { font-size: .56rem; }
-
-.run-progress-label {
-  font-size: .68rem; color: var(--muted); margin-top: 6px;
-  font-variant-numeric: tabular-nums;
-}
-.run-progress-label strong { color: var(--text); }
-.run-progress-label.done { color: var(--good); font-weight: 700; }
-
-/* =================================================================
-   SELECTED-NODE COMPACT METRICS — reuses .nc-metrics' flex-row look
-   (SNR/SF only; RSSI stays hero-only, see #signal-hero; PDR lives in
-   the "PDR pro SF" headline block below, see .pdr-sf-*)
-   ================================================================= */
-
-#sel-metrics { margin: 2px 0 14px; }
+.nc-metrics { display: flex; gap: var(--space-2); flex-wrap: wrap; font-size: .74rem; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text-muted); margin: 2px 0 var(--space-4); }
 
 .m-good { color: var(--good); }
 .m-ok   { color: var(--m-ok); }
 .m-warn { color: var(--warn); }
 .m-bad  { color: var(--bad); }
 
-/* =================================================================
-   PDR PRO SF — HEADLINE block: delivery reliability per SF is the
-   coverage metric that actually matters (RSSI barely changes with SF,
-   PDR does). Flat cards, no glow — reuses the .m-good/.m-ok/.m-warn/
-   .m-bad tiers already used everywhere else for signal quality.
-   ================================================================= */
-
-.pdr-sf-wrap {
-  margin: 14px 0; padding: 12px 14px;
-  background: var(--bg-elev2); border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-}
-.pdr-sf-hdr {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 8px; margin-bottom: 10px;
-}
-.pdr-sf-title {
-  font-size: .67rem; font-weight: 800; text-transform: uppercase;
-  letter-spacing: .10em; color: var(--muted);
-}
-.pdr-sf-overall {
-  font-size: .74rem; font-weight: 700; color: var(--text);
-  font-variant-numeric: tabular-nums;
-}
-.pdr-sf-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-@media (max-width: 480px) {
-  .pdr-sf-grid { grid-template-columns: 1fr; }
-}
-.pdr-sf-cell {
-  padding: 8px 10px;
-  background: var(--bg-elev); border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-}
+.pdr-sf-wrap { margin: var(--space-4) 0; padding: var(--space-3) var(--space-4); background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius-sm); }
+.pdr-sf-hdr { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); margin-bottom: var(--space-2); }
+.pdr-sf-title { font-size: .67rem; font-weight: 800; text-transform: uppercase; letter-spacing: .10em; color: var(--text-faint); }
+.pdr-sf-overall { font-size: .74rem; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+.pdr-sf-grid { display: grid; grid-template-columns: 1fr; gap: var(--space-2); }
+@media (min-width: 640px) { .pdr-sf-grid { grid-template-columns: repeat(3, 1fr); } }
+.pdr-sf-cell { padding: var(--space-2) var(--space-3); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-sm); }
 .pdr-sf-sf { font-size: .78rem; font-weight: 800; color: var(--text); margin-bottom: 4px; }
-.pdr-sf-row {
-  display: flex; justify-content: space-between; align-items: baseline;
-  gap: 6px; font-size: .74rem; padding: 2px 0;
-}
-.pdr-sf-lbl { color: var(--muted); font-weight: 700; }
-/* No color on .pdr-sf-val itself — JS always appends an m-good/m-ok/m-warn/
-   m-bad class alongside it (equal specificity; the later-declared rule
-   would otherwise win regardless of the tier, same pitfall as
-   .dstatus-value above). Falls back to inherited var(--text) for the "—"
-   (unknown) case — the em dash itself already reads as "no data". */
+.pdr-sf-row { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; font-size: .74rem; padding: 2px 0; }
+.pdr-sf-lbl { color: var(--text-muted); font-weight: 700; }
 .pdr-sf-val { font-weight: 800; font-variant-numeric: tabular-nums; }
 .pdr-sf-val small { font-weight: 600; opacity: .8; }
-.pdr-sf-sub {
-  margin-top: 4px; font-size: .68rem; color: var(--muted);
-  font-variant-numeric: tabular-nums;
-}
+.pdr-sf-sub { margin-top: 4px; font-size: .68rem; color: var(--text-muted); font-variant-numeric: tabular-nums; }
 
-/* Downlink-Test toggle on run start */
-.run-dltest-toggle {
-  display: flex; align-items: center; gap: 8px;
-  margin-top: 10px; padding: 2px 0;
-  font-size: .78rem; color: var(--muted); cursor: pointer;
-}
-.run-dltest-toggle input[type="checkbox"] {
-  width: 16px; height: 16px; accent-color: var(--accent1); flex-shrink: 0;
-}
+.run-dltest-toggle { display: flex; align-items: center; gap: var(--space-2); margin-top: var(--space-2); padding: 6px 0; font-size: .78rem; color: var(--text-muted); cursor: pointer; min-height: 44px; }
+.run-dltest-toggle input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--accent); flex-shrink: 0; }
 
-/* =================================================================
-   DEVICE STATUS — "is the configuration working?" (Trust & visibility)
-   ================================================================= */
-
-.dstatus {
-  margin: 14px 0; padding: 12px 14px;
-  background: var(--bg-elev2); border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-}
-.dstatus-row {
-  display: flex; justify-content: space-between; align-items: baseline;
-  gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--line);
-}
+.dstatus { margin: var(--space-4) 0; padding: var(--space-3) var(--space-4); background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius-sm); }
+.dstatus-row { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-3); padding: 6px 0; border-bottom: 1px solid var(--line); }
 .dstatus-row:last-child { border-bottom: none; }
-.dstatus-label {
-  font-size: .68rem; font-weight: 700; text-transform: uppercase;
-  letter-spacing: .06em; color: var(--muted); flex-shrink: 0;
-}
-.dstatus-value {
-  font-size: .86rem; font-weight: 700; text-align: right;
-  font-variant-numeric: tabular-nums;
-  /* No color here on purpose: JS always appends an m-good/m-ok/m-warn/m-bad
-     class alongside this one (equal specificity, so whichever sets color
-     wins ambiguously by source order) — inherits var(--text) by default,
-     same visual result, but lets the tier class win unambiguously. */
-}
-.dstatus-hint { font-size: .72rem; color: var(--muted); margin-top: 10px; line-height: 1.5; }
+.dstatus-label { font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--text-faint); flex-shrink: 0; }
+.dstatus-value { font-size: .86rem; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
+.dstatus-hint { font-size: .72rem; color: var(--text-muted); margin-top: var(--space-2); line-height: 1.5; }
 
 /* =================================================================
-   RF ENVIRONMENT — always-on own/foreign totals + the spectrum-survey
-   sections below (heatmap, band busyness, networks, devices, vendors).
-   Flat/clean throughout — a single accent color at varying opacity for
-   the heatmap, thin flat bars elsewhere, no gradients/glow.
+   SF-SWEEP TIMELINE
    ================================================================= */
 
-.coex-totals { display: flex; gap: 10px; margin: 2px 0 4px; }
-.coex-total-box {
-  flex: 1; text-align: center; padding: 10px 8px;
-  background: var(--bg-elev2); border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-}
-.coex-total-num {
-  display: block; font-size: 1.3rem; font-weight: 800;
-  font-variant-numeric: tabular-nums; color: var(--text);
-}
-.coex-total-lbl {
-  display: block; font-size: .66rem; color: var(--muted);
-  text-transform: uppercase; letter-spacing: .05em; margin-top: 2px;
-}
-.coex-total-box.own .coex-total-num { color: var(--accent-light); }
+.sweep-timeline { display: flex; gap: 4px; margin-top: var(--space-2); }
+.sweep-seg { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.sweep-seg-track { height: 6px; border-radius: 3px; background: var(--surface-3); overflow: hidden; position: relative; }
+.sweep-seg-fill { height: 100%; width: 0%; border-radius: 3px; background: var(--grey); transition: width .8s cubic-bezier(.4,0,.2,1); }
+.sweep-seg.done .sweep-seg-fill    { background: var(--good); }
+.sweep-seg.current .sweep-seg-fill { background: var(--accent); }
+.sweep-seg-label { font-size: .62rem; font-weight: 700; color: var(--text-muted); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sweep-seg.done .sweep-seg-label    { color: var(--good); }
+.sweep-seg.current .sweep-seg-label { color: var(--text); }
+.sweep-timeline.compact { gap: 3px; margin-top: var(--space-2); }
+.sweep-timeline.compact .sweep-seg-track { height: 4px; }
+.sweep-timeline.compact .sweep-seg-label { font-size: .56rem; }
+.run-progress-label { font-size: .68rem; color: var(--text-muted); margin-top: var(--space-1); font-variant-numeric: tabular-nums; }
+.run-progress-label strong { color: var(--text); }
+.run-progress-label.done { color: var(--good); font-weight: 700; }
 
-.rf-sec { margin-top: 16px; }
-.rf-sec:first-of-type { margin-top: 4px; }
-.rf-sec-title {
-  font-size: .68rem; font-weight: 700; text-transform: uppercase;
-  letter-spacing: .07em; color: var(--muted); margin-bottom: 8px;
-  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
-}
-.rf-sec-count { color: var(--accent-light); font-weight: 800; text-transform: none; letter-spacing: normal; }
+/* =================================================================
+   RF ENVIRONMENT
+   ================================================================= */
 
-/* Two-up pairing — heatmap+timeline, then SF+RSSI distribution — stacked on
-   mobile, side by side once there's room. Reuses the same min-width
-   breakpoint as #node-grid for consistency. */
-.rf-pair-grid { display: grid; grid-template-columns: 1fr; gap: 14px; align-items: start; }
-@media (min-width: 520px) {
+.coex-totals { display: flex; gap: var(--space-2); margin: 2px 0 var(--space-2); }
+.coex-total-box { flex: 1; text-align: center; padding: var(--space-2); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-sm); box-shadow: var(--shadow); }
+.coex-total-num { display: block; font-size: 1.3rem; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--text); }
+.coex-total-lbl { display: block; font-size: .66rem; color: var(--text-faint); text-transform: uppercase; letter-spacing: .05em; margin-top: 2px; }
+.coex-total-box.own .coex-total-num { color: var(--accent); }
+
+.rf-sec { margin-top: var(--space-4); }
+.rf-sec:first-of-type { margin-top: var(--space-1); }
+.rf-sec-title { font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--text-faint); margin-bottom: var(--space-2); display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+.rf-sec-count { color: var(--accent); font-weight: 800; text-transform: none; letter-spacing: normal; }
+
+.rf-pair-grid { display: grid; grid-template-columns: 1fr; gap: var(--space-4); align-items: start; }
+@media (min-width: 640px) {
   .rf-pair-grid.rf-heat-pair { grid-template-columns: auto 1fr; }
   .rf-pair-grid.rf-dist-pair { grid-template-columns: 1fr 1fr; }
 }
 
-/* Channel x SF heatmap — fixed, tight cell size (not 1fr) so the matrix
-   reads as a small, dense grid instead of stretching to the panel width. */
 .rf-heat-grid { display: grid; grid-template-columns: 26px repeat(6, 24px); gap: 1px; }
-.rf-heat-hdr {
-  font-size: .56rem; font-weight: 700; color: var(--muted);
-  text-align: center; padding: 2px 0;
-}
+.rf-heat-hdr { font-size: .56rem; font-weight: 700; color: var(--text-faint); text-align: center; padding: 2px 0; }
 .rf-heat-rowhdr { text-align: right; padding-right: 3px; }
-.rf-heat-cell {
-  width: 24px; height: 24px;
-  border: 1px solid var(--line); border-radius: 3px;
-  display: flex; align-items: center; justify-content: center;
-  font-size: .56rem; font-weight: 700; color: var(--text);
-  font-variant-numeric: tabular-nums;
-}
-.rf-heat-legend { display: flex; align-items: center; gap: 5px; margin-top: 6px; font-size: .6rem; color: var(--muted); }
-.rf-heat-legend-bar {
-  flex: 0 1 140px; height: 6px; border-radius: 3px; border: 1px solid var(--line);
-  background: linear-gradient(90deg, rgba(34,211,238,.08), rgba(34,211,238,.9));
-}
+.rf-heat-cell { width: 24px; height: 24px; border: 1px solid var(--line); border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: .56rem; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+.rf-heat-legend { display: flex; align-items: center; gap: var(--space-1); margin-top: var(--space-1); font-size: .6rem; color: var(--text-faint); }
+.rf-heat-legend-bar { flex: 0 1 140px; height: 6px; border-radius: 3px; border: 1px solid var(--line); background: linear-gradient(90deg, var(--accent-dim), var(--accent)); }
 
-/* Traffic timeline — 24 hourly bars, pairs with the heatmap (where/what-SF
-   vs. when). Same flat inline-SVG-bars pattern as the busyness sparkline. */
 .rf-timeline-svg { width: 100%; height: 44px; display: block; }
-.rf-timeline-bar { fill: var(--accent1); }
-.rf-timeline-axis {
-  display: flex; justify-content: space-between;
-  font-size: .6rem; color: var(--muted); margin-top: 2px;
-}
+.rf-timeline-bar { fill: var(--accent); }
+.rf-timeline-axis { display: flex; justify-content: space-between; font-size: .6rem; color: var(--text-faint); margin-top: 2px; }
 
-/* Band busyness */
-.rf-busy-row { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+.rf-busy-row { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-2); }
 .rf-busy-rate { display: flex; align-items: baseline; gap: 4px; flex-shrink: 0; }
 .rf-busy-rate span { font-size: 1.3rem; font-weight: 800; color: var(--text); font-variant-numeric: tabular-nums; }
-.rf-busy-rate small { font-size: .66rem; color: var(--muted); }
+.rf-busy-rate small { font-size: .66rem; color: var(--text-faint); }
 .rf-sparkline { flex: 1; height: 24px; }
-.rf-spark-bar { fill: var(--accent1); }
+.rf-spark-bar { fill: var(--accent); }
 
-.rf-mtype { display: flex; gap: 6px; flex-wrap: wrap; }
-.rf-mtype-chip {
-  font-size: .68rem; font-weight: 700; color: var(--muted);
-  background: var(--bg-elev); border: 1px solid var(--line);
-  border-radius: 999px; padding: 3px 9px;
-}
+.rf-mtype { display: flex; gap: var(--space-1); flex-wrap: wrap; }
+.rf-mtype-chip { font-size: .68rem; font-weight: 700; color: var(--text-muted); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-pill); padding: 3px 9px; }
 
-/* Networks */
-.rf-net-row { margin-bottom: 8px; }
-.rf-net-hdr { display: flex; justify-content: space-between; gap: 8px; font-size: .74rem; margin-bottom: 3px; }
+.rf-net-row { margin-bottom: var(--space-2); }
+.rf-net-hdr { display: flex; justify-content: space-between; gap: var(--space-2); font-size: .74rem; margin-bottom: 3px; }
 .rf-net-label { font-weight: 700; color: var(--text); }
-.rf-net-count { color: var(--muted); font-variant-numeric: tabular-nums; }
-.rf-net-bar-track { height: 6px; border-radius: 3px; background: var(--bg-elev3); overflow: hidden; }
-.rf-net-bar-fill { height: 100%; background: var(--accent1); border-radius: 3px; }
+.rf-net-count { color: var(--text-faint); font-variant-numeric: tabular-nums; }
+.rf-net-bar-track { height: 6px; border-radius: 3px; background: var(--surface-3); overflow: hidden; }
+.rf-net-bar-fill { height: 100%; background: var(--accent); border-radius: 3px; }
 
-/* Foreign devices */
+/* Foreign devices — capped, contained scroll (spec §19: "bounded height is
+   a rule, not a per-list decision"). */
 .rf-devices-list { max-height: 220px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
-.rf-dev-row {
-  display: grid; grid-template-columns: 1fr auto auto auto auto; gap: 8px;
-  align-items: center; font-size: .72rem; padding: 5px 0;
-  border-bottom: 1px solid var(--line);
-}
+.rf-dev-row { display: grid; grid-template-columns: 1fr auto auto auto auto; gap: var(--space-2); align-items: center; font-size: .72rem; padding: 5px 0; border-bottom: 1px solid var(--line); }
 .rf-dev-row:last-child { border-bottom: none; }
-.rf-dev-net { color: var(--muted); font-size: .66rem; }
+.rf-dev-net { color: var(--text-muted); font-size: .66rem; }
 
-/* Vendors */
-.rf-vendor-row {
-  display: flex; justify-content: space-between; gap: 8px;
-  font-size: .74rem; padding: 4px 0; border-bottom: 1px solid var(--line);
+/* Vertical column chart (SF/RSSI distributions) — spec addendum
+   2026-08-26: ordered categories read as a distribution's SHAPE in column
+   form, not as a stack of rows. See columnChartHtml() in rf.js for why the
+   floor/zero/value-label rules exist — this is the visual half of that. */
+.col-chart {
+  display: flex; align-items: flex-end; gap: 3px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-sm);
+  padding: var(--space-3) var(--space-1) var(--space-2);
 }
-.rf-vendor-row:last-child { border-bottom: none; }
-
-/* SF / RSSI distribution — small horizontal bar rows, same flat look as
-   the network bars above. */
-.rf-dist-row {
-  display: grid; grid-template-columns: minmax(58px, auto) 1fr 24px; gap: 6px;
-  align-items: center; font-size: .72rem; padding: 3px 0;
+.col-item { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; }
+.col-value {
+  font-size: .62rem; font-weight: 700; color: var(--text);
+  margin-bottom: 3px; font-variant-numeric: tabular-nums;
+  white-space: nowrap; overflow: hidden; text-overflow: clip; max-width: 100%;
 }
-.rf-dist-label { color: var(--text); font-weight: 700; white-space: nowrap; }
-.rf-dist-bar-track { height: 6px; border-radius: 3px; background: var(--bg-elev3); overflow: hidden; }
-.rf-dist-bar-fill { height: 100%; background: var(--accent1); border-radius: 3px; }
-.rf-dist-count { color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+.col-zero .col-value { color: var(--text-faint); font-weight: 600; }
+.col-bar-track {
+  width: 100%; height: 84px;
+  display: flex; align-items: flex-end; justify-content: center;
+  border-bottom: 2px solid var(--line); /* baseline — visible even for a zero column */
+}
+.col-bar-fill {
+  display: block; width: 70%; max-width: 30px;
+  border-radius: 3px 3px 0 0; background: var(--accent);
+}
+.col-label {
+  margin-top: 4px; font-size: .62rem; font-weight: 700; color: var(--text-faint);
+  white-space: nowrap; overflow: hidden; text-overflow: clip; max-width: 100%;
+}
 
-/* Live frame log — compact, scrollable, newest on top. */
 .rf-frame-log { max-height: 200px; overflow-y: auto; font-size: .72rem; }
-.rf-log-row {
-  display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap;
-  padding: 4px 0; border-bottom: 1px solid var(--line);
-}
+.rf-log-row { display: flex; gap: var(--space-2); align-items: baseline; flex-wrap: wrap; padding: 4px 0; border-bottom: 1px solid var(--line); }
 .rf-log-row:last-child { border-bottom: none; }
-.rf-log-time { color: var(--muted); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.rf-log-time { color: var(--text-faint); font-variant-numeric: tabular-nums; flex-shrink: 0; }
 .rf-log-addr { flex-shrink: 0; }
-.rf-log-net { color: var(--muted); font-size: .66rem; flex-shrink: 0; }
+.rf-log-net { color: var(--text-faint); font-size: .66rem; flex-shrink: 0; }
 .rf-log-sf { flex-shrink: 0; }
 .rf-log-rssi { flex-shrink: 0; font-variant-numeric: tabular-nums; }
 
+/* Vendor KPI highlights + the collapsed long tail — spec §19.1/§20.2:
+   4 meaningful vendors (>1 join) as headline numbers, the 328-row
+   single-join remainder reduced to just the OUI in a dense grid, capped
+   and scrolling, behind "Show N more". */
+.vendor-highlights { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--space-2); margin-bottom: var(--space-3); }
+@media (min-width: 640px) { .vendor-highlights { grid-template-columns: repeat(4, 1fr); } }
+.vcard { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: var(--space-3); min-width: 0; }
+.vcard .stat-num { font-size: 1.3rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.vcard .stat-label { font-size: .66rem; color: var(--text-faint); }
+.vcard-name { margin-top: var(--space-1); font-size: .68rem; color: var(--text-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rf-disclosure { width: 100%; min-height: 44px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-2); color: var(--accent); font-weight: 700; }
+.tail { margin-top: var(--space-2); }
+#lb-vendor-tail .list-body { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 5px; padding: var(--space-2); }
+.vtail-cell { background: var(--surface-2); border-radius: 7px; padding: 6px 7px; font-size: .68rem; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 /* =================================================================
-   GENERIC TABLE (device list, run history)
+   LIST COMPONENT — search + filter + sort, built once (js/list.js),
+   mounted only where volume justifies it: the event log, the RF vendor
+   tail, RF foreign devices (spec §12/§19/§20.2).
+   ================================================================= */
+
+.list-block { margin-bottom: var(--space-2); }
+.list-toolbar { display: flex; flex-direction: column; gap: var(--space-2); margin-bottom: var(--space-2); }
+.lt-row { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+.lt-chips { display: flex; gap: var(--space-1); flex-wrap: wrap; flex: 1; }
+.lt-hint { align-self: center; font-size: .68rem; color: var(--text-faint); }
+.lt-sort { min-height: 44px; padding: 0 var(--space-3); border: 1px solid var(--line); border-radius: var(--radius-pill); background: var(--surface); color: var(--text-muted); font-size: .72rem; font-weight: 700; white-space: nowrap; }
+.list-body { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-sm); overflow-y: auto; }
+
+/* =================================================================
+   GENERIC TABLE (device registration)
    ================================================================= */
 
 .dtbl { width: 100%; border-collapse: collapse; font-size: .78rem; }
-.dtbl th {
-  text-align: left; padding: 5px 6px;
-  font-size: .67rem; font-weight: 700; text-transform: uppercase;
-  letter-spacing: .06em; color: var(--muted); border-bottom: 1px solid var(--line);
-}
+.dtbl th { text-align: left; padding: 5px 6px; font-size: .67rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--text-faint); border-bottom: 1px solid var(--line); }
 .dtbl td { padding: 6px 6px; border-bottom: 1px solid var(--line); }
 .dtbl tr:last-child td { border-bottom: none; }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .75rem; color: var(--accent-light); }
-
 .hist-running { color: var(--bad); font-weight: 700; }
 .hist-done    { color: var(--good); font-weight: 700; }
-.hist-aborted { color: var(--muted);  font-weight: 700; }
+.hist-aborted { color: var(--text-faint); font-weight: 700; }
 
 /* =================================================================
-   VERLAUF LINE CHART — inline SVG, no chart library (flat/clean)
+   RUN CHART (inline SVG)
    ================================================================= */
 
 .hist-chart-row td { padding: 4px 6px 12px; border-bottom: 1px solid var(--line); }
 .hist-chart { margin: 2px 0 0; }
-
-/* Always-visible chart in the selected-device panel — framed like the other
-   flat info boxes (.signal-hero/.dstatus), so it reads as its own section. */
-#sel-chart-wrap {
-  margin: 14px 0;
-  padding: 10px 12px 4px;
-  background: var(--bg-elev2);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-}
+#sel-chart-wrap { margin: var(--space-4) 0; padding: var(--space-2) var(--space-3) 4px; background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius-sm); }
 #sel-chart-wrap .hist-chart { margin: 0; }
-
 .rc-svg { width: 100%; height: auto; display: block; }
 .rc-grid { stroke: var(--line); stroke-width: 1; }
-.rc-axis-label { font-size: 9px; fill: var(--muted); font-family: var(--font); }
+.rc-axis-label { font-size: 9px; fill: var(--text-faint); font-family: var(--font); }
 .rc-line-rssi { stroke-width: 2; stroke-linecap: round; fill: none; }
-.rc-line-snr  { stroke: var(--muted); stroke-width: 1.2; fill: none; opacity: .8; }
-
-.rc-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 6px; }
-.rc-legend .lgrow { margin-bottom: 0; font-size: .72rem; color: var(--muted); }
+.rc-line-snr  { stroke: var(--text-muted); stroke-width: 1.2; fill: none; opacity: .8; }
+.rc-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: var(--space-1); }
+.rc-legend .lgrow { margin-bottom: 0; font-size: .72rem; color: var(--text-muted); }
 .rc-legend-swatch { display: inline-block; width: 14px; height: 0; border-top: 2px solid var(--text); flex-shrink: 0; }
-.rc-legend-swatch.snr { border-top: 1px solid var(--muted); opacity: .8; }
+.rc-legend-swatch.snr { border-top: 1px solid var(--text-muted); opacity: .8; }
 
 /* =================================================================
-   LOSS AVERSION — gateway-move conflict + stop-run confirm
+   LOSS AVERSION — gateway-move conflict + stop-run confirm (spec §13:
+   destructive dialogues name the concrete cost).
    ================================================================= */
 
-.loss-title {
-  font-size: 1rem; font-weight: 800; color: var(--bad);
-  display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
-}
-.loss-row {
-  padding: 10px 0; border-bottom: 1px solid var(--line);
-  font-size: .84rem;
-}
+.loss-title { font-size: 1rem; font-weight: 800; color: var(--red); display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-2); }
+.loss-row { padding: var(--space-2) 0; border-bottom: 1px solid var(--line); font-size: .84rem; }
 .loss-row:last-child { border-bottom: none; }
 .loss-row .loss-name { font-weight: 700; color: var(--text); margin-bottom: 2px; }
-.loss-row .loss-detail { color: var(--muted); font-size: .78rem; }
+.loss-row .loss-detail { color: var(--text-muted); font-size: .78rem; }
 .loss-row .loss-missing { color: var(--warn); font-weight: 600; }
 
-/* Kept for backward-compat: earlier round's simple conflict-row layout,
-   still used as a light wrapper before the loss-row detail is filled in. */
-.conflict-row {
-  display: flex; justify-content: space-between; align-items: center;
-  gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--line);
-  font-size: .84rem;
-}
-.conflict-row:last-child { border-bottom: none; }
-
 /* =================================================================
-   CONFIRM MODAL (generic — stop-run / gateway-move loss aversion)
+   CONFIRM MODAL
    ================================================================= */
 
 .confirm-panel { max-width: 480px; margin: 0 auto; }
-.confirm-body { padding: 8px 20px 24px; }
-.confirm-icon { font-size: 1.8rem; text-align: center; margin-bottom: 6px; }
-.confirm-body h3 { font-size: 1.05rem; font-weight: 800; text-align: center; margin-bottom: 12px; }
-.confirm-body p { font-size: .86rem; color: var(--muted); line-height: 1.6; margin-bottom: 8px; }
+.confirm-body { padding: var(--space-2) var(--space-5) var(--space-5); }
+.confirm-icon { font-size: 1.8rem; text-align: center; margin-bottom: var(--space-1); }
+.confirm-body h3 { font-size: 1.05rem; font-weight: 800; text-align: center; margin-bottom: var(--space-3); }
+.confirm-body p { font-size: .86rem; color: var(--text-muted); line-height: 1.6; margin-bottom: var(--space-2); }
 .confirm-body p strong { color: var(--text); }
 .confirm-actions { justify-content: center; }
 
@@ -916,300 +789,208 @@ details[open].coll > summary::before { transform: rotate(90deg); }
    MISC
    ================================================================= */
 
-.msg { font-size: .80rem; margin-top: 8px; color: var(--muted); min-height: 1.1em; line-height: 1.4; }
+.msg { font-size: .80rem; margin-top: var(--space-2); color: var(--text-muted); min-height: 1.1em; line-height: 1.4; }
 .msg.err { color: var(--bad); }
 .msg.ok  { color: var(--good); }
-.hint { font-size: .74rem; color: var(--muted); line-height: 1.5; }
-.sep { border: none; border-top: 1px solid var(--line); margin: 14px 0; }
-.between { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.hint { font-size: .74rem; color: var(--text-faint); line-height: 1.5; }
+.sep { border: none; border-top: 1px solid var(--line); margin: var(--space-4) 0; }
+.between { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--space-2); }
+.pill {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: .70rem; font-weight: 700; border-radius: var(--radius-pill);
+  padding: 3px 9px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 40vw;
+  border: 1px solid var(--line); background: var(--surface-2); color: var(--text-muted);
+}
+.pill.on { color: var(--bad); border-color: var(--bad); background: rgba(var(--red-rgb), .12); }
 
 /* =================================================================
-   SLIDE-UP SHEET / OVERLAY (shared by Hilfe, Platzieren/Umsetzen, Confirm)
+   SLIDE-UP SHEET / OVERLAY (Help, Place/Relocate, Confirm)
    ================================================================= */
 
 .sheet-ov {
   position: fixed; inset: 0; z-index: 500;
-  background: rgba(4,6,10,.78);
-  -webkit-backdrop-filter: blur(2px);
-  backdrop-filter: blur(2px);
+  background: rgba(10,14,20,.55);
   display: flex; align-items: flex-end;
   opacity: 0; pointer-events: none;
   transition: opacity var(--t-med);
 }
 .sheet-ov.open { opacity: 1; pointer-events: auto; }
-
 .sheet-panel {
   width: 100%; max-height: 88vh; overflow-y: auto;
-  background: var(--bg-elev); border-top: 1px solid var(--line);
+  background: var(--surface); border-top: 1px solid var(--line);
   border-radius: 20px 20px 0 0;
-  box-shadow: 0 -8px 40px rgba(0,0,0,.6);
+  box-shadow: 0 -8px 40px rgba(0,0,0,.25);
   transform: translateY(100%);
   transition: transform var(--t-med) cubic-bezier(.25,.8,.25,1);
-  -webkit-overflow-scrolling: touch;
+  padding-bottom: env(safe-area-inset-bottom);
 }
 .sheet-ov.open .sheet-panel { transform: translateY(0); }
-
-.h-handle { display: flex; justify-content: center; padding: 12px 0 4px; }
-.h-handle::before { content:''; display:block; width:36px; height:4px; background:var(--line); border-radius:2px; }
-
-.h-hdr {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 8px 20px 12px; border-bottom: 1px solid var(--line);
-}
+.h-handle { display: flex; justify-content: center; padding: var(--space-3) 0 4px; }
+.h-handle::before { content: ''; display: block; width: 36px; height: 4px; background: var(--line); border-radius: 2px; }
+.h-hdr { display: flex; align-items: center; justify-content: space-between; padding: var(--space-2) var(--space-5) var(--space-3); border-bottom: 1px solid var(--line); }
 .h-hdr h2 { font-size: 1rem; font-weight: 800; }
-.sheet-x { background:none; border:none; cursor:pointer; color:var(--muted); font-size:1.4rem; line-height:1; padding:2px 6px; transition: color var(--t-fast); }
+.sheet-x { background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 1.4rem; line-height: 1; padding: 6px; min-width: 44px; min-height: 44px; }
 .sheet-x:hover { color: var(--text); }
-
-.h-body { padding: 16px 20px 40px; max-width: 680px; margin: 0 auto; }
-.h-sec  { margin-bottom: 24px; }
-.h-sec h3 {
-  font-size: .71rem; font-weight: 700; text-transform: uppercase;
-  letter-spacing: .10em; color: var(--accent-light); margin-bottom: 10px;
-}
+.h-body { padding: var(--space-4) var(--space-5) var(--space-5); max-width: 680px; margin: 0 auto; }
+.h-sec { margin-bottom: var(--space-5); }
+.h-sec h3 { font-size: .71rem; font-weight: 700; text-transform: uppercase; letter-spacing: .10em; color: var(--accent); margin-bottom: var(--space-2); }
 .h-sec p, .h-sec li { font-size: .86rem; line-height: 1.65; }
 .h-sec ul, .h-sec ol { padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
-
-.lgrow { display: flex; align-items: center; gap: 8px; font-size: .82rem; margin-bottom: 5px; }
+.lgrow { display: flex; align-items: center; gap: var(--space-2); font-size: .82rem; margin-bottom: 5px; }
 .lgdot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
 
+/* Detail screen's action footer — fixed directly ABOVE the tab bar (spec
+   §10: primary actions reachable without scrolling back up; spec §10
+   "Safe area": the tab bar, toast and this footer must share the bottom
+   strip without overlapping — the earlier sticky-inside-a-full-height-flex
+   approach put it UNDER the fixed tab bar instead). */
+.detail-actions {
+  position: fixed; left: 0; right: 0;
+  bottom: calc(56px + env(safe-area-inset-bottom));
+  z-index: 250;
+  max-width: 720px; margin: 0 auto;
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface); border-top: 1px solid var(--line);
+  display: flex; flex-direction: column; gap: var(--space-2);
+}
+
 /* =================================================================
-   TOAST
+   TOAST — redundant confirmation only (spec §13); anything with lasting
+   value also writes a durable event row and changes the card's state.
+   Shares the bottom safe-area strip with the tab bar, sitting above it.
    ================================================================= */
 
 #toast {
-  position: fixed; bottom: 24px; left: 50%;
+  position: fixed; left: 50%; bottom: calc(66px + env(safe-area-inset-bottom));
   transform: translateX(-50%) translateY(12px);
-  background: var(--bg-elev3); color: var(--text);
-  padding: 10px 18px; border-radius: 999px;
+  background: var(--text); color: var(--bg);
+  padding: 10px 18px; border-radius: var(--radius-pill);
   font-size: .84rem; font-weight: 600;
-  opacity: 0; pointer-events: none; z-index: 400;
-  white-space: nowrap; box-shadow: 0 4px 24px rgba(0,0,0,.6), 0 0 0 1px var(--line);
+  opacity: 0; pointer-events: none; z-index: 350;
+  max-width: min(86vw, 420px); text-align: center;
+  box-shadow: 0 4px 24px rgba(0,0,0,.3);
   transition: opacity var(--t-fast), transform var(--t-fast);
-  border: 1px solid var(--line);
 }
 #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
 /* =================================================================
-   HISTORY / ANALYSIS VIEW (F-0007, Phase 1) — browse past measurements.
-   #main (Live) and #history-view share the same viewport; only one is
-   visible at a time (see switchView() in app.js). Mobile-first: single
-   column everywhere, a 2-up grid for the run detail once there's room.
+   HISTORY (level 2) — F-0007 browsable run list + left/right run detail.
    ================================================================= */
 
-#history-view { max-width: 980px; margin: 0 auto; padding: 12px 12px 40px; }
+.hist-filter-row { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2) 14px; margin-bottom: var(--space-3); }
+.hist-filter-row select { flex: 1 1 140px; max-width: 220px; background: var(--surface); border: 1px solid var(--line); color: var(--text); border-radius: var(--radius-sm); padding: 7px 10px; font-size: .82rem; min-height: 44px; }
 
-.hist-filter-row {
-  display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; margin-bottom: 12px;
-}
-.hist-filter-row select {
-  flex: 1 1 140px; max-width: 220px;
-  background: var(--bg-elev2); border: 1px solid var(--line); color: var(--text);
-  border-radius: var(--radius-sm); padding: 7px 10px; font-size: .82rem;
-}
-
-/* List — one compact row per run, no table (avoids horizontal scroll on
-   narrow screens; wraps instead). Three stacked lines: device/location,
-   Started/Ended, status/packets/PDR — the timestamps get their own line
-   so they stay clearly labelled and legible instead of competing for
-   space with everything else. */
 .hist-row {
   display: flex; flex-direction: column; gap: 5px;
-  padding: 10px 4px; border-bottom: 1px solid var(--line);
-  cursor: pointer; transition: background var(--t-fast);
+  padding: var(--space-3) 4px; border-bottom: 1px solid var(--line);
+  cursor: pointer; transition: background var(--t-fast); min-height: 44px;
 }
 .hist-row:last-child { border-bottom: none; }
-.hist-row:hover { background: var(--bg-elev2); }
-.hist-row-main {
-  display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px;
-}
+.hist-row:hover { background: var(--surface-2); }
+.hist-row-main { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; }
 .hist-row-device { font-weight: 700; color: var(--text); font-size: .86rem; }
-.hist-row-loc { font-size: .74rem; color: var(--muted); }
+.hist-row-loc { font-size: .74rem; color: var(--text-faint); }
 .hist-row-times { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; font-size: .78rem; color: var(--text); }
 .hist-row-time { font-variant-numeric: tabular-nums; }
-.hist-row-time-lbl {
-  color: var(--muted); font-weight: 700; text-transform: uppercase;
-  font-size: .62rem; letter-spacing: .05em; margin-right: 5px;
-}
-.hist-row-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: .74rem; color: var(--muted); }
-.hist-badge {
-  font-size: .64rem; font-weight: 800; text-transform: uppercase; letter-spacing: .04em;
-  border-radius: 999px; padding: 2px 8px; border: 1px solid currentColor;
-}
+.hist-row-time-lbl { color: var(--text-faint); font-weight: 700; text-transform: uppercase; font-size: .62rem; letter-spacing: .05em; margin-right: 5px; }
+.hist-row-meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); font-size: .74rem; color: var(--text-faint); }
+.hist-badge { font-size: .64rem; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; border-radius: var(--radius-pill); padding: 2px 8px; border: 1px solid currentColor; }
 .hist-row-pdr { font-weight: 700; font-variant-numeric: tabular-nums; }
 
-/* Detail — left (device) / right (gateway), stacked on mobile. */
-.hist-detail-grid { display: grid; grid-template-columns: 1fr; gap: 20px; margin-top: 4px; }
-@media (min-width: 720px) {
-  .hist-detail-grid { grid-template-columns: 1fr 1fr; }
-}
+.hist-detail-grid { display: grid; grid-template-columns: 1fr; gap: var(--space-5); margin-top: 4px; }
+@media (min-width: 1024px) { .hist-detail-grid { grid-template-columns: 1fr 1fr; } }
 .hist-detail-col { min-width: 0; }
-.hist-detail-subtitle {
-  font-size: .68rem; font-weight: 700; text-transform: uppercase;
-  letter-spacing: .07em; color: var(--muted); margin-bottom: 8px;
-}
-.hist-detail-meta {
-  margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line);
-  font-size: .76rem; color: var(--muted); display: flex; flex-direction: column; gap: 3px;
-}
+.hist-detail-subtitle { font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--text-faint); margin-bottom: var(--space-2); }
+.hist-detail-meta { margin-top: var(--space-3); padding-top: var(--space-2); border-top: 1px solid var(--line); font-size: .76rem; color: var(--text-muted); display: flex; flex-direction: column; gap: 3px; }
 .hist-detail-meta strong { color: var(--text); }
 
 /* =================================================================
-   MAP / PLACEMENT EDITOR (F-0008, PoC) — drag node markers onto an
-   uploaded map image. Flat/clean, no glow. touch-action: none throughout
-   the drag surface so a drag never also scrolls the page on a phone.
+   EVENT LOG — two fixed-height lines instead of four squeezed columns
+   (spec §20.2), a single banner instead of a per-row badge when a whole
+   page is reconstructed (spec §20.2 "mark the exception, not the rule").
    ================================================================= */
 
-#map-stage {
-  position: relative;
-  width: 100%;
-  border-radius: var(--radius-sm);
-  overflow: hidden;
-  border: 1px solid var(--line);
-  background: var(--bg-elev2);
-  touch-action: none;
+.evt-backfill-banner { padding: var(--space-2) var(--space-3); background: var(--surface-2); border-radius: var(--radius-sm); margin-bottom: var(--space-2); }
+
+.evt-row {
+  display: block; width: 100%; text-align: left; font: inherit; color: inherit;
+  background: var(--surface); border: none; border-bottom: 1px solid var(--line);
+  padding: var(--space-2) var(--space-1); cursor: pointer;
 }
+.evt-row:last-child { border-bottom: none; }
+.evt-row-l1, .evt-row-l2 {
+  display: flex; align-items: baseline; gap: var(--space-2);
+  height: 20px; overflow: hidden;
+}
+.evt-row-expanded .evt-row-l1, .evt-row-expanded .evt-row-l2 { height: auto; white-space: normal; }
+.evt-device { font-weight: 700; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+.evt-time { color: var(--text-faint); font-variant-numeric: tabular-nums; font-size: .70rem; flex-shrink: 0; }
+.evt-type-reason { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+.evt-type { font-weight: 700; color: var(--accent); }
+.evt-reason { color: var(--text-muted); font-size: .82rem; }
+.evt-badge-backfill { font-size: .62rem; font-weight: 700; text-transform: uppercase; letter-spacing: .02em; color: var(--text-faint); border: 1px solid var(--line); border-radius: var(--radius-pill); padding: 1px 7px; flex-shrink: 0; }
+/* Capped + internally scrolling (spec §19/AC3: "bounded height is a rule,
+   not a per-list decision" — applies even to a page whose only content is
+   this list, so a manually-grown "Load more" page can never reach the
+   same unbounded state the RF vendor list did). The search box and filter
+   chips stay in view above it instead of scrolling out of reach. */
+#events-log-body { margin-top: 4px; background: var(--surface); border-radius: var(--radius-sm); max-height: 55vh; overflow-y: auto; }
+
+/* =================================================================
+   MAP / PLACEMENT EDITOR — one marker recipe. touch-action: none
+   throughout the drag surface so a drag never also scrolls the page.
+   ================================================================= */
+
+#map-stage { position: relative; width: 100%; border-radius: var(--radius-sm); overflow: hidden; border: 1px solid var(--line); background: var(--surface-2); touch-action: none; }
 #map-image { display: block; width: 100%; height: auto; }
 #map-markers { position: absolute; inset: 0; touch-action: none; }
 
-.map-marker {
-  position: absolute;
-  transform: translate(-50%, -100%);
-  display: flex; flex-direction: column; align-items: center; gap: 2px;
-  cursor: grab; touch-action: none; user-select: none;
-}
+.map-marker { position: absolute; transform: translate(-50%, -100%); display: flex; flex-direction: column; align-items: center; gap: 2px; cursor: grab; touch-action: none; user-select: none; }
 .map-marker.dragging { cursor: grabbing; z-index: 10; }
 .map-marker-dot {
   width: 28px; height: 28px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  background: var(--accent1); color: #0b1220; font-weight: 800; font-size: .95rem;
-  border: 2px solid var(--bg-elev); box-shadow: 0 2px 6px rgba(0,0,0,.4);
+  background: var(--accent); color: #fff; font-weight: 800; font-size: .95rem;
+  border: 2px solid var(--surface); box-shadow: 0 2px 6px rgba(0,0,0,.25);
 }
-.map-marker-gateway .map-marker-dot { background: var(--accent2); color: #fff; }
-.map-marker-label {
-  font-size: .62rem; font-weight: 700; color: var(--text);
-  background: rgba(15,20,28,.85); padding: 1px 6px; border-radius: 4px;
-  white-space: nowrap; max-width: 96px; overflow: hidden; text-overflow: ellipsis;
-}
+.map-marker-gateway .map-marker-dot { background: var(--sf12-color); }
+.map-marker-label { font-size: .62rem; font-weight: 700; color: #fff; background: rgba(28,28,30,.82); padding: 1px 6px; border-radius: 4px; white-space: nowrap; max-width: 96px; overflow: hidden; text-overflow: ellipsis; }
+
+/* The delete control used to be 18 px, positioned top:-4px/right:-12px —
+   directly overlapping the 28 px drag handle, so delete and drag sat
+   under one thumbprint (spec §10/AC5). Now a full 44×44 px touch target,
+   moved clear of the dot with real spacing (>= 8 px) so the two gestures
+   no longer compete for the same area; the visible glyph inside stays a
+   small red circle so the marker doesn't look oversized. */
 .map-marker-remove {
-  position: absolute; top: -4px; right: -12px;
-  width: 18px; height: 18px; border-radius: 50%;
-  background: var(--bad); color: #fff; border: none; padding: 0;
-  font-size: .72rem; line-height: 1; cursor: pointer;
+  position: absolute; top: -18px; right: -34px;
+  width: 44px; height: 44px; border-radius: 50%;
+  background: transparent; border: none; padding: 0; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.map-marker-remove::before {
+  content: "×"; width: 20px; height: 20px; border-radius: 50%;
+  background: var(--red); color: #fff; font-size: .8rem; line-height: 1;
   display: flex; align-items: center; justify-content: center;
 }
 
-.map-unplaced-chip {
-  display: inline-flex; align-items: center; gap: 6px;
-  background: var(--bg-elev2); border: 1px solid var(--line); color: var(--text);
-  border-radius: 999px; padding: 6px 12px; margin: 0 6px 6px 0;
-  font-size: .78rem; font-weight: 700; cursor: pointer;
-  transition: border-color var(--t-fast), color var(--t-fast);
-}
-.map-unplaced-chip:hover { border-color: var(--accent-light); color: var(--accent-light); }
-.map-unplaced-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent1); flex-shrink: 0; }
-.map-unplaced-dot.gw { background: var(--accent2); }
-
-/* Compact "Position on floor plan" preview in the Place/Relocate sheet —
-   one marker, tap-to-place/move (a tap fires a plain 'click' for both
-   mouse and touch, no drag machinery needed here). */
-#sheet-map-stage {
-  position: relative;
-  width: 100%;
-  border-radius: var(--radius-sm);
-  overflow: hidden;
-  border: 1px solid var(--line);
-  background: var(--bg-elev2);
-  cursor: crosshair;
-  touch-action: none;
-}
+#sheet-map-stage { position: relative; width: 100%; border-radius: var(--radius-sm); overflow: hidden; border: 1px solid var(--line); background: var(--surface-2); cursor: crosshair; touch-action: none; }
 #sheet-map-image { display: block; width: 100%; height: auto; }
-#sheet-map-marker {
-  position: absolute;
-  transform: translate(-50%, -50%);
-  width: 22px; height: 22px; border-radius: 50%;
-  background: var(--accent1);
-  border: 2px solid var(--bg-elev);
-  box-shadow: 0 2px 6px rgba(0,0,0,.4);
-  pointer-events: none;
-}
-#sheet-map-marker.gateway { background: var(--accent2); }
+#sheet-map-marker { position: absolute; transform: translate(-50%, -50%); width: 22px; height: 22px; border-radius: 50%; background: var(--accent); border: 2px solid var(--surface); box-shadow: 0 2px 6px rgba(0,0,0,.25); pointer-events: none; }
+#sheet-map-marker.gateway { background: var(--sf12-color); }
 
-/* History detail's small read-only map thumbnail (device left / gateway
-   right) — same visual language, no interaction. */
-.map-thumb {
-  position: relative; width: 100%; max-width: 280px;
-  margin-top: 10px; border-radius: var(--radius-sm); overflow: hidden;
-  border: 1px solid var(--line);
-}
+.map-thumb { position: relative; width: 100%; max-width: 280px; margin-top: var(--space-2); border-radius: var(--radius-sm); overflow: hidden; border: 1px solid var(--line); }
 .map-thumb img { display: block; width: 100%; height: auto; }
-.map-marker-sm {
-  position: absolute; transform: translate(-50%, -50%);
-  width: 16px; height: 16px; border-radius: 50%;
-  background: var(--accent1);
-  border: 2px solid var(--bg-elev);
-  box-shadow: 0 2px 6px rgba(0,0,0,.4);
-}
-.map-marker-sm.gateway { background: var(--accent2); }
+.map-marker-sm { position: absolute; transform: translate(-50%, -50%); width: 16px; height: 16px; border-radius: 50%; background: var(--accent); border: 2px solid var(--surface); box-shadow: 0 2px 6px rgba(0,0,0,.25); }
+.map-marker-sm.gateway { background: var(--sf12-color); }
 
 /* =================================================================
-   EVENT LOG (cockpit-redesign Stage 1, spec §4/§12/§14) — durable
-   milestone list. Reuses the existing token system throughout: the chip
-   is .map-unplaced-chip's exact recipe (pill, --bg-elev2/--line resting,
-   --accent-grad active) and the row is .rf-log-row's compact
-   time+fields layout — no new button/list system, same tokens as
-   everywhere else in this file.
+   UTILITIES — visibility state lives here, not in style.display
+   scattered elsewhere. !important is deliberate: several toggled
+   elements carry their own selector-level display rule (e.g. .screen /
+   details[open]), which otherwise outranks a plain class on specificity
+   alone regardless of source order.
    ================================================================= */
 
-.evt-chip-row { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
-.evt-chip {
-  display: inline-flex; align-items: center;
-  background: var(--bg-elev2); border: 1px solid var(--line); color: var(--muted);
-  border-radius: 999px; padding: 5px 11px;
-  font-size: .72rem; font-weight: 700; cursor: pointer;
-  transition: background var(--t-fast), color var(--t-fast), border-color var(--t-fast);
-}
-.evt-chip:hover { border-color: var(--accent-light); color: var(--accent-light); }
-.evt-chip.active { background: var(--accent-grad); color: #0b1220; border-color: transparent; }
-
-.evt-row {
-  display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap;
-  padding: 8px 0; border-bottom: 1px solid var(--line);
-}
-.evt-row:last-child { border-bottom: none; }
-.evt-time { color: var(--muted); font-variant-numeric: tabular-nums; flex-shrink: 0; font-size: .74rem; }
-.evt-type { font-weight: 700; flex-shrink: 0; }
-.evt-device { color: var(--accent-light); flex-shrink: 0; }
-.evt-reason { color: var(--muted); font-size: .82rem; }
-
-/* Backfilled rows (source='backfill') must read as reconstructed, not as
-   measurement evidence (spec §12/§15) — same muted-pill language as
-   status pills elsewhere, deliberately NOT a colour alone. */
-.evt-badge-backfill {
-  font-size: .62rem; font-weight: 700; text-transform: uppercase; letter-spacing: .02em;
-  color: var(--muted); border: 1px solid var(--line); border-radius: 999px;
-  padding: 1px 7px; flex-shrink: 0;
-}
-
-#events-log-body { margin-top: 4px; }
-
-/* =================================================================
-   UTILITIES (cockpit-redesign Stage 2a, spec §6/§16) — visibility state
-   moves here instead of living in `style.display`/`style="display:none"`
-   scattered across index.html and app.js (153 such spots before this
-   stage). This is the ONLY thing this class family carries: no pixel
-   values, no colours, nothing that could make it look like a component.
-   Inline styles that carry a real computed value (bar widths, marker
-   positions, chart geometry) are unaffected and stay inline. */
-
-/* !important is deliberate and load-bearing, not a shortcut: several
-   toggled elements (#main, #sel-metrics, …) carry their own ID-selector
-   `display` rule elsewhere in this file (e.g. `#main { display: grid; }`),
-   which otherwise outranks a plain class on specificity alone regardless
-   of source order — the exact bug this class exists to prevent. Same
-   precedent as the prefers-reduced-motion override above. */
 .is-hidden { display: none !important; }
-
-/* Body-level scroll lock while a sheet/modal is open — previously
-   `document.body.style.overflow = 'hidden' | ''`, same idea as
-   .is-hidden but scoped to <body> rather than the toggled element. */
 body.scroll-locked { overflow: hidden; }
