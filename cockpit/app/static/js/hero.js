@@ -1,9 +1,20 @@
 // hero.js — Campaign status hero card: the goal-gradient ring that is never
-// zero (principle 2) plus its per-device progress breakdown. Unchanged
-// behaviour from the old app.js.
+// zero (principle 2) plus its per-device progress breakdown.
+//
+// cockpit-redesign Stage 2b addendum (spec §3/§7): this used to read
+// n.last_run — the device's most recent run EVER, regardless of which
+// placement it belonged to. That is the exact bug §7 identifies in the
+// device card, just uncaught here: thermostat-katia was relocated on 23 Jul
+// and its active placement has never produced a run, but an OLDER run from
+// the placement it left still carried status 'done', so the hero counted it
+// as finished and reported "100% · 4/4 done" while the card two centimetres
+// below it showed the same device red ("never measured"). Now uses the same
+// derivation as severity.js (runForActivePlacement) — a run only counts
+// towards "done" if it belongs to the device's CURRENT active placement.
 import { state } from './state.js';
 import { esc, fmtHoursOfTotal } from './format.js';
 import { liveRunProgress } from './run.js';
+import { runForActivePlacement } from './severity.js';
 
 const HERO_RING_R    = 52;
 const HERO_RING_CIRC = 2 * Math.PI * HERO_RING_R;
@@ -23,7 +34,8 @@ export function initHeroRing() {
  *   running    -> 0.4 + 0.6 x live elapsed/planned fraction (0..1, clamped;
  *                 0 when the run has no planned duration to extrapolate
  *                 against — e.g. a Phase A run with no sweep)
- *   done       -> 1.0  (a completed last_run and nothing running now)
+ *   done       -> 1.0  (the ACTIVE placement's run has completed and
+ *                 nothing is running now — not just any last_run ever)
  * liveRunProgress does the wall-clock extrapolation, so this stays accurate
  * between /api/nodes refreshes too. */
 function deviceProgressTerm(n) {
@@ -32,10 +44,16 @@ function deviceProgressTerm(n) {
     const frac = live.progress != null ? Math.max(0, Math.min(1, live.progress)) : 0;
     return { state: 'running', value: 0.4 + 0.6 * frac, run: n.active_run, live, frac };
   }
-  if (n.last_run && n.last_run.status === 'done') {
-    return { state: 'done', value: 1, run: n.last_run };
-  }
   if (n.placement) {
+    // The run belonging to the CURRENT active placement, not just the
+    // device's last run ever (see the module comment above) — a run
+    // started before this placement's started_at is a leftover from
+    // wherever the device used to be, not evidence this spot was measured.
+    const runsForDevice = state.runsByEui[n.eui] || [];
+    const found = runForActivePlacement(n, runsForDevice);
+    if (found && found.run.status === 'done') {
+      return { state: 'done', value: 1, run: found.run };
+    }
     return { state: 'placed', value: 0.4, run: null };
   }
   return { state: 'not-placed', value: 0, run: null };

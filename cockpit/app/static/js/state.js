@@ -17,4 +17,10 @@ export const state = {
   selectedNodeId: null,
   devMetrics: {},  // dev_eui -> { rssi, snr, sf, f_cnt, pdr, acked, downlinks_sent, dl_pdr, lastUplinkAt, intervalSeconds }
   currentView: 'devices', // 'devices' | 'events' | 'radio' | 'map' | 'detail' | 'history' — see view-switch.js
+  // eui -> runs (newest first), from GET /api/runs — set by nodes.js's
+  // loadNodes(), read by severity.js's computeSeverity/runForActivePlacement
+  // (via nodes.js and hero.js). Shared here rather than passed down through
+  // render calls because both the device list and the campaign hero need
+  // it (cockpit-redesign Stage 2b addendum, spec §7 applied to hero.js).
+  runsByEui: {},
 };

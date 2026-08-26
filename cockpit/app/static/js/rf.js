@@ -20,7 +20,12 @@ import { esc, fmtNum, fmtTime, ageFromUplinkAt, rssiClass } from './format.js';
 import { mountList } from './list.js';
 
 const RF_HEATMAP_CHANNELS = [0, 1, 2, 3, 4, 5, 6, 7]; // the 8 EU868 LoRa channels
-const RF_HEATMAP_SFS = [7, 8, 9, 10, 11, 12];
+// Fallback only, for the (currently unseen) case of an empty matrix — the
+// real SF columns are always derived from the data (see deriveHeatmapSfs
+// below). SF11 is listed here for historical reasons but never occurs in
+// the field data (spec addendum 2026-08-26): a hardcoded 7..12 column list
+// used to render one permanently-empty SF11 column on every real dataset.
+const RF_HEATMAP_SFS_FALLBACK = [7, 8, 9, 10, 11, 12];
 
 let _rfEnvLoading = false;
 let _rfEnvPending = false;
@@ -82,27 +87,114 @@ function renderRfEnvironment(data) {
   renderRfFrameLog(data.recent_frames || []);
 }
 
-/** Channel × SF grid, cells shaded by foreign-frame count (a single accent
- * color at varying opacity — flat, no gradient/glow) relative to the
- * loudest cell currently observed. */
+/** The matrix only ever contains keys for (channel, SF) pairs that
+ * actually occurred (db.py groups the real rf_frame rows) — SF11, for
+ * example, is real zero in the field data and simply has no `ch*_sf11` key
+ * at all. Deriving the column set from the data, instead of a hardcoded
+ * list, is what keeps a genuinely-unused SF from permanently occupying a
+ * blank column (and would just as correctly pick up a new SF nobody has
+ * hardcoded here yet). */
+function deriveHeatmapSfs(matrix) {
+  const sfs = new Set();
+  for (const key of Object.keys(matrix)) {
+    const m = /_sf(\d+)$/.exec(key);
+    if (m) sfs.add(Number(m[1]));
+  }
+  return sfs.size ? [...sfs].sort((a, b) => a - b) : RF_HEATMAP_SFS_FALLBACK;
+}
+
+// Cell shading floor (product-owner decision) — the smallest non-zero
+// value must still read as "a little", not vanish against the card. A
+// real zero (see alphaForCount below) stays fully uncoloured, which is
+// what actually distinguishes "none" from "the quietest cell we have".
+const RF_HEATMAP_ALPHA_FLOOR = 0.15;
+
+// The shading colour is one fixed cyan in BOTH themes, laid over the page
+// background at varying opacity. That makes a single opacity threshold the
+// wrong tool for choosing the text colour: in the light theme a faint cell
+// is light, in the dark theme the same faint cell is dark. So the ink is
+// derived from the actual composite instead — see heatmapInk().
+const RF_HEATMAP_RGB = [34, 211, 238];
+
+/** sRGB relative luminance (WCAG). */
+function _luminance([r, g, b]) {
+  const f = (c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+  return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+}
+
+/** Current page background as [r,g,b] — the surface the cells composite over. */
+function _pageBackground() {
+  const m = getComputedStyle(document.body).backgroundColor.match(/[\d.]+/g) || [];
+  return m.length >= 3 ? m.slice(0, 3).map(Number) : [255, 255, 255];
+}
+
+/** log10 opacity scale, normalised over the OBSERVED range (smallest
+ * non-zero value .. largest value) rather than a fixed decade count. The
+ * real matrix spans a factor of ~730 (8..5838); on a linear scale that
+ * puts everything below ~1000 at under 15% opacity, so 700, 200 and 8 are
+ * indistinguishable. On log10 the same neighbours separate by 5-20
+ * percentage points. A true zero returns 0 — no colour at all, which is
+ * what distinguishes "none" from "the quietest cell we have". */
+function alphaForCount(count, logMin, logMax, alphaMax) {
+  if (count === 0) return 0;
+  const floor = RF_HEATMAP_ALPHA_FLOOR;
+  if (logMax === logMin) return alphaMax; // one distinct non-zero value — nothing to spread
+  const frac = (Math.log10(count) - logMin) / (logMax - logMin);
+  // The ceiling varies by theme, the floor does not: scaling the whole ramp
+  // would drag the smallest value down with it (0.15 x 0.48 = 0.07) and undo
+  // the very guarantee the floor exists for.
+  return floor + (alphaMax - floor) * frac;
+}
+
+/** How far the shading may go, and which ink stays readable on it.
+ *
+ * Cyan over a LIGHT page never leaves the bright half, so dark ink holds
+ * across the whole 0.15..1.0 ramp (worst case 10.3:1).
+ *
+ * Cyan over a DARK page is the awkward one: past roughly half opacity the
+ * cell lands in the mid-luminance dead zone where *neither* dark nor light
+ * ink reaches 4.5:1. Rather than pick a losing ink, the ramp is capped
+ * before that zone — 0.48 keeps light ink at 5.3:1 throughout. The gradient
+ * stays monotonic, just shallower, which is ordinary for a dark surface.
+ * Both figures are computed from the real palette, not estimated. */
+function heatmapShading(pageBg) {
+  const darkPage = _luminance(pageBg) < 0.35;
+  return { alphaMax: darkPage ? 0.48 : 1, inkClass: darkPage ? '' : ' is-strong' };
+}
+
+/** Channel × SF grid, cells shaded by foreign-frame count on a log10 scale
+ * (a single accent color at varying opacity — flat, no gradient/glow),
+ * see alphaForCount above for why. Full card width, stacked above the
+ * timeline (product-owner decision, not side-by-side even on desktop) —
+ * columns stretch to fill the available width instead of a fixed 24px, so
+ * the per-cell frame count is actually legible instead of ~9px text. */
 function buildRfHeatmapHtml(matrix) {
+  const pageBg = _pageBackground();
+  const { alphaMax, inkClass } = heatmapShading(pageBg);
+  const sfs = deriveHeatmapSfs(matrix);
   const counts = RF_HEATMAP_CHANNELS.flatMap(
-    ch => RF_HEATMAP_SFS.map(sf => matrix[`ch${ch}_sf${sf}`] || 0)
+    ch => sfs.map(sf => matrix[`ch${ch}_sf${sf}`] || 0)
   );
-  const max = Math.max(1, ...counts);
   if (!counts.some(c => c > 0)) {
     return '<p class="hint">No foreign frames observed yet.</p>';
   }
+  const positive = counts.filter(c => c > 0);
+  const logMin = Math.log10(Math.min(...positive));
+  const logMax = Math.log10(Math.max(...positive));
 
-  let html = '<div class="rf-heat-grid">';
+  let html = `<div class="rf-heat-grid" style="grid-template-columns:minmax(34px,auto) repeat(${sfs.length},minmax(0,1fr))">`;
   html += '<div class="rf-heat-hdr"></div>';
-  for (const sf of RF_HEATMAP_SFS) html += `<div class="rf-heat-hdr">SF${sf}</div>`;
+  for (const sf of sfs) html += `<div class="rf-heat-hdr">SF${sf}</div>`;
   for (const ch of RF_HEATMAP_CHANNELS) {
     html += `<div class="rf-heat-hdr rf-heat-rowhdr">CH${ch}</div>`;
-    for (const sf of RF_HEATMAP_SFS) {
+    for (const sf of sfs) {
       const count = matrix[`ch${ch}_sf${sf}`] || 0;
-      const alpha = count === 0 ? 0 : Math.max(0.15, count / max);
-      html += `<div class="rf-heat-cell" style="background:rgba(34,211,238,${alpha.toFixed(2)})" title="CH${ch} / SF${sf}: ${count} foreign frame${count === 1 ? '' : 's'}">${count || ''}</div>`;
+      const alpha = alphaForCount(count, logMin, logMax, alphaMax);
+      // Ink and ramp both come from heatmapShading() — the same opacity
+      // reads light on one page background and dark on the other, so
+      // neither can be a fixed constant.
+      const strong = count > 0 ? inkClass : '';
+      html += `<div class="rf-heat-cell${strong}" style="background:rgba(34,211,238,${alpha.toFixed(2)})" title="CH${ch} / SF${sf}: ${count} foreign frame${count === 1 ? '' : 's'}">${count || ''}</div>`;
     }
   }
   html += '</div>';
@@ -388,6 +480,13 @@ function renderRfFrameLog(frames) {
 // ---------------------------------------------------------------------------
 
 export function initRfView() {
+  // The heatmap derives its text colour from the composite of each cell's
+  // shading over the page background (see heatmapInk). Custom properties
+  // cannot express that, so switching theme has to rebuild those cells —
+  // otherwise the ink stays chosen for the previous background and half the
+  // grid drops below 4.5:1 without anything looking obviously broken.
+  document.addEventListener('cockpit:themechange', () => { loadRfEnvironment(); });
+
   const toggle = document.getElementById('vendor-tail-toggle');
   const tailWrap = document.getElementById('vendor-tail');
   if (!toggle || !tailWrap) return;

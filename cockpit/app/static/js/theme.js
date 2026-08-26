@@ -10,6 +10,11 @@ const STORAGE_KEY = 'cockpit-theme';
 
 function applyTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme);
+  // Almost everything re-colours itself through custom properties. The one
+  // exception is the heatmap, whose *text* colour has to be derived from the
+  // composite of its own shading over the page background — that composite
+  // changes with the theme, so those cells must be recomputed, not restyled.
+  document.dispatchEvent(new CustomEvent('cockpit:themechange', { detail: { theme } }));
   const btn = document.getElementById('btn-theme-toggle');
   if (btn) {
     btn.setAttribute('aria-pressed', String(theme === 'dark'));

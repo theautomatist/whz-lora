@@ -623,18 +623,42 @@ details[open].coll > summary::before { transform: rotate(90deg); }
 
 .rf-pair-grid { display: grid; grid-template-columns: 1fr; gap: var(--space-4); align-items: start; }
 @media (min-width: 640px) {
-  .rf-pair-grid.rf-heat-pair { grid-template-columns: auto 1fr; }
+  /* rf-heat-pair (heatmap + timeline) stays ONE column at every width —
+     product-owner decision: both charts run the full card width, stacked,
+     never side-by-side, so the heatmap has room to stretch instead of
+     being pinned to a ~176px auto column (spec addendum 2026-08-26). */
   .rf-pair-grid.rf-dist-pair { grid-template-columns: 1fr 1fr; }
 }
 
-.rf-heat-grid { display: grid; grid-template-columns: 26px repeat(6, 24px); gap: 1px; }
-.rf-heat-hdr { font-size: .56rem; font-weight: 700; color: var(--text-faint); text-align: center; padding: 2px 0; }
-.rf-heat-rowhdr { text-align: right; padding-right: 3px; }
-.rf-heat-cell { width: 24px; height: 24px; border: 1px solid var(--line); border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: .56rem; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
-.rf-heat-legend { display: flex; align-items: center; gap: var(--space-1); margin-top: var(--space-1); font-size: .6rem; color: var(--text-faint); }
+/* Column count is data-driven (deriveHeatmapSfs in rf.js sets the actual
+   grid-template-columns inline — the real matrix has 5 SF columns, not a
+   hardcoded 6). Columns stretch to fill the full card width instead of a
+   fixed 24px so the count in each cell is legible. */
+.rf-heat-grid { display: grid; gap: 3px; }
+.rf-heat-hdr { font-size: .72rem; font-weight: 700; color: var(--text-faint); text-align: center; padding: 4px 0; }
+.rf-heat-rowhdr { text-align: right; padding-right: 6px; }
+.rf-heat-cell { height: 48px; border: 1px solid var(--line); border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 1rem; font-weight: 800; color: var(--text); font-variant-numeric: tabular-nums; }
+/* Dark ink for cells whose own shading has gone bright. Deliberately a
+   literal, not a token: the cell background is the same fixed cyan in both
+   themes, so the readable foreground is the same in both too — deriving it
+   from --text would reintroduce exactly the dark-mode failure it fixes. */
+.rf-heat-cell.is-strong { color: #06141b; }
+.rf-heat-legend { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1); margin-top: var(--space-2); font-size: .68rem; color: var(--text-faint); }
 .rf-heat-legend-bar { flex: 0 1 140px; height: 6px; border-radius: 3px; border: 1px solid var(--line); background: linear-gradient(90deg, var(--accent-dim), var(--accent)); }
+/* Cell colour is log-scaled, not proportional — this note is what keeps
+   "twice the colour" from being misread as "twice the frame count" (the
+   number in the cell is the actual value; colour is only order-of-
+   magnitude). Its own line so it never fights the low/bar/high row for
+   space on a 390px phone. */
+.rf-heat-legend-scale { flex-basis: 100%; font-style: italic; }
 
-.rf-timeline-svg { width: 100%; height: 44px; display: block; }
+/* Full card width, taller than the old 44px sliver — at that height a
+   24-hour bar chart was barely a barcode. viewBox stays "0 0 100 32"
+   (rf.js): with preserveAspectRatio="none" only the FINAL rendered CSS
+   height determines how tall each bar looks (bar height is always a
+   fraction of that box, independent of the viewBox's own internal units),
+   so raising it here is the actual, sufficient fix — not a JS change. */
+.rf-timeline-svg { width: 100%; height: 96px; display: block; }
 .rf-timeline-bar { fill: var(--accent); }
 .rf-timeline-axis { display: flex; justify-content: space-between; font-size: .6rem; color: var(--text-faint); margin-top: 2px; }
 

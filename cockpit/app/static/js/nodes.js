@@ -14,8 +14,6 @@ import { renderSelectedNode } from './selected-panel.js';
 import { refreshDeviceStatus } from './device-status.js';
 import { populateEventDeviceChips } from './events.js';
 
-let _runsByEui = {}; // eui -> runs (newest first), from GET /api/runs — see severity.js
-
 export async function loadNodes() {
   try {
     const [nodesData, runsData] = await Promise.all([
@@ -26,10 +24,10 @@ export async function loadNodes() {
     state.nodesById = {};
     for (const n of state.nodes) state.nodesById[n.id] = n;
 
-    _runsByEui = {};
+    state.runsByEui = {};
     for (const r of runsData.runs || []) {
       if (!r.device || !r.device.eui) continue;
-      (_runsByEui[r.device.eui] = _runsByEui[r.device.eui] || []).push(r);
+      (state.runsByEui[r.device.eui] = state.runsByEui[r.device.eui] || []).push(r);
     }
 
     if (state.selectedNodeId == null || !state.nodesById[state.selectedNodeId]) {
@@ -91,7 +89,7 @@ export function renderNodeDashboard() {
     return;
   }
 
-  const entries = state.nodes.map(n => Object.assign({ node: n }, computeSeverity(n, _runsByEui)));
+  const entries = state.nodes.map(n => Object.assign({ node: n }, computeSeverity(n, state.runsByEui)));
   const sorted = sortByNeed(entries);
 
   list.innerHTML = sorted.map(dcardHtml).join('');
