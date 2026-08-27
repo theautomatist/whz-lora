@@ -1,0 +1,20 @@
+# Local developer overlay — NOT part of the deployed stack.
+#
+# Purpose: this machine already runs other projects. The ChirpStack UI's
+# host port 8080 collides with an unrelated container, so this overlay
+# republishes it on 8081. Nothing else changes: the cockpit reaches
+# ChirpStack over the compose network on chirpstack:8080, which is
+# unaffected by which host port it is published on.
+#
+# Use it explicitly, never implicitly — the file is deliberately NOT named
+# docker-compose.override.yml, so `docker compose up` and the smoke test
+# keep using the real port mapping:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --wait
+#
+# Adjust the port if 8081 is taken too.
+
+services:
+  chirpstack:
+    ports: !override
+      - "8081:8080"

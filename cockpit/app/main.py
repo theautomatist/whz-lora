@@ -2,6 +2,8 @@
 
 Routes:
   GET  /                       serves static/index.html (HTTP 200, no redirect)
+  GET  /favicon.ico            serves the self-drawn favicon (browsers fetch this
+                                path directly, regardless of <link rel="icon">)
   GET  /healthz                unauthenticated health check
   GET  /api/devices            list devices in whz-feldtest
   POST /api/devices            register (find-or-create) an OTAA device
@@ -24,7 +26,9 @@ Routes:
   GET  /api/nodes              list nodes (devices + gateway) with placement + active run
   POST /api/placement          close current placement, open a new one (no run)
   POST /api/photo/{placement_id}   attach a photo (multipart, max 3 per placement)
-  GET  /api/photo/{photo_id}   serve a photo
+  GET  /api/photo/{photo_id}   serve the original photo (full size — the lightbox)
+  GET  /api/photo/{photo_id}/thumb  serve a small cached preview (photo strips), generated
+                                on first request and reused after that (see PHOTO_THUMBNAIL_MAX_EDGE)
   POST /api/run/start          start a run (requires device + gateway placements)
   POST /api/run/stop           stop a device's active run
   POST /api/relocate           close run, new placement, start new run — one call
@@ -70,6 +74,16 @@ Routes:
   matters, not RSSI which barely varies with SF): POST /api/run/start's
   downlink_test flag + ingest.py's confirmed-downlink test feed
   GET /api/run/{id}/stats above.
+
+  Cockpit redesign Stage 1 (docs/developer/design/cockpit-redesign-spec.md
+  §4/§14/§16) — durable event log, milestones only (join/run_started/
+  run_stopped/relocated/gateway_moved/downlink_acked/downlink_nacked/
+  segment_changed/first_uplink), written at db.py/ingest.py's respective
+  trigger points:
+  GET  /api/events/log         keyset-paginated event log (?cursor=/?limit=/
+                                ?type=/?node_id=/?run_id=) — distinct from
+                                GET /api/events above, which is the live SSE
+                                stream and carries nothing durable.
 """
 import asyncio
 import base64
@@ -90,12 +104,19 @@ from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Upload
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
+from PIL import Image, ImageOps
 from pydantic import BaseModel, Field, field_validator
 
 from . import chirpstack as cs
 from . import config
 from . import scheduler
-from .db import MAX_PHOTOS_PER_PLACEMENT, RF_FRAME_COLUMNS, Database, parse_dl_counts
+from .db import (
+    EVENT_LOG_DEFAULT_LIMIT,
+    MAX_PHOTOS_PER_PLACEMENT,
+    RF_FRAME_COLUMNS,
+    Database,
+    parse_dl_counts,
+)
 from .ingest import MQTTIngest
 from .state import CampaignState
 
@@ -334,7 +355,9 @@ def _process_run_sweep(run: dict) -> None:
         node = _db.get_node(run["device_node_id"])
         if node:
             _switch_device_profile_best_effort(node["eui"], next_sf)
-        _db.advance_run_segment(run["id"], next_index, now.isoformat(timespec="seconds"))
+        _db.advance_run_segment(
+            run["id"], next_index, now.isoformat(timespec="seconds"), sf=next_sf
+        )
         campaign.broadcast_event({"type": "nodes"})
     elif decision["done"]:
         _db.stop_run(run["id"], status="done", reason="schedule-complete")
@@ -671,6 +694,14 @@ async def healthz():
 async def _root():
     """Serve index.html directly (HTTP 200, no redirect)."""
     return FileResponse(os.path.join(_static_dir, "index.html"))
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def _favicon():
+    """Browsers request this well-known path directly, independent of the
+    page's <link rel="icon"> markup — see index.html's head and
+    scripts/gen_favicon.py for how the file itself is produced."""
+    return FileResponse(os.path.join(_static_dir, "favicon.ico"), media_type="image/x-icon")
 
 
 # ---------------------------------------------------------------------------
@@ -1027,6 +1058,100 @@ async def get_photo(photo_id: int):
     return FileResponse(path, media_type=media_type or "application/octet-stream")
 
 
+# Longest edge of a generated preview, in pixels. The CSS tile is 72 px
+# (see .pthumb in style.css) shown with `object-fit: cover`, so what has to
+# stay sharp is the SHORTER edge after scaling, not the longer one. Field
+# photos are portrait/landscape phone shots (~4:3 or 3:4, confirmed against
+# the real photos under cockpit-data/photos/), so bounding the long edge to
+# 300 px leaves the short edge at ~225 px — still >3x the 72 px tile, i.e.
+# comfortably sharp on a 3x-DPR phone display, the top end of common
+# devicePixelRatios. Generous on purpose (spec: "großzügig genug ... für
+# Retina-Displays"), while still cutting a 2-4 MB original by ~99%.
+PHOTO_THUMBNAIL_MAX_EDGE = 300
+_THUMBNAIL_SUFFIX = ".thumb.jpg"  # kept next to the original, clearly derived
+
+
+def _thumbnail_path(placement_id: int, filename: str) -> str:
+    stem, _ext = os.path.splitext(filename)
+    return os.path.join(config.PHOTOS_DIR, str(placement_id), f"{stem}{_THUMBNAIL_SUFFIX}")
+
+
+def _write_thumbnail(original_path: str, thumb_path: str) -> None:
+    """Decode `original_path`, apply its EXIF orientation, downscale to fit
+    within PHOTO_THUMBNAIL_MAX_EDGE px on the long edge, and write a JPEG to
+    `thumb_path`.
+
+    EXIF orientation: phone cameras almost always store pixels upright in
+    the sensor's native orientation plus an EXIF Orientation tag telling
+    the viewer how to rotate them for display; browsers honour that tag
+    when showing the ORIGINAL, but a naive PIL resize does not, so ignoring
+    it here would produce a sideways preview next to an upright original —
+    confirmed against the real field photos, which do carry orientation 6.
+    ImageOps.exif_transpose() rotates the pixels to match and drops the tag
+    (it is now baked in, not needed on the small preview).
+
+    Written via a temp file + os.replace() in the same directory so a
+    concurrent request never serves a partially-written thumbnail.
+
+    Raises on any decode/encode failure (corrupt original, unsupported
+    format, ...) — the caller turns that into a clean 404, never a 500.
+    """
+    tmp_path = f"{thumb_path}.tmp-{os.getpid()}"
+    with Image.open(original_path) as im:
+        im = ImageOps.exif_transpose(im)
+        im.thumbnail((PHOTO_THUMBNAIL_MAX_EDGE, PHOTO_THUMBNAIL_MAX_EDGE), Image.LANCZOS)
+        if im.mode not in ("RGB", "L"):
+            im = im.convert("RGB")
+        im.save(tmp_path, format="JPEG", quality=82)
+    os.replace(tmp_path, thumb_path)
+
+
+@app.get("/api/photo/{photo_id}/thumb", dependencies=[Depends(_require_auth)])
+async def get_photo_thumbnail(photo_id: int):
+    """Serve a small cached preview for the photo strips (Overview/History);
+    /api/photo/{photo_id} above stays the untouched original the lightbox
+    opens full size.
+
+    Generated on first request and cached on disk next to the original
+    (see _thumbnail_path); a later request reuses it as long as it is not
+    older than the original, so re-uploading a photo under the same name
+    (not something the UI does today, but cheap to get right) still
+    invalidates the cache correctly.
+    """
+    d = _dbh()
+    photo = d.get_photo(photo_id)
+    if photo is None:
+        raise HTTPException(status_code=404, detail="photo not found")
+    original_path = os.path.join(config.PHOTOS_DIR, str(photo["placement_id"]), photo["filename"])
+    if not os.path.exists(original_path):
+        raise HTTPException(status_code=404, detail="photo file missing on disk")
+
+    thumb_path = _thumbnail_path(photo["placement_id"], photo["filename"])
+    try:
+        fresh = os.path.exists(thumb_path) and os.path.getmtime(thumb_path) >= os.path.getmtime(
+            original_path
+        )
+        if not fresh:
+            _write_thumbnail(original_path, thumb_path)
+    except Exception:
+        # A corrupt/unreadable original must degrade gracefully, not 500 —
+        # the one real case on record is an orphaned file with no DB row
+        # (photos/3/1.png), which this endpoint never even reaches since
+        # the lookup above is DB-id first; this branch is for a DB-known
+        # photo whose bytes on disk are damaged.
+        logger.exception("Could not generate thumbnail for photo %s", photo_id)
+        raise HTTPException(status_code=404, detail="could not generate thumbnail")
+
+    return FileResponse(
+        thumb_path,
+        media_type="image/jpeg",
+        # Photos are immutable once written; the browser can keep this
+        # indefinitely instead of re-fetching it on every render of the
+        # photo strip.
+        headers={"Cache-Control": "public, max-age=31536000, immutable"},
+    )
+
+
 # ---------------------------------------------------------------------------
 # F-0008 Map / Placement Editor — position a node on an uploaded map image.
 # Explicitly a placeholder: the first real map is an isometric building view
@@ -1345,6 +1470,15 @@ def relocate(req: RelocateRequest):
         config.DATA_DIR,
         node["eui"],
     )
+    try:
+        d.record_event(
+            "relocated",
+            node_id=req.device_node_id,
+            run_id=run["id"],
+            payload={"floor": req.floor, "room": req.room},
+        )
+    except Exception as e:
+        logger.warning("record_event(relocated) failed: %s", e)
     campaign.broadcast_event({"type": "nodes"})
     return {"placement_id": placement_id, "run_id": run["id"]}
 
@@ -1381,6 +1515,12 @@ async def gateway_move(req: GatewayMoveRequest):
         _gateway_node_id, req.floor, req.room, req.description, req.note, "",
         floorplan_id=floorplan_id, map_x=map_x, map_y=map_y,
     )
+    try:
+        d.record_event(
+            "gateway_moved", node_id=_gateway_node_id, payload={"floor": req.floor, "room": req.room}
+        )
+    except Exception as e:
+        logger.warning("record_event(gateway_moved) failed: %s", e)
     campaign.broadcast_event({"type": "nodes"})
     return {"placement_id": placement_id}
 
@@ -1400,6 +1540,12 @@ async def gateway_move_force(req: GatewayMoveRequest):
         _gateway_node_id, req.floor, req.room, req.description, req.note, "",
         floorplan_id=floorplan_id, map_x=map_x, map_y=map_y,
     )
+    try:
+        d.record_event(
+            "gateway_moved", node_id=_gateway_node_id, payload={"floor": req.floor, "room": req.room}
+        )
+    except Exception as e:
+        logger.warning("record_event(gateway_moved) failed: %s", e)
     campaign.broadcast_event({"type": "nodes"})
     return {"placement_id": placement_id}
 
@@ -1837,6 +1983,29 @@ def set_device_interval(node_id: int, req: SetIntervalRequest):
     except grpc.RpcError as e:
         raise HTTPException(status_code=502, detail=e.details())
     return {"status": "enqueued", "dev_eui": node["eui"], "minutes": req.minutes}
+
+
+# ---------------------------------------------------------------------------
+# Cockpit-redesign Stage 1 — durable event log (spec §4/§14/§16)
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/events/log", dependencies=[Depends(_require_auth)])
+async def events_log(
+    cursor: Optional[int] = None,
+    limit: int = EVENT_LOG_DEFAULT_LIMIT,
+    type: Optional[str] = None,
+    node_id: Optional[int] = None,
+    run_id: Optional[int] = None,
+):
+    """The durable milestone log GET /api/events (the SSE stream below)
+    cannot provide, because SSE messages are transient — never persisted,
+    lost on every reload. Keyset pagination (?cursor=<id>&limit=<n>,
+    WHERE id < cursor, never OFFSET), newest first; optional ?type=/
+    ?node_id=/?run_id= filters. Deliberately a different path from
+    GET /api/events — that one stays the live SSE stream."""
+    d = _dbh()
+    return d.list_events(cursor=cursor, limit=limit, type_=type, node_id=node_id, run_id=run_id)
 
 
 # ---------------------------------------------------------------------------

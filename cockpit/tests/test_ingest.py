@@ -90,6 +90,101 @@ def test_join_event_unaffected_by_db():
 
 
 # ---------------------------------------------------------------------------
+# Cockpit-redesign Stage 1 (spec §4/§14) — join/ack/nack persisted to the
+# durable event log, at THIS call site (not inside CampaignState.process_join
+# — see db.py's module docstring and test_state.py's restart-regression test
+# for why that distinction matters).
+# ---------------------------------------------------------------------------
+
+
+def test_join_event_writes_a_join_event_with_node_id_and_dev_addr():
+    db = MagicMock()
+    db.get_node_by_eui.return_value = {"id": 7, "kind": "device"}
+    ingest, state = _make_ingest(db=db)
+    evt = {"deviceInfo": {"devEui": "aaaa000000000001"}, "devAddr": "01020304"}
+    ingest._handle_app_event("join", json.dumps(evt).encode("utf-8"))
+
+    db.get_node_by_eui.assert_called_once_with("aaaa000000000001")
+    db.record_event.assert_called_once_with(
+        "join", node_id=7, payload={"dev_addr": "01020304"}
+    )
+
+
+def test_join_event_unknown_node_still_writes_event_with_node_id_none():
+    db = MagicMock()
+    db.get_node_by_eui.return_value = None
+    ingest, state = _make_ingest(db=db)
+    evt = {"deviceInfo": {"devEui": "aaaa000000000001"}, "devAddr": "01020304"}
+    ingest._handle_app_event("join", json.dumps(evt).encode("utf-8"))
+
+    db.record_event.assert_called_once_with(
+        "join", node_id=None, payload={"dev_addr": "01020304"}
+    )
+
+
+def test_join_event_no_db_does_not_crash():
+    ingest, state = _make_ingest(db=None)
+    evt = {"deviceInfo": {"devEui": "aaaa000000000001"}, "devAddr": "01020304"}
+    ingest._handle_app_event("join", json.dumps(evt).encode("utf-8"))  # must not raise
+    state.process_join.assert_called_once_with("aaaa000000000001", "01020304")
+
+
+def test_join_event_record_event_exception_is_swallowed():
+    db = MagicMock()
+    db.get_node_by_eui.return_value = {"id": 7, "kind": "device"}
+    db.record_event.side_effect = RuntimeError("disk full")
+    ingest, state = _make_ingest(db=db)
+    evt = {"deviceInfo": {"devEui": "aaaa000000000001"}, "devAddr": "01020304"}
+    ingest._handle_app_event("join", json.dumps(evt).encode("utf-8"))  # must not raise
+    state.process_join.assert_called_once_with("aaaa000000000001", "01020304")
+
+
+def test_ack_event_acknowledged_writes_downlink_acked_event():
+    db = MagicMock()
+    db.get_node_by_eui.return_value = {"id": 7, "kind": "device"}
+    db.get_active_run.return_value = {"id": 3}
+    ingest, state = _make_ingest(db=db)
+    evt = {"deviceInfo": {"devEui": "aaaa000000000001"}, "acknowledged": True}
+    ingest._handle_app_event("ack", json.dumps(evt).encode("utf-8"))
+
+    db.record_event.assert_called_once_with("downlink_acked", node_id=7, run_id=3)
+
+
+def test_ack_event_nack_writes_downlink_nacked_event():
+    db = MagicMock()
+    db.get_node_by_eui.return_value = {"id": 7, "kind": "device"}
+    db.get_active_run.return_value = None
+    ingest, state = _make_ingest(db=db)
+    evt = {"deviceInfo": {"devEui": "aaaa000000000001"}, "acknowledged": False}
+    ingest._handle_app_event("ack", json.dumps(evt).encode("utf-8"))
+
+    db.record_event.assert_called_once_with("downlink_nacked", node_id=7, run_id=None)
+
+
+def test_ack_event_unknown_node_writes_event_with_node_id_none_and_skips_run_lookup():
+    db = MagicMock()
+    db.get_node_by_eui.return_value = None
+    ingest, state = _make_ingest(db=db)
+    evt = {"deviceInfo": {"devEui": "aaaa000000000001"}, "acknowledged": True}
+    ingest._handle_app_event("ack", json.dumps(evt).encode("utf-8"))
+
+    db.get_active_run.assert_not_called()
+    db.record_event.assert_called_once_with("downlink_acked", node_id=None, run_id=None)
+
+
+def test_ack_event_record_event_exception_is_swallowed():
+    """A failure writing the ack/nack event must not prevent process_ack
+    from running — same defensive contract as record_downlink_test_ack."""
+    db = MagicMock()
+    db.get_node_by_eui.return_value = {"id": 7, "kind": "device"}
+    db.record_event.side_effect = RuntimeError("disk full")
+    ingest, state = _make_ingest(db=db)
+    evt = {"deviceInfo": {"devEui": "aaaa000000000001"}, "acknowledged": True}
+    ingest._handle_app_event("ack", json.dumps(evt).encode("utf-8"))  # must not raise
+    state.process_ack.assert_called_once_with("aaaa000000000001")
+
+
+# ---------------------------------------------------------------------------
 # F-0006 "Trust & Sichtbarkeit" (Task 2) — txack/ack -> record_downlink_txack
 # ---------------------------------------------------------------------------
 

@@ -284,6 +284,107 @@ def test_increment_run_packets():
 
 
 # ---------------------------------------------------------------------------
+# Cockpit-redesign Stage 1 — start_run/stop_run also write a durable event
+# (spec §4/§14) at the trigger point itself, regardless of which route
+# called them.
+# ---------------------------------------------------------------------------
+
+
+def test_start_run_writes_run_started_event():
+    d = _new_db()
+    node_id, _ = d.upsert_node("device", "d1", "aaaa000000000001")
+    gw_id, _ = d.upsert_node("gateway", "gw", "7076ff0064071a3d")
+    dp = d.create_placement(node_id, "EG", "R1", "", "", "3dbi")
+    gp = d.create_placement(gw_id, "EG", "flur", "", "", "")
+    data_dir = tempfile.mkdtemp()
+
+    run = d.start_run(node_id, dp, gp, "adr", data_dir, "aaaa000000000001")
+
+    events = d.list_events()["events"]
+    assert len(events) == 1
+    assert events[0]["type"] == "run_started"
+    assert events[0]["node_id"] == node_id
+    assert events[0]["run_id"] == run["id"]
+    assert events[0]["source"] == "live"
+
+
+def test_stop_run_writes_run_stopped_event_with_reason():
+    d = _new_db()
+    node_id, _ = d.upsert_node("device", "d1", "aaaa000000000001")
+    gw_id, _ = d.upsert_node("gateway", "gw", "7076ff0064071a3d")
+    dp = d.create_placement(node_id, "EG", "R1", "", "", "3dbi")
+    gp = d.create_placement(gw_id, "EG", "flur", "", "", "")
+    data_dir = tempfile.mkdtemp()
+    run = d.start_run(node_id, dp, gp, "adr", data_dir, "aaaa000000000001")
+
+    d.stop_run(run["id"], status="done", reason="manual")
+
+    events = d.list_events(type_="run_stopped")["events"]
+    assert len(events) == 1
+    assert events[0]["node_id"] == node_id
+    assert events[0]["run_id"] == run["id"]
+    assert events[0]["payload"] == {"status": "done", "reason": "manual"}
+
+
+def test_stop_run_without_reason_omits_it_from_payload():
+    d = _new_db()
+    node_id, _ = d.upsert_node("device", "d1", "aaaa000000000001")
+    gw_id, _ = d.upsert_node("gateway", "gw", "7076ff0064071a3d")
+    dp = d.create_placement(node_id, "EG", "R1", "", "", "3dbi")
+    gp = d.create_placement(gw_id, "EG", "flur", "", "", "")
+    data_dir = tempfile.mkdtemp()
+    run = d.start_run(node_id, dp, gp, "adr", data_dir, "aaaa000000000001")
+
+    d.stop_run(run["id"], status="done")
+
+    event = d.list_events(type_="run_stopped")["events"][0]
+    assert event["payload"] == {"status": "done"}
+
+
+def test_stop_run_unknown_id_does_not_write_an_event():
+    """stop_run on a nonexistent run_id must not fabricate an event with
+    node_id=None just because the UPDATE affected zero rows."""
+    d = _new_db()
+    d.stop_run(9999, status="done")
+    assert d.list_events()["events"] == []
+
+
+def test_start_run_event_write_failure_does_not_break_start_run(monkeypatch):
+    """A DB error while writing the event must never break the run start
+    that has already succeeded and committed — same defensive contract as
+    record_rf_frame."""
+    d = _new_db()
+    node_id, _ = d.upsert_node("device", "d1", "aaaa000000000001")
+    gw_id, _ = d.upsert_node("gateway", "gw", "7076ff0064071a3d")
+    dp = d.create_placement(node_id, "EG", "R1", "", "", "3dbi")
+    gp = d.create_placement(gw_id, "EG", "flur", "", "", "")
+    data_dir = tempfile.mkdtemp()
+
+    monkeypatch.setattr(
+        d, "record_event", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("disk full"))
+    )
+    run = d.start_run(node_id, dp, gp, "adr", data_dir, "aaaa000000000001")  # must not raise
+    assert run["status"] == "running"
+
+
+def test_stop_run_event_write_failure_does_not_break_stop_run(monkeypatch):
+    d = _new_db()
+    node_id, _ = d.upsert_node("device", "d1", "aaaa000000000001")
+    gw_id, _ = d.upsert_node("gateway", "gw", "7076ff0064071a3d")
+    dp = d.create_placement(node_id, "EG", "R1", "", "", "3dbi")
+    gp = d.create_placement(gw_id, "EG", "flur", "", "", "")
+    data_dir = tempfile.mkdtemp()
+    run = d.start_run(node_id, dp, gp, "adr", data_dir, "aaaa000000000001")
+
+    monkeypatch.setattr(
+        d, "record_event", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("disk full"))
+    )
+    d.stop_run(run["id"], status="done")  # must not raise
+
+    assert d.get_run(run["id"])["status"] == "done"
+
+
+# ---------------------------------------------------------------------------
 # gateway-move guard primitives — list_running_runs / abort_running_runs
 # ---------------------------------------------------------------------------
 
@@ -344,6 +445,27 @@ def test_abort_running_runs_sets_aborted_and_keeps_data():
 def test_abort_running_runs_empty_is_noop():
     d = _new_db()
     assert d.abort_running_runs(reason="gateway-move") == []
+
+
+def test_abort_running_runs_writes_run_stopped_event_per_run():
+    d = _new_db()
+    n1, _ = d.upsert_node("device", "d1", "aaaa000000000001")
+    n2, _ = d.upsert_node("device", "d2", "bbbb000000000002")
+    gw_id, _ = d.upsert_node("gateway", "gw", "7076ff0064071a3d")
+    gp = d.create_placement(gw_id, "EG", "flur", "", "", "")
+    data_dir = tempfile.mkdtemp()
+    dp1 = d.create_placement(n1, "EG", "R1", "", "", "3dbi")
+    run1 = d.start_run(n1, dp1, gp, "adr", data_dir, "aaaa000000000001")
+    dp2 = d.create_placement(n2, "1OG", "R2", "", "", "3dbi")
+    run2 = d.start_run(n2, dp2, gp, "adr", data_dir, "bbbb000000000002")
+
+    d.abort_running_runs(reason="gateway-move")
+
+    stopped = d.list_events(type_="run_stopped")["events"]
+    assert len(stopped) == 2
+    by_run = {e["run_id"]: e for e in stopped}
+    assert by_run[run1["id"]]["payload"] == {"status": "aborted", "reason": "gateway-move"}
+    assert by_run[run2["id"]]["payload"] == {"status": "aborted", "reason": "gateway-move"}
 
 
 # ---------------------------------------------------------------------------
@@ -510,6 +632,36 @@ def test_record_uplink_for_run_no_row_after_run_stopped():
     assert len(lines) == 1  # header only
 
 
+def test_record_uplink_for_run_writes_first_uplink_event_once():
+    """spec §4 — the confirmation that a new placement actually joined and
+    is sending, which today is only ever a toast. Must fire on the run's
+    FIRST packet only, not on every subsequent one."""
+    d = _new_db()
+    data_dir = tempfile.mkdtemp()
+    node_id, run = _setup_active_run(d, data_dir)
+
+    d.record_uplink_for_run("aaaa000000000001", SAMPLE_METRICS)
+    d.record_uplink_for_run("aaaa000000000001", SAMPLE_METRICS)
+    d.record_uplink_for_run("aaaa000000000001", SAMPLE_METRICS)
+
+    events = d.list_events(type_="first_uplink")["events"]
+    assert len(events) == 1
+    assert events[0]["node_id"] == node_id
+    assert events[0]["run_id"] == run["id"]
+
+
+def test_record_uplink_for_run_event_write_failure_does_not_break_recording(monkeypatch):
+    d = _new_db()
+    data_dir = tempfile.mkdtemp()
+    node_id, run = _setup_active_run(d, data_dir)
+
+    monkeypatch.setattr(
+        d, "record_event", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("disk full"))
+    )
+    result = d.record_uplink_for_run("aaaa000000000001", SAMPLE_METRICS)  # must not raise
+    assert result == 1
+
+
 # ---------------------------------------------------------------------------
 # Phase B — SF-sweep columns: migration, start_run(sf_schedule=...),
 # advance_run_segment, get_last_run
@@ -559,12 +711,19 @@ def test_migration_adds_missing_columns_to_existing_db():
         """
     )
     d._conn.execute(
+        "INSERT INTO node (id, kind, name, eui, created_at) VALUES "
+        "(1, 'device', 'd1', 'aaaa000000000001', '2026-01-01T00:00:00+00:00')"
+    )
+    d._conn.execute(
         "INSERT INTO run (device_node_id, device_placement_id, gateway_placement_id, "
         "phase, started_at, status, packets) VALUES (1, 1, 1, 'adr', '2026-01-01T00:00:00+00:00', 'done', 7)"
     )
     d._conn.commit()
 
-    d.init_schema()  # runs the migration
+    d.init_schema()  # runs the migration — including the Stage 1 event-table
+    # backfill (spec §15), which needs device_node_id=1 to actually exist:
+    # the event table's node_id has a real FK, unlike this ad-hoc legacy
+    # `run` table above (which predates even that constraint).
 
     cols = {row["name"] for row in d._conn.execute("PRAGMA table_info(run)").fetchall()}
     assert {"planned_seconds", "sf_schedule", "interval_minutes", "segment_index", "segment_started_at"} <= cols
@@ -641,6 +800,28 @@ def test_advance_run_segment_updates_index_and_timestamp():
     updated = d.get_run(run["id"])
     assert updated["segment_index"] == 1
     assert updated["segment_started_at"] == "2026-01-01T13:00:00+00:00"
+
+
+def test_advance_run_segment_writes_segment_changed_event_with_sf():
+    d = _new_db()
+    node_id, _ = d.upsert_node("device", "d1", "aaaa000000000001")
+    gw_id, _ = d.upsert_node("gateway", "gw", "7076ff0064071a3d")
+    dp = d.create_placement(node_id, "3OG", "R301", "", "", "3dbi")
+    gp = d.create_placement(gw_id, "EG", "flur", "", "", "")
+    data_dir = tempfile.mkdtemp()
+    run = d.start_run(
+        node_id, dp, gp, "adr", data_dir, "aaaa000000000001",
+        planned_seconds=300, sf_schedule=[{"sf": 7, "seconds": 100}, {"sf": 9, "seconds": 100}],
+        interval_minutes=5,
+    )
+
+    d.advance_run_segment(run["id"], 1, "2026-01-01T13:00:00+00:00", sf=9)
+
+    events = d.list_events(type_="segment_changed")["events"]
+    assert len(events) == 1
+    assert events[0]["node_id"] == node_id
+    assert events[0]["run_id"] == run["id"]
+    assert events[0]["payload"] == {"segment_index": 1, "sf": 9}
 
 
 def test_get_last_run_none_when_never_run():

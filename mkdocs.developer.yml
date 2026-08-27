@@ -37,6 +37,10 @@ nav:
       - Prozessmodell: analysis/process-model.md
       - Störungsanalyse Pi (2026-08-01): analysis/pi-field-diagnosis-2026-08-01.md
       - Glossary: analysis/CONTEXT.md
+  - Design:
+      - Cockpit Redesign Spec: design/cockpit-redesign-spec.md
+  - Runbooks:
+      - Rebuilding the field Pi: runbooks/pi-host-rebuild.md
   - Architecture:
       - System Design: architecture/system-design.md
   - Diagrams:
@@ -62,6 +66,7 @@ nav:
       - ADR-0016: decisions/adr-0016.md
       - ADR-0017: decisions/adr-0017.md
       - ADR-0018: decisions/adr-0018.md
+      - ADR-0019: decisions/adr-0019.md
       - ADR-0020: decisions/adr-0020.md
       - ADR-0021: decisions/adr-0021.md
 

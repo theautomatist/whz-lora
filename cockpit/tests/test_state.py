@@ -414,6 +414,30 @@ def test_process_join_stores_devaddr():
     state.process_coex_frame(7, 868100000, -70, phy)
 
 
+def test_process_join_never_writes_an_event_even_with_a_db_wired():
+    """Cockpit-redesign Stage 1 regression guard (spec §4/§14): main.py's
+    start-up pre-fetch (main.py ~226-236) calls campaign.process_join()
+    once per ChirpStack device purely to seed the DevAddr table — NOT to
+    record a real join. If process_join itself ever wrote an event, every
+    cockpit restart would fabricate one "join" per device in the very log
+    meant to answer "did the join actually happen?". The real join event is
+    written at ingest.py's MQTT call site instead (see test_ingest.py) —
+    this test pins that process_join, with a real Database wired via
+    set_db(), NEVER inserts into `event`, no matter how many times it is
+    called (simulating N devices at start-up)."""
+    from app.db import Database
+
+    state = CampaignState(data_dir=tempfile.mkdtemp())
+    db = Database(os.path.join(tempfile.mkdtemp(), "test.db"))
+    db.init_schema()
+    state.set_db(db)
+
+    for i in range(5):  # mimics main.py's per-device start-up loop
+        state.process_join(f"aabbccdd0000000{i}", f"0102030{i}")
+
+    assert db.list_events()["events"] == []
+
+
 # ---------------------------------------------------------------------------
 # F-0006 "Trust & Sichtbarkeit" — always-on "Funkumgebung" (coex, Task 1)
 # ---------------------------------------------------------------------------

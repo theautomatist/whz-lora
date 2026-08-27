@@ -48,6 +48,15 @@ Schema (see _SCHEMA below):
                placement (like floor/room/photos), not as a separate live
                marker, so it is frozen per measurement and History can show
                "where this node stood, on which map, during this run".
+  event      — Cockpit-redesign Stage 1 (see
+               docs/developer/design/cockpit-redesign-spec.md §4/§14): a
+               durable, append-only log of MILESTONES ONLY — never one row
+               per uplink. This is the correctness fix for the finding that
+               a join of one of our own devices was, until this table,
+               persisted nowhere: only a toast, gone the moment it faded.
+               See record_event/list_events below, and the module-level
+               _MIGRATIONS list for how an existing database backfills
+               run_started/run_stopped from its `run` rows.
 
 No GPS anywhere — placements are floor/room/description, not coordinates
 (map_marker above is image-relative, same idea).
@@ -59,7 +68,7 @@ import logging
 import os
 import sqlite3
 import threading
-from typing import Optional
+from typing import Callable, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -216,7 +225,52 @@ CREATE TABLE IF NOT EXISTS map_marker (
     UNIQUE(floorplan_id, node_id)
 );
 CREATE INDEX IF NOT EXISTS idx_map_marker_floorplan ON map_marker(floorplan_id);
+
+-- Cockpit-redesign Stage 1 (spec §4/§14) — durable milestone log. Purely
+-- additive: CREATE TABLE IF NOT EXISTS, so it is created for every existing
+-- database on the next init_schema() too, same as floorplan/map_marker
+-- above. Only the ONE-TIME backfill of historical run_started/run_stopped
+-- rows needs a version-gated migration (see _MIGRATIONS below) — table
+-- creation itself does not.
+CREATE TABLE IF NOT EXISTS event (
+    id      INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts      TEXT NOT NULL,             -- UTC ISO, see Database._now()
+    type    TEXT NOT NULL,             -- see EVENT_TYPES
+    node_id INTEGER REFERENCES node(id),
+    run_id  INTEGER REFERENCES run(id),
+    payload TEXT,                      -- small JSON, nullable
+    source  TEXT NOT NULL DEFAULT 'live'   -- 'live' | 'backfill'
+);
+-- Keyset pagination (WHERE id < :cursor ORDER BY id DESC LIMIT :n, never
+-- OFFSET) is already served by the INTEGER PRIMARY KEY's own rowid btree;
+-- this index is kept anyway so the access pattern is explicit and cannot
+-- silently regress to a table scan if that ever changes.
+CREATE INDEX IF NOT EXISTS idx_event_id_desc ON event(id DESC);
+CREATE INDEX IF NOT EXISTS idx_event_node ON event(node_id);
+CREATE INDEX IF NOT EXISTS idx_event_run ON event(run_id);
 """
+
+# GET /api/events/log milestones only — per product-owner decision, never
+# one row per uplink. Kept as a set for validation/documentation; not
+# enforced with a CHECK constraint (SQLite CHECK would need a schema
+# migration to ever add a type, which defeats the point of this being an
+# additive, evolvable log).
+EVENT_TYPES = frozenset(
+    {
+        "join",
+        "run_started",
+        "run_stopped",
+        "relocated",
+        "gateway_moved",
+        "downlink_acked",
+        "downlink_nacked",
+        "segment_changed",
+        "first_uplink",
+    }
+)
+
+EVENT_LOG_DEFAULT_LIMIT = 50
+EVENT_LOG_MAX_LIMIT = 200
 
 # NOTE — schema deviation from the original brief: a `packets INTEGER` column
 # was added to `run`. Endpoints need a live packet count (GET /api/nodes,
@@ -246,6 +300,66 @@ _PLACEMENT_MIGRATION_COLUMNS: list[tuple[str, str]] = [
     ("floorplan_id", "INTEGER REFERENCES floorplan(id)"),
     ("map_x", "REAL"),
     ("map_y", "REAL"),
+]
+
+
+# ---------------------------------------------------------------------------
+# Schema versioning (PRAGMA user_version) — spec §15
+#
+# There was none before Stage 1: only CREATE TABLE IF NOT EXISTS plus the two
+# column-guard migrations above. Those keep working unchanged (they are
+# idempotent regardless of version). _MIGRATIONS below is the numbered,
+# version-gated scaffold that carries this and every later stage's migration
+# work — each entry is (target_version, step), step takes the raw
+# sqlite3.Connection and runs inside one transaction; _run_migrations()
+# commits and bumps PRAGMA user_version after each step that actually ran,
+# so a step whose version is already <= the DB's current user_version is a
+# guaranteed no-op — restarting the container twice cannot double-apply a
+# migration (e.g. the backfill below cannot double-insert events).
+# ---------------------------------------------------------------------------
+
+
+def _migrate_001_backfill_run_events(conn: sqlite3.Connection) -> None:
+    """Stage 1 (event table) migration — see spec §15.
+
+    Derives `run_started`/`run_stopped` events from the EXISTING `run`
+    table, using each run's own started_at/ended_at as the event's ts (the
+    historical moment it actually happened, not "now" when the migration
+    runs) and its stored `reason` (or 'unknown' if NULL) — every inserted
+    row gets source='backfill' so it can never be mistaken for live
+    measurement evidence. A still-running run (ended_at IS NULL) only gets
+    its run_started row; there is nothing to backfill for run_stopped yet.
+
+    Deliberately NOT backfilled, per spec §15 against the real field data:
+      - gateway_moved  — the gateway has exactly one placement; it was
+        never moved. Zero source rows exist for this.
+      - relocated      — placement-boundary gaps in the real data are form
+        corrections seconds apart, not moves; a heuristic here would
+        invent history rather than recover it.
+      - join / downlink_acked / downlink_nacked — never persisted before
+        this table existed. Permanently lost; not reconstructable.
+    """
+    rows = conn.execute(
+        "SELECT id, device_node_id, started_at, ended_at, reason FROM run"
+    ).fetchall()
+    for row in rows:
+        conn.execute(
+            "INSERT INTO event (ts, type, node_id, run_id, payload, source) "
+            "VALUES (?, 'run_started', ?, ?, NULL, 'backfill')",
+            (row["started_at"], row["device_node_id"], row["id"]),
+        )
+        if row["ended_at"] is not None:
+            payload = json.dumps({"reason": row["reason"] or "unknown"})
+            conn.execute(
+                "INSERT INTO event (ts, type, node_id, run_id, payload, source) "
+                "VALUES (?, 'run_stopped', ?, ?, ?, 'backfill')",
+                (row["ended_at"], row["device_node_id"], row["id"], payload),
+            )
+
+
+# (target_version, step) — applied in order, each once, see _run_migrations.
+_MIGRATIONS: list[tuple[int, Callable[[sqlite3.Connection], None]]] = [
+    (1, _migrate_001_backfill_run_events),
 ]
 
 
@@ -295,6 +409,7 @@ class Database:
             self._migrate_run_columns()
             self._migrate_placement_columns()
             self._conn.commit()
+            self._run_migrations()
 
     def _migrate_run_columns(self) -> None:
         """Additive `ALTER TABLE run ADD COLUMN` for Phase B, guarded by a
@@ -317,6 +432,27 @@ class Database:
             if name not in existing:
                 self._conn.execute(f"ALTER TABLE placement ADD COLUMN {name} {decl}")
 
+    def _run_migrations(self) -> None:
+        """Apply every _MIGRATIONS step whose target version is still ahead
+        of PRAGMA user_version, in order, each as its own transaction — see
+        the _MIGRATIONS module comment above. A fresh database (created
+        moments ago by the executescript above) and an old field database
+        both start at user_version 0 and converge on the same end state;
+        calling this twice (e.g. two container restarts) is a no-op the
+        second time because the version check already skips every step."""
+        current = self._conn.execute("PRAGMA user_version").fetchone()[0]
+        for version, step in _MIGRATIONS:
+            if current >= version:
+                continue
+            try:
+                step(self._conn)
+                self._conn.commit()
+            except Exception:
+                self._conn.rollback()
+                raise
+            self._conn.execute(f"PRAGMA user_version = {version}")
+            current = version
+
     def close(self) -> None:
         with self._lock:
             self._conn.close()
@@ -324,6 +460,114 @@ class Database:
     @staticmethod
     def _now() -> str:
         return datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
+
+    # ------------------------------------------------------------------
+    # event — cockpit-redesign Stage 1 durable milestone log (spec §4/§14).
+    # record_event is called both from route handlers/ingest.py directly
+    # (relocated, gateway_moved, join, downlink_acked/nacked — see main.py
+    # and ingest.py) and from other Database methods below via the
+    # best-effort _record_event_safe wrapper (run_started, run_stopped,
+    # segment_changed, first_uplink — every start/stop/advance/first-packet,
+    # regardless of which route triggered it).
+    # ------------------------------------------------------------------
+
+    def record_event(
+        self,
+        type_: str,
+        node_id: Optional[int] = None,
+        run_id: Optional[int] = None,
+        payload: Optional[dict] = None,
+        source: str = "live",
+    ) -> int:
+        """Append one row to the durable event log. Milestones only — never
+        call this once per uplink (see EVENT_TYPES).
+
+        Matches record_rf_frame's contract (see that method's docstring):
+        this method itself lets exceptions propagate; a caller for whom a
+        write failure must never be fatal (the MQTT ingest thread, an HTTP
+        route) is responsible for catching around it — see
+        _record_event_safe for the callers inside this class that do
+        exactly that.
+        """
+        with self._lock:
+            payload_json = json.dumps(payload) if payload else None
+            cur = self._conn.execute(
+                "INSERT INTO event (ts, type, node_id, run_id, payload, source) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (self._now(), type_, node_id, run_id, payload_json, source),
+            )
+            self._conn.commit()
+            return cur.lastrowid
+
+    def _record_event_safe(
+        self,
+        type_: str,
+        node_id: Optional[int] = None,
+        run_id: Optional[int] = None,
+        payload: Optional[dict] = None,
+    ) -> None:
+        """Best-effort record_event for call sites inside this class
+        (start_run/stop_run/abort_running_runs/advance_run_segment/
+        record_uplink_for_run) — a write failure here must never break the
+        run/uplink operation that has already succeeded and already
+        committed."""
+        try:
+            self.record_event(type_, node_id=node_id, run_id=run_id, payload=payload)
+        except Exception as e:
+            logger.warning("record_event(%s) failed: %s", type_, e)
+
+    def list_events(
+        self,
+        cursor: Optional[int] = None,
+        limit: int = EVENT_LOG_DEFAULT_LIMIT,
+        type_: Optional[str] = None,
+        node_id: Optional[int] = None,
+        run_id: Optional[int] = None,
+    ) -> dict:
+        """Keyset-paginated event log, newest first — backs GET
+        /api/events/log. `WHERE id < :cursor ORDER BY id DESC LIMIT :n`,
+        never OFFSET, so a deep page costs the same as the first one.
+
+        Returns {"events": [...], "next_cursor": int|None, "has_more":
+        bool}: "next_cursor" is the id to pass as the next page's
+        ?cursor=, None once there is nothing further back. Each event is
+        enriched with node_name (a LEFT JOIN — an unknown/NULL node_id
+        still returns the row, just with node_name=None) and a decoded
+        payload dict, so the UI list never needs a second request per row.
+        """
+        limit = max(1, min(limit, EVENT_LOG_MAX_LIMIT))
+        with self._lock:
+            sql = (
+                "SELECT e.id, e.ts, e.type, e.node_id, e.run_id, e.payload, e.source, "
+                "n.name AS node_name "
+                "FROM event e LEFT JOIN node n ON n.id = e.node_id WHERE 1=1 "
+            )
+            params: list = []
+            if cursor is not None:
+                sql += "AND e.id < ? "
+                params.append(cursor)
+            if type_ is not None:
+                sql += "AND e.type = ? "
+                params.append(type_)
+            if node_id is not None:
+                sql += "AND e.node_id = ? "
+                params.append(node_id)
+            if run_id is not None:
+                sql += "AND e.run_id = ? "
+                params.append(run_id)
+            sql += "ORDER BY e.id DESC LIMIT ?"
+            params.append(limit + 1)  # one extra row -> cheap has_more check
+            rows = self._conn.execute(sql, params).fetchall()
+            has_more = len(rows) > limit
+            rows = rows[:limit]
+            events = []
+            for row in rows:
+                event = dict(row)
+                raw_payload = event.pop("payload")
+                event["payload"] = json.loads(raw_payload) if raw_payload else None
+                events.append(event)
+            next_cursor = events[-1]["id"] if has_more and events else None
+            return {"events": events, "next_cursor": next_cursor, "has_more": has_more}
 
     # ------------------------------------------------------------------
     # node
@@ -612,6 +856,12 @@ class Database:
             row = self._conn.execute(
                 "SELECT * FROM run WHERE id = ?", (run_id,)
             ).fetchone()
+            self._record_event_safe(
+                "run_started",
+                node_id=device_node_id,
+                run_id=run_id,
+                payload={"phase": phase, "sweep": bool(sf_schedule)},
+            )
             return dict(row)
 
     def stop_run(
@@ -623,17 +873,44 @@ class Database:
                 (self._now(), status, reason, run_id),
             )
             self._conn.commit()
+            row = self._conn.execute(
+                "SELECT device_node_id FROM run WHERE id = ?", (run_id,)
+            ).fetchone()
+            if row is not None:
+                payload = {"status": status}
+                if reason:
+                    payload["reason"] = reason
+                self._record_event_safe(
+                    "run_stopped", node_id=row["device_node_id"], run_id=run_id, payload=payload
+                )
 
     def advance_run_segment(
-        self, run_id: int, segment_index: int, segment_started_at: str
+        self,
+        run_id: int,
+        segment_index: int,
+        segment_started_at: str,
+        sf: Optional[int] = None,
     ) -> None:
-        """Phase B: move a running sweep to its next SF segment."""
+        """Phase B: move a running sweep to its next SF segment. *sf* (the
+        new segment's spreading factor), when given, is only used for the
+        segment_changed event payload — it has no effect on the update
+        itself."""
         with self._lock:
             self._conn.execute(
                 "UPDATE run SET segment_index = ?, segment_started_at = ? WHERE id = ?",
                 (segment_index, segment_started_at, run_id),
             )
             self._conn.commit()
+            row = self._conn.execute(
+                "SELECT device_node_id FROM run WHERE id = ?", (run_id,)
+            ).fetchone()
+            if row is not None:
+                payload = {"segment_index": segment_index}
+                if sf is not None:
+                    payload["sf"] = sf
+                self._record_event_safe(
+                    "segment_changed", node_id=row["device_node_id"], run_id=run_id, payload=payload
+                )
 
     def stop_active_run_for_device(
         self, device_node_id: int, status: str = "done", reason: Optional[str] = None
@@ -667,6 +944,13 @@ class Database:
                     (now, reason, r["id"]),
                 )
             self._conn.commit()
+            for r in running:
+                self._record_event_safe(
+                    "run_stopped",
+                    node_id=r["device_node_id"],
+                    run_id=r["id"],
+                    payload={"status": "aborted", "reason": reason},
+                )
             return running
 
     def increment_run_packets(self, run_id: int) -> int:
@@ -754,7 +1038,16 @@ class Database:
                     writer.writeheader()
                 writer.writerow(row)
 
-            return self.increment_run_packets(run["id"])
+            packet_count = self.increment_run_packets(run["id"])
+            if packet_count == 1:
+                # The confirmation §4 says is missing in the field today: the
+                # first packet of a brand-new run is the proof the placement
+                # actually joined and is sending, not just a toast that
+                # already faded by the time anyone could check.
+                self._record_event_safe(
+                    "first_uplink", node_id=node["id"], run_id=run["id"]
+                )
+            return packet_count
 
     # ------------------------------------------------------------------
     # "Trust & Sichtbarkeit" — per-SF downlink reliability test

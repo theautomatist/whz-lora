@@ -4,3 +4,7 @@ paho-mqtt==2.1.0
 chirpstack-api==4.18.0
 grpcio==1.81.1
 python-multipart==0.0.9
+# Photo preview thumbnails (Aufgabe: server-side previews). manylinux2014
+# aarch64 wheel confirmed available for the Raspberry Pi 5 target (Debian
+# bookworm/trixie, glibc >= 2.17) — no compile step, no extra apt packages.
+pillow==12.2.0

@@ -1,0 +1,10 @@
+timestamp_utc,dev_eui,run_id,node_name,floor,room,description,antenna,phase,gateway_desc,rssi_dbm,snr_db,sf,freq_hz,f_cnt,gw_eui
+2026-07-08T09:05:00+00:00,aaaa000000000042,1,thermostat-golden,3,301,,3dbi,adr,EG Flur,-80,5.0,7,868100000,1,7076ff0064071a3d
+2026-07-08T09:15:00+00:00,aaaa000000000042,1,thermostat-golden,3,301,,3dbi,adr,EG Flur,-84,3.0,7,868100000,2,7076ff0064071a3d
+2026-07-08T09:25:00+00:00,aaaa000000000042,1,thermostat-golden,3,301,,3dbi,adr,EG Flur,,,7,868100000,3,7076ff0064071a3d
+2026-07-08T09:35:00+00:00,aaaa000000000042,1,thermostat-golden,3,301,,3dbi,adr,EG Flur,-90,-1.0,7,868100000,4,7076ff0064071a3d
+2026-07-08T10:05:00+00:00,aaaa000000000042,1,thermostat-golden,3,301,,3dbi,adr,EG Flur,-95,-5.0,9,868300000,5,7076ff0064071a3d
+2026-07-08T10:15:00+00:00,aaaa000000000042,1,thermostat-golden,3,301,,3dbi,adr,EG Flur,-97,-6.0,9,868300000,6,7076ff0064071a3d
+2026-07-08T10:25:00+00:00,aaaa000000000042,1,thermostat-golden,3,301,,3dbi,adr,EG Flur,-99,-7.5,9,868300000,7,7076ff0064071a3d
+2026-07-08T11:05:00+00:00,aaaa000000000042,1,thermostat-golden,3,301,,3dbi,adr,EG Flur,-110,-12.0,12,868500000,8,7076ff0064071a3d
+2026-07-08T11:15:00+00:00,aaaa000000000042,1,thermostat-golden,3,301,,3dbi,adr,EG Flur,-108,-11.0,12,868500000,9,7076ff0064071a3d
